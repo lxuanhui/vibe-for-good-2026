@@ -6,6 +6,7 @@ import indonesiaBoundary from '../../assets/indonesia-province-simple.json'
 import {
   BOUNDARY_LINE_COLOR,
   INDONESIA_FILL_COLOR,
+  INDONESIA_GLOW_COLOR,
   KHG_CLASSIFICATION_COLORS,
   KHG_FALLBACK_COLOR,
   LAYER_COLORS,
@@ -32,6 +33,18 @@ export function MapView() {
 
   const boundary = useMemo(() => indonesiaBoundary, [])
 
+  // Per-point radius for the close-zoom dot layer below. 'zoom' must be the
+  // top-level expression (MapLibre rejects it nested inside e.g. a '+'), so
+  // the FRP-based size bump is nested inside each zoom stop instead.
+  const firmsRadius = [
+    'interpolate',
+    ['linear'],
+    ['zoom'],
+    7, ['interpolate', ['linear'], ['get', 'frp'], 0, 1.5, 25, 3],
+    9, ['interpolate', ['linear'], ['get', 'frp'], 0, 2.5, 25, 4.5],
+    12, ['interpolate', ['linear'], ['get', 'frp'], 0, 5, 25, 8],
+  ] as const
+
   return (
     <div className="relative h-full w-full">
       <Map
@@ -44,6 +57,14 @@ export function MapView() {
         }}
       >
         <Source id="boundary" type="geojson" data={boundary as FeatureCollection<Geometry, GeoJsonProperties>}>
+          {/* Soft blurred rim light along the coastline, drawn under the crisp
+              fill/outline -- same glow-halo idea as the event marker's pulse,
+              muted and static since this traces an entire landmass. */}
+          <Layer
+            id="boundary-glow"
+            type="line"
+            paint={{ 'line-color': INDONESIA_GLOW_COLOR, 'line-width': 10, 'line-blur': 6, 'line-opacity': 0.5 }}
+          />
           <Layer id="boundary-fill" type="fill" paint={{ 'fill-color': INDONESIA_FILL_COLOR, 'fill-opacity': 0.85 }} />
           <Layer id="boundary-line" type="line" paint={{ 'line-color': BOUNDARY_LINE_COLOR, 'line-width': 0.75 }} />
         </Source>
@@ -130,17 +151,43 @@ export function MapView() {
 
         {firms && (
           // Merges mock per-case detections with the real NASA FIRMS pipeline
-          // pull into one source/layer -- see hooks.ts useFirms(). Radius/
-          // opacity tuned down from the mock-only styling since the real pull
-          // alone is ~21.5k points.
+          // pull into one source/layer -- see hooks.ts useFirms(). At
+          // country-wide zoom, ~21.5k overlapping points would just alpha-
+          // stack into a solid red mass as plain circles, so this uses a
+          // heatmap (a soft, muted glow field, brightest where detections
+          // cluster) that fades out by zoom 9 as individually glowing dots
+          // (echoing the event marker's halo) fade in -- the standard
+          // MapLibre pattern for point clouds at this density.
           <Source id="firms" type="geojson" data={firms as FeatureCollection<Geometry, GeoJsonProperties>}>
+            <Layer
+              id="firms-heat"
+              type="heatmap"
+              maxzoom={9}
+              paint={{
+                'heatmap-weight': ['interpolate', ['linear'], ['get', 'frp'], 0, 0.1, 25, 0.5],
+                'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 3, 0.15, 9, 1.1],
+                'heatmap-color': [
+                  'interpolate',
+                  ['linear'],
+                  ['heatmap-density'],
+                  0, 'rgba(255,90,74,0)',
+                  0.3, 'rgba(135,9,26,0.15)',
+                  0.65, 'rgba(255,90,74,0.32)',
+                  1, 'rgba(255,90,74,0.5)',
+                ],
+                'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 3, 4, 9, 20],
+                'heatmap-opacity': ['interpolate', ['linear'], ['zoom'], 7, 1, 9, 0],
+              }}
+            />
             <Layer
               id="firms-circle"
               type="circle"
+              minzoom={7}
               paint={{
-                'circle-radius': ['interpolate', ['linear'], ['get', 'frp'], 0, 2, 25, 6],
+                'circle-radius': firmsRadius,
                 'circle-color': LAYER_COLORS.firms,
-                'circle-opacity': 0.5,
+                'circle-opacity': ['interpolate', ['linear'], ['zoom'], 7, 0, 9, 0.65],
+                'circle-blur': 0.3,
               }}
             />
           </Source>
