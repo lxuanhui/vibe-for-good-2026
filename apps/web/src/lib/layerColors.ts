@@ -19,10 +19,6 @@ export const KHG_CLASSIFICATION_COLORS = {
 
 export const KHG_FALLBACK_COLOR = '#3f4a5c'
 
-// Real pipeline pull (data_pipeline), kept visually distinct from the mock
-// 'firms' fixture layer above.
-export const PIPELINE_FIRMS_COLOR = '#facc15'
-
 export const BOUNDARY_LINE_COLOR = '#2e3a4a'
 
 // Deep green landmass fill for Indonesia's boundary -- the previous

@@ -1,12 +1,19 @@
 import type { FeatureCollection, PointGeometry } from '../geojson'
 import { isInsideIndonesia } from '../../lib/indonesiaGeo'
 
-// Real NASA FIRMS pull from data_pipeline (see data_pipeline/README.md and
-// export_web_geojson.py) -- the 2019-09-01..05 Sumatra/Kalimantan haze
-// window, 21,519 hotspots. Served from public/pipeline/ and fetched at
+// STILL FAKE, in the sense that matters here: a real NASA FIRMS pull (see
+// data_pipeline/README.md and export_web_geojson.py) but a one-off static
+// snapshot -- the 2019-09-01..05 Sumatra/Kalimantan haze window, 21,519
+// hotspots -- not a live query. Served from public/pipeline/ and fetched at
 // runtime (not bundled) for a quick "does pipeline output actually render
-// on the map" proof of concept; not wired to the mock investigation-case
-// system or the demo timeline scrubber.
+// on the map" proof of concept; not wired to the demo timeline scrubber
+// (dates don't overlap the 2026 mock case dates in fixtures/dates.ts).
+//
+// Merged into the 'firms' layer alongside the mock per-case detections --
+// see hooks.ts useFirms(). Delete this whole file + public/pipeline/ once
+// GET /api/overlays/firms?bbox=...&date=... is real (same target as the
+// mock generator -- see fixtures/overlays.ts firmsForDate()): that endpoint
+// replaces both fake sources with one live, bbox/date-filtered query.
 
 export interface PipelineFirmsProperties {
   frp: number

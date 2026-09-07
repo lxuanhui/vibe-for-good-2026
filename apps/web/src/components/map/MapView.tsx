@@ -9,10 +9,9 @@ import {
   KHG_CLASSIFICATION_COLORS,
   KHG_FALLBACK_COLOR,
   LAYER_COLORS,
-  PIPELINE_FIRMS_COLOR,
 } from '../../lib/layerColors'
 import { useAppStore } from '../../store/useAppStore'
-import { useEvents, useOverlay, usePipelineFirms } from '../../api/hooks'
+import { useEvents, useOverlay, useFirms } from '../../api/hooks'
 import { EventMarkers } from './EventMarkers'
 import { LayerControlPanel } from './LayerControlPanel'
 import { TimelineScrubber } from './TimelineScrubber'
@@ -25,13 +24,11 @@ export function MapView() {
   const activeDate = useAppStore((s) => s.activeDate)
   const selectEvent = useAppStore((s) => s.selectEvent)
 
-  const firms = useOverlay('firms', activeDate, layerVisibility.firms)
+  const firms = useFirms(activeDate, layerVisibility.firms)
   const sarBackscatter = useOverlay('sar-backscatter', activeDate, layerVisibility['sar-backscatter'])
   const khg = useOverlay('khg', activeDate, layerVisibility.khg)
   const concessions = useOverlay('concessions', activeDate, layerVisibility.concessions)
   const fireComplexLinks = useOverlay('fire-complex-links', activeDate, layerVisibility['fire-complex-links'])
-  const pipelineFirmsVisible = useAppStore((s) => s.pipelineFirmsVisible)
-  const pipelineFirms = usePipelineFirms(pipelineFirmsVisible)
 
   const boundary = useMemo(() => indonesiaBoundary, [])
 
@@ -132,29 +129,17 @@ export function MapView() {
         )}
 
         {firms && (
+          // Merges mock per-case detections with the real NASA FIRMS pipeline
+          // pull into one source/layer -- see hooks.ts useFirms(). Radius/
+          // opacity tuned down from the mock-only styling since the real pull
+          // alone is ~21.5k points.
           <Source id="firms" type="geojson" data={firms as FeatureCollection<Geometry, GeoJsonProperties>}>
             <Layer
               id="firms-circle"
               type="circle"
               paint={{
-                'circle-radius': ['interpolate', ['linear'], ['get', 'frp'], 0, 3, 25, 9],
+                'circle-radius': ['interpolate', ['linear'], ['get', 'frp'], 0, 2, 25, 6],
                 'circle-color': LAYER_COLORS.firms,
-                'circle-opacity': 0.55,
-                'circle-stroke-color': LAYER_COLORS.firms,
-                'circle-stroke-width': 1,
-              }}
-            />
-          </Source>
-        )}
-
-        {pipelineFirms && (
-          <Source id="pipeline-firms" type="geojson" data={pipelineFirms as FeatureCollection<Geometry, GeoJsonProperties>}>
-            <Layer
-              id="pipeline-firms-circle"
-              type="circle"
-              paint={{
-                'circle-radius': ['interpolate', ['linear'], ['get', 'frp'], 0, 1.5, 25, 4],
-                'circle-color': PIPELINE_FIRMS_COLOR,
                 'circle-opacity': 0.5,
               }}
             />
