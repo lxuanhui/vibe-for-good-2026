@@ -9,17 +9,25 @@ Read the specs in `DesignSpecs/` in this order:
 1. [`environmental_assurance_claude_code_spec.md`](DesignSpecs/environmental_assurance_claude_code_spec.md) — original project overview, goals, and architecture.
 2. [`environmental_assurance_spec_v2.md`](DesignSpecs/environmental_assurance_spec_v2.md) — updated architecture accounting for peatland fires that are invisible to FIRMS; supersedes Stage 0/1 of the original spec.
 3. [`assurance_console_ui_spec.md`](DesignSpecs/assurance_console_ui_spec.md) — frontend/UI specification for the console (Map/Table views, investigation report layout, API contract).
-Vite + React + TypeScript frontend with a Flask API backend.
 
 ## Layout
 
 ```
-frontend/   Vite + React + TypeScript (dev server on :5173)
-backend/    Flask API (dev server on :5001, mounted at /api)
+frontend/       Environmental Assurance Console — Vite + React + TypeScript
+                (MapLibre, Tailwind, zustand, recharts). Dev server on :5173.
+backend/        Flask API. Local dev server on :5001 mounted at /api;
+                the same app runs on AWS Lambda via lambda_handler.py.
+infra/          Terraform — Lambda + API Gateway HTTP API. See infra/README.md.
+data_pipeline/  Python feasibility spike for the environmental data sources.
+                See data_pipeline/README.md.
 ```
 
 The Vite dev server proxies `/api/*` to the Flask backend, so the frontend can
 call `fetch('/api/hello')` with no CORS setup in development.
+
+The console currently renders from fixtures (`frontend/src/api/client.ts`),
+which mirror the endpoint contract in the UI spec so the mock can be swapped
+for real calls without touching any caller.
 
 ## Getting started
 
@@ -40,11 +48,27 @@ npm install
 npm run dev                             # http://localhost:5173
 ```
 
+## Deploying
+
+The Flask API deploys to AWS Lambda behind an API Gateway HTTP API:
+
+```bash
+cd infra
+./scripts/build_lambda.sh
+terraform init      # first time only
+terraform apply
+```
+
+`terraform apply` creates billable AWS resources. See
+[`infra/README.md`](infra/README.md) for the architecture, the decisions
+behind it, and what is deliberately not built yet.
+
 ## Checks
 
 ```bash
-cd backend  && .venv/bin/ruff check . && .venv/bin/pytest -q
 cd frontend && npm run lint && npm run build
+cd backend  && .venv/bin/ruff check . && .venv/bin/pytest -q
+cd infra    && terraform fmt -check -recursive && terraform validate
 ```
 
 ## Dependencies
