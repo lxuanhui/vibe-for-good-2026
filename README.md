@@ -96,8 +96,18 @@ cd backend  && .venv/bin/ruff check . && .venv/bin/pytest -q
 cd infra    && terraform fmt -check -recursive && terraform validate
 ```
 
+## Contributing
+
+Branch, then PR — nothing lands on `main` directly. Name branches
+`<type>/<short-description>` with one of `feat/`, `fix/`, `refactor/`,
+`docs/`, `chore/`. See [`CLAUDE.md`](CLAUDE.md) for the full working
+conventions, which apply to humans and to Claude sessions alike.
+
 ## Dependencies
 
 Renovate opens grouped update PRs weekly (Monday mornings, Asia/Singapore).
 Configuration lives in `renovate.json`; the Dependency Dashboard issue tracks
 everything pending.
+
+Renovate only runs once the [Renovate GitHub App](https://github.com/apps/renovate)
+is installed on the repository — the config file on its own does nothing.

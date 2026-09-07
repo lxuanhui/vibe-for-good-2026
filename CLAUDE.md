@@ -85,6 +85,41 @@ which data is real and which is a fixture.
 | `add-data-source` | Adding or re-checking a source in `data_pipeline/` |
 | `deploy-api` | Deploying or debugging the Lambda-hosted API |
 
+## Working in this repo
+
+**Never commit to `main`.** Every change goes on a branch and lands through a
+pull request, so the two of us can see what the other's Claude did before it
+is in the trunk. Name the branch `<type>/<short-kebab-description>`, using the
+same type you would put on the commit:
+
+| Prefix | For |
+|---|---|
+| `feat/` | New behaviour a user could notice |
+| `fix/` | Correcting behaviour that was already meant to work |
+| `refactor/` | Restructuring without changing behaviour |
+| `docs/` | Docs, specs, comments, `CLAUDE.md`, skills |
+| `chore/` | Config, CI, dependencies, tooling |
+
+Wait for CI before merging. Which workflow runs depends on the paths touched:
+`CI` (frontend lint+build, backend ruff+pytest) runs on every PR; `Infra`
+runs only on `infra/**`, `backend/**`, or its own file, posts the Terraform
+plan as a PR comment, and applies on merge to `main`. **Read the plan comment
+before merging an infra PR** — merging is what deploys.
+
+Do not run `terraform apply` by hand to ship something. It works, and it
+races the pipeline; the pipeline holds the state lock and smoke-tests the
+result afterwards. Apply locally only when you are deliberately recovering
+something, and check `aws sts get-caller-identity` first — the active profile
+comes from the environment, not from the repo.
+
+Never commit a real `.env`, `*.tfvars`, Terraform state, `.terraform/`, or
+`infra/build/`. [`.env.example`](.env.example) is the index of every
+credential the project uses and where each one lives. There are no AWS access
+keys anywhere in this repo by design — GitHub authenticates to AWS over OIDC.
+
+Dependencies are Renovate's job, not yours. Do not hand-bump a version to fix
+an unrelated problem; if a bump is genuinely required, say so in the PR.
+
 ## Conventions
 
 - Comments explain *why*, not what. The existing code documents decisions and
@@ -93,3 +128,6 @@ which data is real and which is a fixture.
   the Tailwind `--color-status-*` tokens). No inline hexes in components.
 - Never render or store raw concession/peatland boundary geometry — attribute
   lookups only (spec v2 §2).
+- Comments and commit messages are written for the other person on this team,
+  who does not have your context. Say what was rejected and why, not only what
+  was chosen.
