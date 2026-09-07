@@ -20,6 +20,8 @@ backend/        Flask API. Local dev server on :5001 mounted at /api;
 infra/          Terraform — Lambda + API Gateway HTTP API. See infra/README.md.
 data_pipeline/  Python feasibility spike for the environmental data sources.
                 See data_pipeline/README.md.
+docs/           Decision log and environment facts. See docs/README.md.
+DesignSpecs/    The specs the product is built against.
 ```
 
 The Vite dev server proxies `/api/*` to the Flask backend, so the frontend can
