@@ -150,3 +150,12 @@ venv/
 data_pipeline/.cache*
 data_pipeline/output/
 data_pipeline/.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
