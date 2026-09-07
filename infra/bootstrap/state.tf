@@ -21,6 +21,13 @@ resource "aws_s3_bucket_versioning" "state" {
   }
 }
 
+# SSE-S3 rather than SSE-KMS with a customer managed key. The state file does
+# hold sensitive values, but the bucket is private, versioned, and public
+# access is blocked, and the account has one tenant -- so a CMK would buy key
+# rotation and an audit trail we have no use for, at the cost of a key policy
+# that every principal touching state has to be granted against. Revisit if
+# this state is ever shared across accounts or teams.
+# trivy:ignore:AWS-0132
 resource "aws_s3_bucket_server_side_encryption_configuration" "state" {
   bucket = aws_s3_bucket.state.id
   rule {

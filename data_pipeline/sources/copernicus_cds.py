@@ -16,7 +16,9 @@ from data_pipeline.common.http import SESSION
 from data_pipeline.config import CDSE_PASSWORD, CDSE_USERNAME, SUMATRA_KALIMANTAN_BBOX
 
 STAC_URL = "https://stac.dataspace.copernicus.eu/v1/search"
-TOKEN_URL = "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
+# S105 matches the variable name, not the value: this is the public OAuth2
+# endpoint, not a credential.
+TOKEN_URL = "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"  # noqa: S105
 
 
 def search(collection: str, bbox: tuple[float, float, float, float], start: str, end: str, limit: int = 20) -> dict:
