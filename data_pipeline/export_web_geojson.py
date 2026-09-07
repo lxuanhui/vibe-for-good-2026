@@ -6,7 +6,7 @@ Usage:
 
 Reads output/firms_2019_haze_sample.csv (the 2019 Sumatra/Kalimantan haze
 window pull -- see README.md) and writes one combined FeatureCollection to
-apps/web/public/pipeline/firms-2019-09.json (a static asset fetched at
+frontend/public/pipeline/firms-2019-09.json (a static asset fetched at
 runtime, not bundled), keyed by acquisition date.
 """
 
@@ -17,7 +17,7 @@ from pathlib import Path
 CONFIDENCE_LABELS = {"h": "high", "n": "nominal", "l": "low"}
 
 SOURCE_CSV = Path(__file__).parent / "output" / "firms_2019_haze_sample.csv"
-DEST_JSON = Path(__file__).parent.parent / "apps" / "web" / "public" / "pipeline" / "firms-2019-09.json"
+DEST_JSON = Path(__file__).parent.parent / "frontend" / "public" / "pipeline" / "firms-2019-09.json"
 
 
 def main() -> None:

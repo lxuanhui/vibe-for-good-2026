@@ -1,0 +1,175 @@
+import { useMemo } from 'react'
+import { Map, Source, Layer, type MapLayerMouseEvent } from 'react-map-gl/maplibre'
+import type { FeatureCollection, Geometry, GeoJsonProperties } from 'geojson'
+import 'maplibre-gl/dist/maplibre-gl.css'
+import indonesiaBoundary from '../../assets/indonesia-province-simple.json'
+import {
+  BOUNDARY_LINE_COLOR,
+  INDONESIA_FILL_COLOR,
+  KHG_CLASSIFICATION_COLORS,
+  KHG_FALLBACK_COLOR,
+  LAYER_COLORS,
+  PIPELINE_FIRMS_COLOR,
+} from '../../lib/layerColors'
+import { useAppStore } from '../../store/useAppStore'
+import { useEvents, useOverlay, usePipelineFirms } from '../../api/hooks'
+import { EventMarkers } from './EventMarkers'
+import { LayerControlPanel } from './LayerControlPanel'
+import { TimelineScrubber } from './TimelineScrubber'
+
+const INDONESIA_CENTER = { longitude: 113.9, latitude: -1.5, zoom: 4.4 }
+
+export function MapView() {
+  const events = useEvents()
+  const layerVisibility = useAppStore((s) => s.layerVisibility)
+  const activeDate = useAppStore((s) => s.activeDate)
+  const selectEvent = useAppStore((s) => s.selectEvent)
+
+  const firms = useOverlay('firms', activeDate, layerVisibility.firms)
+  const sarBackscatter = useOverlay('sar-backscatter', activeDate, layerVisibility['sar-backscatter'])
+  const khg = useOverlay('khg', activeDate, layerVisibility.khg)
+  const concessions = useOverlay('concessions', activeDate, layerVisibility.concessions)
+  const fireComplexLinks = useOverlay('fire-complex-links', activeDate, layerVisibility['fire-complex-links'])
+  const pipelineFirmsVisible = useAppStore((s) => s.pipelineFirmsVisible)
+  const pipelineFirms = usePipelineFirms(pipelineFirmsVisible)
+
+  const boundary = useMemo(() => indonesiaBoundary, [])
+
+  return (
+    <div className="relative h-full w-full">
+      <Map
+        mapStyle="/blank-style.json"
+        initialViewState={INDONESIA_CENTER}
+        minZoom={3}
+        maxZoom={12}
+        onClick={(e: MapLayerMouseEvent) => {
+          if (!e.originalEvent.defaultPrevented) selectEvent(null)
+        }}
+      >
+        <Source id="boundary" type="geojson" data={boundary as FeatureCollection<Geometry, GeoJsonProperties>}>
+          <Layer id="boundary-fill" type="fill" paint={{ 'fill-color': INDONESIA_FILL_COLOR, 'fill-opacity': 0.85 }} />
+          <Layer id="boundary-line" type="line" paint={{ 'line-color': BOUNDARY_LINE_COLOR, 'line-width': 0.75 }} />
+        </Source>
+
+        {khg && (
+          <Source id="khg" type="geojson" data={khg as FeatureCollection<Geometry, GeoJsonProperties>}>
+            <Layer
+              id="khg-fill"
+              type="fill"
+              paint={{
+                'fill-color': [
+                  'match',
+                  ['get', 'classification'],
+                  'protected_dome',
+                  KHG_CLASSIFICATION_COLORS.protected_dome,
+                  'production_zone',
+                  KHG_CLASSIFICATION_COLORS.production_zone,
+                  KHG_FALLBACK_COLOR,
+                ],
+                'fill-opacity': 0.12,
+              }}
+            />
+            <Layer
+              id="khg-line"
+              type="line"
+              paint={{
+                'line-color': [
+                  'match',
+                  ['get', 'classification'],
+                  'protected_dome',
+                  KHG_CLASSIFICATION_COLORS.protected_dome,
+                  'production_zone',
+                  KHG_CLASSIFICATION_COLORS.production_zone,
+                  KHG_FALLBACK_COLOR,
+                ],
+                'line-width': 1.25,
+                'line-dasharray': [2, 1.5],
+              }}
+            />
+          </Source>
+        )}
+
+        {fireComplexLinks && (
+          <Source id="fire-complex-links" type="geojson" data={fireComplexLinks as FeatureCollection<Geometry, GeoJsonProperties>}>
+            <Layer
+              id="fire-complex-links-line"
+              type="line"
+              paint={{ 'line-color': LAYER_COLORS['fire-complex-links'], 'line-width': 2, 'line-dasharray': [0.2, 1.6] }}
+              layout={{ 'line-cap': 'round' }}
+            />
+          </Source>
+        )}
+
+        {sarBackscatter && (
+          <Source id="sar-backscatter" type="geojson" data={sarBackscatter as FeatureCollection<Geometry, GeoJsonProperties>}>
+            <Layer
+              id="sar-backscatter-circle"
+              type="circle"
+              paint={{
+                'circle-radius': 14,
+                'circle-color': LAYER_COLORS['sar-backscatter'],
+                'circle-opacity': 0.18,
+                'circle-stroke-color': LAYER_COLORS['sar-backscatter'],
+                'circle-stroke-width': 1.5,
+              }}
+            />
+          </Source>
+        )}
+
+        {concessions && (
+          <Source id="concessions" type="geojson" data={concessions as FeatureCollection<Geometry, GeoJsonProperties>}>
+            <Layer
+              id="concessions-circle"
+              type="circle"
+              paint={{
+                'circle-radius': 5,
+                'circle-color': LAYER_COLORS.concessions,
+                'circle-stroke-color': '#0a0d12',
+                'circle-stroke-width': 1.5,
+              }}
+            />
+          </Source>
+        )}
+
+        {firms && (
+          <Source id="firms" type="geojson" data={firms as FeatureCollection<Geometry, GeoJsonProperties>}>
+            <Layer
+              id="firms-circle"
+              type="circle"
+              paint={{
+                'circle-radius': ['interpolate', ['linear'], ['get', 'frp'], 0, 3, 25, 9],
+                'circle-color': LAYER_COLORS.firms,
+                'circle-opacity': 0.55,
+                'circle-stroke-color': LAYER_COLORS.firms,
+                'circle-stroke-width': 1,
+              }}
+            />
+          </Source>
+        )}
+
+        {pipelineFirms && (
+          <Source id="pipeline-firms" type="geojson" data={pipelineFirms as FeatureCollection<Geometry, GeoJsonProperties>}>
+            <Layer
+              id="pipeline-firms-circle"
+              type="circle"
+              paint={{
+                'circle-radius': ['interpolate', ['linear'], ['get', 'frp'], 0, 1.5, 25, 4],
+                'circle-color': PIPELINE_FIRMS_COLOR,
+                'circle-opacity': 0.5,
+              }}
+            />
+          </Source>
+        )}
+
+        <EventMarkers events={events} />
+      </Map>
+
+      <div className="pointer-events-none absolute top-3 left-3">
+        <LayerControlPanel />
+      </div>
+      <div className="pointer-events-none absolute right-3 bottom-3 left-3">
+        <TimelineScrubber />
+      </div>
+    </div>
+  )
+}

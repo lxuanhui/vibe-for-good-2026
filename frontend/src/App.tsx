@@ -1,25 +1,22 @@
-import { useEffect, useState } from 'react'
-import './App.css'
+import { ViewModeToggle } from './components/layout/ViewModeToggle'
+import { MapView } from './components/map/MapView'
+import { ReportPanel } from './components/report/ReportPanel'
+import { TableSidebar } from './components/table/TableSidebar'
 
-function App() {
-  const [message, setMessage] = useState('Connecting to the API…')
-
-  useEffect(() => {
-    fetch('/api/hello')
-      .then((response) => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        return response.json()
-      })
-      .then((data: { message: string }) => setMessage(data.message))
-      .catch((error: Error) => setMessage(`API unavailable: ${error.message}`))
-  }, [])
-
+export default function App() {
   return (
-    <main>
-      <h1>Vibe for Good 2026</h1>
-      <p>{message}</p>
-    </main>
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-bg text-text">
+      <header className="flex h-12 shrink-0 items-center justify-between border-b border-border-strong bg-panel px-4">
+        <span className="text-sm font-semibold tracking-wide">Environmental Assurance Console</span>
+        <ViewModeToggle />
+      </header>
+      <div className="relative flex flex-1 overflow-hidden">
+        <div className="relative flex-1">
+          <MapView />
+        </div>
+        <TableSidebar />
+      </div>
+      <ReportPanel />
+    </div>
   )
 }
-
-export default App
