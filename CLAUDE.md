@@ -20,6 +20,7 @@ to an evidence ID.
 ## Layout
 
 ```
+docs/           Decision log and environment facts — read before re-deciding anything
 frontend/       Vite + React + TS console (MapLibre, Tailwind 4, zustand, recharts)
 backend/        Flask API — runs locally via wsgi.py, on Lambda via lambda_handler.py
 infra/          Terraform: Lambda + API Gateway HTTP API, applied by CI
@@ -31,6 +32,12 @@ Read the specs in this order: `environmental_assurance_claude_code_spec.md`
 (overview) → `environmental_assurance_spec_v2.md` (peatland-aware
 architecture, supersedes v1 §0–1) → `assurance_console_ui_spec.md` (UI + API
 contract).
+
+Check [`docs/decision-log.md`](docs/decision-log.md) before changing anything
+architectural — it records what was already tried and rejected, and why.
+[`docs/environments.md`](docs/environments.md) has the AWS account, live URLs,
+and what CI needs. Add an entry to the log when you make a decision worth not
+re-litigating.
 
 ## Commands
 
