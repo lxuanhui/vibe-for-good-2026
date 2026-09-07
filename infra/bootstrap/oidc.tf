@@ -17,6 +17,35 @@ locals {
   oidc_provider_arn = var.create_oidc_provider ? aws_iam_openid_connect_provider.github[0].arn : "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/token.actions.githubusercontent.com"
 
   project_role_arn = "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:role/${var.project}-*"
+
+  github_owner = split("/", var.github_repository)[0]
+  github_repo  = split("/", var.github_repository)[1]
+
+  # GitHub issues OIDC tokens in two subject formats. The widely documented
+  # one is name-based:
+  #
+  #     repo:owner/repo:pull_request
+  #
+  # but this repository receives the hardened immutable form, which appends
+  # the numeric owner and repository ids:
+  #
+  #     repo:owner@73178128/repo@1358849204:pull_request
+  #
+  # The immutable form is the stronger of the two -- it does not follow a
+  # rename, so a repo deleted and recreated under the same name cannot
+  # inherit this role. Both are allowed here so the pipeline keeps working
+  # whichever format GitHub sends, and both stay pinned to this repository.
+  github_repo_immutable = "${local.github_owner}@${var.github_owner_id}/${local.github_repo}@${var.github_repository_id}"
+
+  # Pushes to main (which apply) and pull requests (which only plan).
+  # Deliberately not "repo:...:*" -- that would let any branch in the repo
+  # assume a role that can write to the account.
+  allowed_oidc_subjects = flatten([
+    for repo_ref in [var.github_repository, local.github_repo_immutable] : [
+      "repo:${repo_ref}:ref:refs/heads/main",
+      "repo:${repo_ref}:pull_request",
+    ]
+  ])
 }
 
 data "aws_iam_policy_document" "github_assume_role" {
@@ -40,10 +69,7 @@ data "aws_iam_policy_document" "github_assume_role" {
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values = [
-        "repo:${var.github_repository}:ref:refs/heads/main",
-        "repo:${var.github_repository}:pull_request",
-      ]
+      values   = local.allowed_oidc_subjects
     }
   }
 }
