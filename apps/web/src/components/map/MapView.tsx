@@ -40,9 +40,9 @@ export function MapView() {
     'interpolate',
     ['linear'],
     ['zoom'],
-    7, ['interpolate', ['linear'], ['get', 'frp'], 0, 1.5, 25, 3],
-    9, ['interpolate', ['linear'], ['get', 'frp'], 0, 2.5, 25, 4.5],
-    12, ['interpolate', ['linear'], ['get', 'frp'], 0, 5, 25, 8],
+    7, ['interpolate', ['linear'], ['get', 'frp'], 0, 2.5, 25, 4.5],
+    9, ['interpolate', ['linear'], ['get', 'frp'], 0, 4, 25, 6.5],
+    12, ['interpolate', ['linear'], ['get', 'frp'], 0, 7, 25, 11],
   ] as const
 
   return (
@@ -165,18 +165,19 @@ export function MapView() {
               type="heatmap"
               maxzoom={9}
               paint={{
-                'heatmap-weight': ['interpolate', ['linear'], ['get', 'frp'], 0, 0.1, 25, 0.5],
-                'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 3, 0.15, 9, 1.1],
+                'heatmap-weight': ['interpolate', ['linear'], ['get', 'frp'], 0, 0.15, 25, 0.6],
+                'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 3, 0.3, 9, 1.8],
                 'heatmap-color': [
                   'interpolate',
                   ['linear'],
                   ['heatmap-density'],
                   0, 'rgba(255,90,74,0)',
-                  0.3, 'rgba(135,9,26,0.15)',
-                  0.65, 'rgba(255,90,74,0.32)',
-                  1, 'rgba(255,90,74,0.5)',
+                  0.25, 'rgba(135,9,26,0.2)',
+                  0.5, 'rgba(200,40,40,0.4)',
+                  0.75, 'rgba(255,90,74,0.6)',
+                  1, 'rgba(255,140,60,0.75)',
                 ],
-                'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 3, 4, 9, 20],
+                'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 3, 7, 9, 28],
                 'heatmap-opacity': ['interpolate', ['linear'], ['zoom'], 7, 1, 9, 0],
               }}
             />
@@ -187,8 +188,8 @@ export function MapView() {
               paint={{
                 'circle-radius': firmsRadius,
                 'circle-color': LAYER_COLORS.firms,
-                'circle-opacity': ['interpolate', ['linear'], ['zoom'], 7, 0, 9, 0.65],
-                'circle-blur': 0.3,
+                'circle-opacity': ['interpolate', ['linear'], ['zoom'], 7, 0, 9, 0.75],
+                'circle-blur': 0.25,
               }}
             />
           </Source>
