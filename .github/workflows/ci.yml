@@ -36,19 +36,3 @@ jobs:
       - run: ruff check .
       - run: pytest -q
 
-  infra:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: infra
-    steps:
-      - uses: actions/checkout@v5
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.9.8
-      - run: terraform fmt -check -recursive
-      # No AWS credentials in CI, so this stays at init -backend=false +
-      # validate: enough to catch syntax and provider-schema errors without
-      # touching state or an account.
-      - run: terraform init -backend=false
-      - run: terraform validate

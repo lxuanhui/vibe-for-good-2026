@@ -5,6 +5,11 @@
 # script producing the zip, so the deployed artifact hash tracks content and
 # `terraform apply` is a no-op when nothing changed.
 #
+# The output must be BYTE-IDENTICAL for the same inputs on any machine.
+# Otherwise a laptop and a CI runner disagree on source_code_hash, Terraform
+# reports a Lambda update on every plan, and no plan is ever clean. Every
+# choice below that looks fussy is protecting that property.
+#
 # Run this before `terraform plan`/`apply` whenever backend/ changes.
 set -euo pipefail
 
@@ -23,16 +28,26 @@ echo "==> Cleaning $BUILD_DIR"
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
 
-WHEEL_DIR="$(mktemp -d)"
-trap 'rm -rf "$WHEEL_DIR"' EXIT
-
-# Two steps rather than one `pip install <backend dir>`: the vendoring step
-# below passes --only-binary=:all: (needed alongside --platform), which
-# forbids building anything from source -- including the backend project
-# itself. Building its wheel first sidesteps that; the wheel is
-# py3-none-any, so it stays valid for the Lambda target.
-echo "==> Building backend wheel"
-"$PYTHON" -m pip wheel --no-deps --wheel-dir "$WHEEL_DIR" --quiet "$BACKEND_DIR"
+# Dependencies are read from pyproject.toml rather than duplicated here, so
+# there is still one source of truth -- but the backend itself is NOT pip
+# installed. Installing it would mean building its wheel, which drags in
+# whatever build backend version pip resolves that day plus a direct_url.json
+# recording the mktemp path it was built in, both of which differ per machine.
+# Copying the source in sidesteps all of it.
+echo "==> Reading dependencies from pyproject.toml"
+# Read into an array with a while-loop rather than mapfile: macOS ships
+# bash 3.2, which predates mapfile, and this script has to run identically
+# there and on the Ubuntu runner.
+DEPS=()
+while IFS= read -r dep; do
+    [ -n "$dep" ] && DEPS+=("$dep")
+done < <("$PYTHON" - "$BACKEND_DIR/pyproject.toml" <<'PYEOF'
+import sys, tomllib
+with open(sys.argv[1], "rb") as fh:
+    print("\n".join(tomllib.load(fh)["project"]["dependencies"]))
+PYEOF
+)
+printf '    %s\n' "${DEPS[@]}"
 
 echo "==> Vendoring dependencies for python$PYTHON_VERSION/$PLATFORM"
 # --platform/--python-version pin the wheels to the Lambda runtime rather
@@ -48,12 +63,26 @@ echo "==> Vendoring dependencies for python$PYTHON_VERSION/$PLATFORM"
     --only-binary=:all: \
     --upgrade \
     --quiet \
-    "$WHEEL_DIR"/*.whl
+    "${DEPS[@]}"
 
-echo "==> Adding Lambda entrypoint"
-# The `app` package itself arrives via the wheel above. wsgi.py is the local
-# dev server and has no place in the bundle, so only the handler is copied.
+echo "==> Adding application source"
+cp -R "$BACKEND_DIR/app" "$BUILD_DIR/app"
+# wsgi.py is the local dev server and has no place in the bundle.
 cp "$BACKEND_DIR/lambda_handler.py" "$BUILD_DIR/lambda_handler.py"
+
+# Console-script wrappers (bin/flask, bin/dotenv) are generated with a shebang
+# pointing at the interpreter that ran pip -- /opt/homebrew/... on a Mac,
+# /opt/hostedtoolcache/... on a runner. Lambda invokes the handler directly and
+# never uses them, and they are the single biggest source of cross-machine
+# hash drift.
+rm -rf "$BUILD_DIR/bin"
+
+# Each such script is also listed in its package's RECORD, with the script's
+# hash and size -- and the shebang path length differs per machine, so those
+# lines differ too. RECORD is pip uninstall bookkeeping and is never read at
+# runtime; the rest of it stays intact.
+find "$BUILD_DIR" -name 'RECORD' -exec sed -i.bak '/^\.\.\/\.\.\/bin\//d' {} +
+find "$BUILD_DIR" -name 'RECORD.bak' -delete
 
 # .dist-info is deliberately kept -- Flask reads its own version through
 # importlib.metadata, which needs it.

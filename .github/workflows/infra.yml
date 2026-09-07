@@ -1,0 +1,130 @@
+name: Infra
+
+# Anything that changes what gets deployed: the Terraform itself, and the
+# backend source that build_lambda.sh packages into the function.
+on:
+  pull_request:
+    paths:
+      - 'infra/**'
+      - 'backend/**'
+      - '.github/workflows/infra.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'infra/**'
+      - 'backend/**'
+      - '.github/workflows/infra.yml'
+  workflow_dispatch:
+
+# Terraform state takes one lock at a time. Serialising every run of this
+# workflow means a queued run waits rather than failing on a held lock.
+# cancel-in-progress stays false -- killing a job mid-apply leaves the lock
+# held and the state half-written.
+concurrency:
+  group: terraform-infra
+  cancel-in-progress: false
+
+env:
+  TF_VERSION: '1.16.0'
+  PYTHON_VERSION: '3.13'
+  AWS_REGION: ap-southeast-1
+  # Empty secret/variable falls back to the same defaults declared in
+  # variables.tf, so CI and a local apply converge on identical config
+  # instead of fighting over the Lambda environment on every run.
+  TF_VAR_flask_secret_key: ${{ secrets.FLASK_SECRET_KEY || 'dev' }}
+  TF_VAR_cors_origins: ${{ vars.CORS_ORIGINS || '*' }}
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra
+    permissions:
+      id-token: write       # required to mint the OIDC token for AWS
+      contents: read
+      pull-requests: write  # to post the plan back onto the PR
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      # Short-lived credentials from the OIDC role created by
+      # infra/bootstrap/. Nothing long-lived is stored in this repo.
+      - name: Assume AWS role
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: gha-infra-${{ github.run_id }}
+
+      # Terraform hashes this directory, so it must exist before plan --
+      # and it must be built the same way locally and in CI or every run
+      # would show a spurious source_code_hash change.
+      - name: Build Lambda payload
+        run: ./scripts/build_lambda.sh
+
+      # -recursive also covers infra/bootstrap/, which is applied by hand.
+      - name: Format check
+        run: terraform fmt -check -recursive
+
+      - name: Init
+        run: terraform init -input=false -lock-timeout=5m
+
+      - name: Validate
+        run: terraform validate
+
+      - name: Plan
+        id: plan
+        run: |
+          terraform plan -input=false -lock-timeout=5m -out=tfplan
+          terraform show -no-color tfplan > plan.txt
+
+      - name: Summarise plan
+        run: |
+          {
+            echo '### Terraform plan'
+            echo '```terraform'
+            # Job summaries cap at 1 MiB; a large plan is truncated rather
+            # than losing the whole summary.
+            head -c 60000 plan.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment plan on PR
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo '#### Terraform plan — `infra/`'
+            echo
+            echo '<details><summary>Show plan</summary>'
+            echo
+            echo '```terraform'
+            head -c 60000 plan.txt
+            echo '```'
+            echo
+            echo '</details>'
+          } > comment.md
+          gh pr comment "${{ github.event.number }}" --body-file comment.md
+
+      # Apply only from main. A PR gets a plan and nothing else, so review
+      # happens against the same plan that will be applied.
+      - name: Apply
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        run: terraform apply -input=false -lock-timeout=5m -auto-approve tfplan
+
+      - name: Smoke test
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        run: |
+          URL="$(terraform output -raw api_health_url)"
+          echo "GET $URL"
+          curl --fail --silent --show-error --retry 3 --retry-delay 5 "$URL"

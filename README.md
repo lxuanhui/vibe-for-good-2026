@@ -50,7 +50,12 @@ npm run dev                             # http://localhost:5173
 
 ## Deploying
 
-The Flask API deploys to AWS Lambda behind an API Gateway HTTP API:
+The Flask API runs on AWS Lambda behind an API Gateway HTTP API, deployed by
+CI: a pull request touching `infra/**` or `backend/**` gets a Terraform plan
+posted as a PR comment, and merging to `main` applies it and health-checks
+the result. GitHub authenticates to AWS over OIDC — no keys in the repo.
+
+To apply by hand against the same remote state:
 
 ```bash
 cd infra
@@ -59,9 +64,27 @@ terraform init      # first time only
 terraform apply
 ```
 
-`terraform apply` creates billable AWS resources. See
-[`infra/README.md`](infra/README.md) for the architecture, the decisions
-behind it, and what is deliberately not built yet.
+Requires Terraform >= 1.10. See [`infra/README.md`](infra/README.md) for the
+architecture, the one-time bootstrap, the pipeline, and what is deliberately
+not built yet.
+
+## Credentials
+
+[`.env.example`](.env.example) is the index of every credential the project
+uses — which file each belongs in, where to obtain it, and which live in
+GitHub rather than on disk. Copy the relevant block into `backend/.env` or
+`data_pipeline/.env`; nothing loads a `.env` at the repo root.
+
+For CI, one repository variable is required:
+
+| Where | Name | Required | Purpose |
+|---|---|---|---|
+| Variable | `AWS_ROLE_ARN` | yes | IAM role GitHub assumes over OIDC. Already set. |
+| Variable | `CORS_ORIGINS` | no | Origin the deployed console is served from; defaults to `*`. |
+| Secret | `FLASK_SECRET_KEY` | no | Lambda's `SECRET_KEY`; defaults to `dev`. |
+
+There are deliberately **no AWS access keys** in this repo — GitHub
+authenticates to AWS over OIDC and assumes a role scoped to this repository.
 
 ## Checks
 

@@ -161,7 +161,7 @@ venv/
 *.egg-info/
 
 # Terraform
-infra/.terraform/
+**/.terraform/
 # .terraform.lock.hcl is deliberately NOT ignored -- it pins provider
 # versions so everyone applies with the same AWS provider build.
 *.tfstate
