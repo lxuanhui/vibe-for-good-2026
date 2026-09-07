@@ -151,9 +151,10 @@ export function MapView() {
 
         {firms && (
           // Merges mock per-case detections with the real NASA FIRMS pipeline
-          // pull into one source/layer -- see hooks.ts useFirms(). At
-          // country-wide zoom, ~21.5k overlapping points would just alpha-
-          // stack into a solid red mass as plain circles, so this uses a
+          // pull into one source/layer, both scoped to activeDate -- see
+          // hooks.ts useFirms(). The real pull's busiest single day is still
+          // ~6.5k overlapping points, which would alpha-stack into a solid
+          // red mass as plain circles at country-wide zoom, so this uses a
           // heatmap (a soft, muted glow field, brightest where detections
           // cluster) that fades out by zoom 9 as individually glowing dots
           // (echoing the event marker's halo) fade in -- the standard

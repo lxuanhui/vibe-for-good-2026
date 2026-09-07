@@ -40,11 +40,14 @@ export function useOverlay(
   return data
 }
 
-// The 'firms' layer merges two sources into one FeatureCollection: the
-// mock per-case detections (timeline-scoped, from fixtures/overlays.ts --
-// see the real-endpoint note there) and the real one-off NASA FIRMS
-// pipeline pull (static, not timeline-scoped -- see fixtures/pipelineFirms.ts).
-// Once a real backend exists, both go away in favor of a single
+// The 'firms' layer merges two sources into one FeatureCollection, both
+// scoped to the same `date`: the mock per-case detections (from
+// fixtures/overlays.ts -- see the real-endpoint note there) and the real
+// NASA FIRMS pipeline pull (from fixtures/pipelineFirms.ts, temporally
+// separated into its own per-date buckets rather than dumped all at once).
+// fixtures/dates.ts populates the timeline's date config directly from both
+// sources, so `date` always lands on a day at least one of them has data
+// for. Once a real backend exists, both go away in favor of a single
 // client.fetchOverlay('firms', date) call -- see that note for the target
 // endpoint contract.
 export function useFirms(date: string, enabled: boolean): FeatureCollection<unknown, unknown> | null {
@@ -55,7 +58,7 @@ export function useFirms(date: string, enabled: boolean): FeatureCollection<unkn
       return
     }
     let active = true
-    Promise.all([client.fetchOverlay('firms', date), fetchPipelineFirms()]).then(([mock, real]) => {
+    Promise.all([client.fetchOverlay('firms', date), fetchPipelineFirms(date)]).then(([mock, real]) => {
       if (!active) return
       setData({ type: 'FeatureCollection', features: [...mock.features, ...real.features] })
     })

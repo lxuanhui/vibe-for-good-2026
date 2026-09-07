@@ -32,7 +32,7 @@ const GEOJSON_LAYERS: { id: OverlayLayerId; label: string; swatch: ReactNode; ca
     id: 'firms',
     label: 'FIRMS thermal hotspots',
     swatch: <Dot color={LAYER_COLORS.firms} />,
-    caption: `Mock cases + real NASA FIRMS pull (21,519 pts, ${PIPELINE_FIRMS_DATE_RANGE[0]} → ${PIPELINE_FIRMS_DATE_RANGE[1]}, not linked to timeline)`,
+    caption: `Mock cases + real NASA FIRMS pull (21,519 pts across ${PIPELINE_FIRMS_DATE_RANGE[0]} → ${PIPELINE_FIRMS_DATE_RANGE[1]}) — scrub the timeline to move between the two`,
   },
   { id: 'sar-backscatter', label: 'SAR backscatter (VH drop)', swatch: <Dot color={LAYER_COLORS['sar-backscatter']} /> },
   {
