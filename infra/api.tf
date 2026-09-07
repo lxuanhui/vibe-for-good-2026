@@ -1,0 +1,153 @@
+# The Flask API, packaged as a single Lambda behind an API Gateway HTTP API.
+#
+# Every /api/* route is proxied to one function rather than split across
+# per-route Lambdas: the app is one Flask blueprint, splitting it would mean
+# N cold starts instead of one, and routing already exists inside Flask.
+
+locals {
+  name = "${var.project}-${var.environment}"
+
+  # Built by scripts/build_lambda.sh -- dependencies vendored next to the
+  # backend source. Terraform zips it rather than the script, so the
+  # source_code_hash below tracks content and redeploys only on real changes.
+  lambda_build_dir = "${path.module}/build/lambda"
+}
+
+data "archive_file" "api" {
+  type        = "zip"
+  source_dir  = local.lambda_build_dir
+  output_path = "${path.module}/build/api.zip"
+}
+
+# --- Execution role -------------------------------------------------------
+
+data "aws_iam_policy_document" "lambda_assume_role" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["lambda.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "api" {
+  name               = "${local.name}-api"
+  assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
+}
+
+# Grants only CreateLogGroup/CreateLogStream/PutLogEvents. Anything the API
+# later needs (S3, DynamoDB, Secrets Manager) gets its own scoped policy
+# attached here rather than widening this one.
+resource "aws_iam_role_policy_attachment" "api_logs" {
+  role       = aws_iam_role.api.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+# Declared explicitly so retention is enforced and the group is destroyed
+# with the stack. Lambda would otherwise create it on first invocation with
+# never-expire retention, outliving `terraform destroy`.
+resource "aws_cloudwatch_log_group" "api" {
+  name              = "/aws/lambda/${local.name}-api"
+  retention_in_days = var.log_retention_days
+}
+
+# --- Function -------------------------------------------------------------
+
+resource "aws_lambda_function" "api" {
+  function_name = "${local.name}-api"
+  role          = aws_iam_role.api.arn
+
+  filename         = data.archive_file.api.output_path
+  source_code_hash = data.archive_file.api.output_base64sha256
+
+  runtime = "python3.13"
+  handler = "lambda_handler.handler"
+
+  # arm64 (Graviton) is cheaper per GB-second than x86_64 and every
+  # dependency here is pure Python -- see scripts/build_lambda.sh.
+  architectures = ["arm64"]
+
+  memory_size = var.lambda_memory_mb
+  timeout     = var.lambda_timeout_seconds
+
+  environment {
+    variables = {
+      SECRET_KEY   = var.flask_secret_key
+      CORS_ORIGINS = var.cors_origins
+    }
+  }
+
+  depends_on = [
+    aws_iam_role_policy_attachment.api_logs,
+    aws_cloudwatch_log_group.api,
+  ]
+}
+
+# --- HTTP API -------------------------------------------------------------
+
+# No cors_configuration block on purpose: flask-cors already sets the CORS
+# headers inside the app. Configuring it here too makes API Gateway append a
+# second Access-Control-Allow-Origin, and browsers reject a response carrying
+# two of them -- which looks exactly like CORS being "not configured".
+resource "aws_apigatewayv2_api" "api" {
+  name          = "${local.name}-api"
+  protocol_type = "HTTP"
+  description   = "Environmental Assurance Console API (Flask on Lambda)"
+}
+
+resource "aws_apigatewayv2_integration" "api" {
+  api_id                 = aws_apigatewayv2_api.api.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.api.invoke_arn
+  payload_format_version = "2.0"
+}
+
+# One catch-all route -- Flask owns routing and 404s for unknown paths, so
+# mirroring each blueprint route in Terraform would just be a second place to
+# forget to update.
+resource "aws_apigatewayv2_route" "proxy" {
+  api_id    = aws_apigatewayv2_api.api.id
+  route_key = "ANY /{proxy+}"
+  target    = "integrations/${aws_apigatewayv2_integration.api.id}"
+}
+
+resource "aws_apigatewayv2_route" "root" {
+  api_id    = aws_apigatewayv2_api.api.id
+  route_key = "ANY /"
+  target    = "integrations/${aws_apigatewayv2_integration.api.id}"
+}
+
+resource "aws_cloudwatch_log_group" "api_gateway" {
+  name              = "/aws/apigateway/${local.name}-api"
+  retention_in_days = var.log_retention_days
+}
+
+resource "aws_apigatewayv2_stage" "default" {
+  api_id      = aws_apigatewayv2_api.api.id
+  name        = "$default"
+  auto_deploy = true
+
+  access_log_settings {
+    destination_arn = aws_cloudwatch_log_group.api_gateway.arn
+    format = jsonencode({
+      requestId      = "$context.requestId"
+      httpMethod     = "$context.httpMethod"
+      path           = "$context.path"
+      status         = "$context.status"
+      responseLength = "$context.responseLength"
+      errorMessage   = "$context.error.message"
+      integrationErr = "$context.integrationErrorMessage"
+      requestTime    = "$context.requestTime"
+    })
+  }
+}
+
+# Scoped to this API's ARN so no other API Gateway can invoke the function.
+resource "aws_lambda_permission" "api_gateway" {
+  statement_id  = "AllowExecutionFromAPIGateway"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.api.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.api.execution_arn}/*/*"
+}
