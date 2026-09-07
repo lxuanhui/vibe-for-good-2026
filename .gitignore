@@ -141,3 +141,12 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Python data-pipeline spike
+__pycache__/
+*.pyc
+.venv/
+venv/
+data_pipeline/.cache*
+data_pipeline/output/
+data_pipeline/.env
