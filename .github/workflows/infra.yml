@@ -71,6 +71,31 @@ jobs:
       - name: Build Lambda payload
         run: ./scripts/build_lambda.sh
 
+      # TEMPORARY: emit a file-level manifest so a CI build can be diffed
+      # against a local one. Remove once hashes agree.
+      - name: Bundle manifest
+        run: |
+          python3 - build/lambda > /tmp/manifest-ci.txt <<'PYEOF'
+          import hashlib, os, stat, sys
+          root = sys.argv[1]
+          rows = []
+          for dirpath, dirnames, filenames in os.walk(root):
+              dirnames.sort()
+              for fn in sorted(filenames):
+                  p = os.path.join(dirpath, fn)
+                  rel = os.path.relpath(p, root)
+                  st = os.lstat(p)
+                  h = hashlib.sha256(open(p, 'rb').read()).hexdigest() if not stat.S_ISLNK(st.st_mode) else 'symlink'
+                  rows.append(f"{oct(stat.S_IMODE(st.st_mode))} {st.st_size:>9} {h} {rel}")
+          print("\n".join(sorted(rows, key=lambda r: r.split(' ', 3)[3])))
+          PYEOF
+          wc -l < /tmp/manifest-ci.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundle-manifest
+          path: /tmp/manifest-ci.txt
+
       # -recursive also covers infra/bootstrap/, which is applied by hand.
       - name: Format check
         run: terraform fmt -check -recursive
