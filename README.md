@@ -96,6 +96,10 @@ cd backend  && .venv/bin/ruff check . && .venv/bin/pytest -q
 cd infra    && terraform fmt -check -recursive && terraform validate
 ```
 
+A `Security` workflow also runs on every PR and weekly: gitleaks over the
+full commit history for committed credentials, plus `npm audit` and
+`pip-audit` for known-vulnerable dependencies.
+
 ## Contributing
 
 Branch, then PR — nothing lands on `main` directly. Name branches

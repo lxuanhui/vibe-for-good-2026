@@ -23,6 +23,15 @@
       "depNameTemplate": "hashicorp/terraform",
       "datasourceTemplate": "github-releases",
       "extractVersionTemplate": "^v(?<version>.*)$"
+    },
+    {
+      "customType": "regex",
+      "description": "Track the gitleaks pin in the Security workflow. Same blind spot as the Terraform pin: the version lives in a workflow env var, which the github-actions manager does not read.",
+      "managerFilePatterns": ["/^\\.github/workflows/security\\.yml$/"],
+      "matchStrings": ["GITLEAKS_VERSION:\\s*'(?<currentValue>[^']+)'"],
+      "depNameTemplate": "gitleaks/gitleaks",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.*)$"
     }
   ],
   "packageRules": [

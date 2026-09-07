@@ -101,10 +101,21 @@ same type you would put on the commit:
 | `chore/` | Config, CI, dependencies, tooling |
 
 Wait for CI before merging. Which workflow runs depends on the paths touched:
-`CI` (frontend lint+build, backend ruff+pytest) runs on every PR; `Infra`
-runs only on `infra/**`, `backend/**`, or its own file, posts the Terraform
-plan as a PR comment, and applies on merge to `main`. **Read the plan comment
-before merging an infra PR** — merging is what deploys.
+
+| Workflow | Runs on | Does |
+|---|---|---|
+| `CI` | every PR | frontend lint + build, backend ruff + pytest |
+| `Security` | every PR, plus weekly | gitleaks over the full history; `npm audit` and `pip-audit` |
+| `Infra` | `infra/**`, `backend/**`, or its own file | posts the Terraform plan as a PR comment, applies on merge to `main` |
+
+**Read the plan comment before merging an infra PR** — merging is what
+deploys.
+
+A `Security` failure is not a formality. If gitleaks flags something, rotate
+the credential first and clean the history second — a secret that reached
+`origin` is compromised whether or not the commit is still reachable. Never
+silence a finding with an allowlist entry without saying in the PR why the
+match is not a real credential.
 
 Do not run `terraform apply` by hand to ship something. It works, and it
 races the pipeline; the pipeline holds the state lock and smoke-tests the

@@ -6,6 +6,56 @@ more valuable half.
 
 ---
 
+## 2026-09-07 — Security scanning in CI: gitleaks over full history, audits that block only on runtime deps
+
+**Status:** done · PR #34
+
+**Decision.** A `Security` workflow with two independent jobs — gitleaks over
+the entire commit history, and `npm audit` + `pip-audit` for known
+vulnerabilities — on every PR, on `main`, and weekly.
+
+**Why full history rather than the diff.** gitleaks scans commit patches, so
+a credential that was committed and then deleted in a later commit is still a
+finding. That is correct: it reached `origin`, so it is compromised regardless
+of whether the file still exists at the tip. Diff-scoped scanning would call
+that clean. The history is small — 14 commits reachable from `main`, ~9 MB of
+patches, about 250 ms to scan — so there is no reason to narrow it.
+
+Note that gitleaks covers what is *reachable in the clone*. CI's fresh clone
+has only the PR ref and `main`, where a local checkout also has stale
+remote-tracking branches; a local run therefore reports a higher commit count
+(24 here) than CI does. Nothing is missed by this: branches are squash-merged
+and deleted, so their original commits do not survive on `origin`.
+
+**Why the binary and not `gitleaks/gitleaks-action`.** The action is free for
+personal accounts but requires a `GITLEAKS_LICENSE` secret under an
+organization. This repo is user-owned today; if it ever moves to an org, a
+pinned binary keeps working and the action would start failing for a reason
+that has nothing to do with the code. The download is checksum-verified
+against the release's own `checksums.txt` — that catches a corrupted or
+substituted download, not a compromised release, which is the honest limit of
+what it buys.
+
+**Why the npm audit is split in two.** The blocking step is
+`--omit=dev`: an advisory in a runtime dependency ships to a user. The full
+audit including dev dependencies runs `continue-on-error` for visibility —
+Vite and oxlint are build-time only, and an advisory in a bundler should not
+block a docs PR at a hackathon. Both were clean when this landed.
+
+**Rejected: GitHub's native secret scanning and push protection.** Both are
+disabled on this repo and cannot be enabled — for a private repository they
+are a GitHub Advanced Security feature, not available on a free personal
+account. Same class of limitation as the auto-merge finding above.
+
+**Note.** GitGuardian already posts a "GitGuardian Security Checks" status on
+pull requests, so there is deliberate overlap on the secrets question. That
+scanner belongs to an installed app and can be removed by whoever installed
+it; the gitleaks job is in this repository, runs on a schedule, and covers
+history rather than the PR diff. The overlap is cheap and the failure modes
+differ.
+
+---
+
 ## 2026-09-07 — Renovate: bump open Python ranges, and track the Terraform CLI pin
 
 **Status:** done · PR #33

@@ -1,0 +1,91 @@
+name: Security
+
+# Two questions, asked separately because they fail for different reasons:
+# did we commit a credential, and are we shipping a known-vulnerable package.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  # Advisories are published after the code that they affect. A weekly run
+  # catches a dependency that became vulnerable while nobody touched the repo.
+  schedule:
+    - cron: '0 21 * * 0'   # Monday 05:00 Asia/Singapore
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GITLEAKS_VERSION: '8.28.0'
+
+jobs:
+  secrets:
+    name: Committed secrets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # gitleaks scans commit patches, not the working tree, so a secret
+          # that was committed and later deleted is still a finding. That is
+          # the point: it is in the history, so it is still leaked.
+          fetch-depth: 0
+
+      - name: Install gitleaks
+        run: |
+          set -euo pipefail
+          base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -fsSL --retry 3 -O "${base}/${archive}"
+          curl -fsSL --retry 3 -O "${base}/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          # Confirms we got the file the release published -- a corrupted or
+          # substituted download, not a compromised release. Worth the four
+          # lines in the job whose whole purpose is not trusting things.
+          grep " ${archive}\$" "gitleaks_${GITLEAKS_VERSION}_checksums.txt" | sha256sum -c -
+          tar -xzf "${archive}" gitleaks
+          sudo install -m 755 gitleaks /usr/local/bin/gitleaks
+
+      - name: Scan history for committed secrets
+        # --redact keeps the secret itself out of the log; a leak reported in
+        # plaintext in a build log is a second copy of the leak.
+        run: gitleaks git --no-banner --redact --verbose .
+
+  dependencies:
+    name: Known vulnerabilities
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # --package-lock-only audits the lockfile without installing, so this
+      # stays fast and cannot be influenced by an install script.
+      - name: npm audit — runtime dependencies
+        working-directory: frontend
+        run: npm audit --package-lock-only --omit=dev --audit-level=high
+
+      # Dev dependencies never reach a user: vite and oxlint are build-time.
+      # Reported, but not a merge blocker -- an advisory in a bundler should
+      # not stop a docs PR from landing.
+      - name: npm audit — including dev dependencies (informational)
+        working-directory: frontend
+        continue-on-error: true
+        run: npm audit --package-lock-only --audit-level=high
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      # Both Python projects declare open ranges and neither has a lockfile,
+      # so pip-audit resolves what an install would actually get today.
+      - name: pip-audit — backend
+        run: pip-audit --progress-spinner=off backend
+
+      - name: pip-audit — data pipeline
+        run: pip-audit --progress-spinner=off -r data_pipeline/requirements.txt
