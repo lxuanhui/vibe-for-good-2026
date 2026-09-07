@@ -59,5 +59,17 @@ cp "$BACKEND_DIR/lambda_handler.py" "$BUILD_DIR/lambda_handler.py"
 # importlib.metadata, which needs it.
 find "$BUILD_DIR" -type d -name '__pycache__' -prune -exec rm -rf {} +
 
+# direct_url.json records the absolute path of the wheel pip installed from,
+# which is a mktemp directory: /var/folders/... on macOS, /tmp/... on a CI
+# runner. Left in place it changes the archive hash on every machine, so
+# Terraform would report a Lambda update on every single plan and no plan
+# would ever be clean. It is install provenance metadata with no runtime use.
+find "$BUILD_DIR" -name 'direct_url.json' -delete
+# ...and the RECORD line pointing at it, which carries that file's hash and
+# so is machine-dependent for the same reason. RECORD is pip uninstall
+# bookkeeping and is not read at runtime.
+find "$BUILD_DIR" -name 'RECORD' -exec sed -i.bak '/direct_url\.json/d' {} +
+find "$BUILD_DIR" -name 'RECORD.bak' -delete
+
 echo "==> Built $BUILD_DIR ($(du -sh "$BUILD_DIR" | cut -f1))"
 echo "    Next: cd infra && terraform apply"
