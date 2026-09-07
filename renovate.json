@@ -14,7 +14,23 @@
     "enabled": true,
     "schedule": ["before 6am on monday"]
   },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Track the Terraform CLI pin in the Infra workflow. The github-actions manager only updates `uses:` refs, so this version -- which decides what actually runs the apply -- would otherwise silently rot.",
+      "managerFilePatterns": ["/^\\.github/workflows/infra\\.yml$/"],
+      "matchStrings": ["TF_VERSION:\\s*'(?<currentValue>[^']+)'"],
+      "depNameTemplate": "hashicorp/terraform",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.*)$"
+    }
+  ],
   "packageRules": [
+    {
+      "description": "Bump open `>=` ranges in Python deps. Renovate's default leaves a range alone while the new version still satisfies it, so `flask>=3.1.0` would never produce a PR for 3.2. Neither Python project has a lockfile, so the range is the only place a version is recorded.",
+      "matchManagers": ["pep621", "pip_requirements"],
+      "rangeStrategy": "bump"
+    },
     {
       "description": "Group all non-major npm updates into one PR",
       "matchManagers": ["npm"],
@@ -23,7 +39,7 @@
     },
     {
       "description": "Group all non-major Python updates into one PR",
-      "matchManagers": ["pep621"],
+      "matchManagers": ["pep621", "pip_requirements"],
       "matchUpdateTypes": ["minor", "patch"],
       "groupName": "python non-major dependencies"
     },
@@ -47,6 +63,11 @@
       "description": "GitHub Actions updates, grouped",
       "matchManagers": ["github-actions"],
       "groupName": "github actions"
+    },
+    {
+      "description": "The Terraform CLI runs the apply on main -- never let it move without a human reading the plan.",
+      "matchDepNames": ["hashicorp/terraform"],
+      "automerge": false
     }
   ],
   "vulnerabilityAlerts": {

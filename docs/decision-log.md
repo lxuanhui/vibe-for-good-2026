@@ -6,6 +6,53 @@ more valuable half.
 
 ---
 
+## 2026-09-07 — Renovate: bump open Python ranges, and track the Terraform CLI pin
+
+**Status:** done · PR #33
+
+**Decision.** Set `rangeStrategy: "bump"` for the `pep621` and
+`pip_requirements` managers, and add a `customManagers` regex entry for
+`TF_VERSION` in `.github/workflows/infra.yml`.
+
+**Why.** Both were silent failures rather than visible ones, which is the
+worst kind of dependency config. Renovate's default range strategy leaves a
+constraint alone as long as the installed version still satisfies it, so
+`flask>=3.1.0` in `backend/pyproject.toml` and `pandas>=2.0` in
+`data_pipeline/requirements.txt` would never have produced a single PR —
+Flask 3.2 satisfies `>=3.1.0`. Neither Python project has a lockfile, so the
+range is the only place a version is written down; if Renovate does not move
+it, nothing does. Separately, the `github-actions` manager updates `uses:`
+refs but not workflow inputs, so `TF_VERSION: '1.16.0'` — the Terraform that
+actually runs the apply, and the version we deliberately chose for native S3
+state locking — was tracked by nothing.
+
+**Rejected.** Pinning the Python deps to exact versions instead. It would
+make Renovate work by default, but `backend/pyproject.toml` is a library-style
+`[project].dependencies` list installed into Lambda by
+`scripts/build_lambda.sh`, and exact pins there would fight the reproducible
+build rather than help it. The bundle's determinism comes from
+`--platform manylinux2014_aarch64` and the post-install cleanup, not from
+pinning.
+
+**Consequence.** The Terraform CLI update is explicitly `automerge: false`.
+A PR that bumps it changes the binary that applies infrastructure on merge to
+`main`; a human reads that plan.
+
+**Not done: repository auto-merge.** The existing `automerge: true` rule for
+dev-only patch updates would ideally use GitHub's native auto-merge, but
+`PATCH /repos/.../` with `allow_auto_merge=true` returns 200 and the field
+stays `false` — native auto-merge is not available for a private repo on a
+free personal account, and the API declines silently rather than erroring.
+Renovate falls back to merging through the API itself, which works, so the
+rule is functional. If the repo goes public or the account is upgraded, flip
+the setting; nothing in the config needs to change.
+
+**Note.** Renovate had never actually run — there was config but no installed
+app. The Renovate GitHub App must be installed on the repository for any of
+this to take effect.
+
+---
+
 ## 2026-09-07 — Lambda bundle must be byte-identical across machines
 
 **Status:** done · PR #31
