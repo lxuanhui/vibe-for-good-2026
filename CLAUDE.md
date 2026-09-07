@@ -22,7 +22,7 @@ to an evidence ID.
 ```
 frontend/       Vite + React + TS console (MapLibre, Tailwind 4, zustand, recharts)
 backend/        Flask API — runs locally via wsgi.py, on Lambda via lambda_handler.py
-infra/          Terraform: Lambda + API Gateway HTTP API
+infra/          Terraform: Lambda + API Gateway HTTP API, applied by CI
 data_pipeline/  Python feasibility spike for the environmental data sources
 DesignSpecs/    The specs. v2 supersedes v1's Stage 0/1; UI spec covers the console.
 ```
@@ -44,7 +44,7 @@ cd backend && uv venv && uv pip install -e ".[dev]"
 cd backend && .venv/bin/python wsgi.py          # :5001
 cd backend && .venv/bin/ruff check . && .venv/bin/pytest -q
 
-# infra (apply creates billable AWS resources — confirm first)
+# infra — CI applies on merge to main; apply by hand only when you mean to
 cd infra && ./scripts/build_lambda.sh && terraform plan
 
 # data pipeline
