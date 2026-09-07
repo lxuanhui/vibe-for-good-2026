@@ -77,6 +77,13 @@ cp "$BACKEND_DIR/lambda_handler.py" "$BUILD_DIR/lambda_handler.py"
 # hash drift.
 rm -rf "$BUILD_DIR/bin"
 
+# Each such script is also listed in its package's RECORD, with the script's
+# hash and size -- and the shebang path length differs per machine, so those
+# lines differ too. RECORD is pip uninstall bookkeeping and is never read at
+# runtime; the rest of it stays intact.
+find "$BUILD_DIR" -name 'RECORD' -exec sed -i.bak '/^\.\.\/\.\.\/bin\//d' {} +
+find "$BUILD_DIR" -name 'RECORD.bak' -delete
+
 # .dist-info is deliberately kept -- Flask reads its own version through
 # importlib.metadata, which needs it.
 find "$BUILD_DIR" -type d -name '__pycache__' -prune -exec rm -rf {} +
