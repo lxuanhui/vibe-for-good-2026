@@ -60,12 +60,19 @@ python -m data_pipeline.run_all
 
 ## State of things
 
-The console is **fixture-driven**. `frontend/src/api/client.ts` mocks the
-endpoint contract from UI spec §5 exactly, so swapping it for real `fetch()`
-calls should not change any caller. Keep that seam intact.
+The console is **mostly** fixture-driven, and moving off fixtures happens one
+endpoint at a time through the seam in `frontend/src/api/client.ts`. Keep that
+seam intact: every function there mirrors UI spec §5, so a caller cannot tell
+which are real.
 
-The Flask API is currently two stub routes (`/api/health`, `/api/hello`). The
-real endpoints from UI spec §5 are not built yet.
+Real: `GET /api/events` and `GET /api/events/{id}`, served by Flask from
+`backend/app/data/events.json`. Still fixtures in the browser:
+`fetchOverlay`, `fetchReport`, and `generateReport` — the last of which fakes
+the Investigator/Skeptic loop with `setTimeout`, and is where a real agent
+goes.
+
+The events being served are still *fixture cases*; the endpoint is real, the
+data is invented. Nothing yet derives an event from an observation.
 
 `data_pipeline/` writes to no database by design — it answers "can this
 source be pulled, and pulled *historically*". Its negative results (FIRMS

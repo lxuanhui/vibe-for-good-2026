@@ -6,6 +6,45 @@ more valuable half.
 
 ---
 
+## 2026-09-08 — Events move behind the API; the FIRMS export deliberately does not
+
+**Status:** done · PR #49
+
+**Decision.** `GET /api/events` and `GET /api/events/{id}` are served by Flask
+from `backend/app/data/events.json`. `client.ts` calls them with `fetch()`.
+The 3.7 MB FIRMS export stays a static file served from `frontend/public/`.
+
+**Why events first.** It is the smallest change that proves the whole path —
+browser, Vite proxy, Flask, and the deployed Lambda — and everything else
+(overlays, the report endpoint, a real agent loop) needs a working event
+lookup to hang off. No new credentials, no new AWS resources.
+
+**Why FIRMS stays static.** Routing 3.7 MB of GeoJSON through Lambda and API
+Gateway would put it against the 6 MB response payload limit with no headroom,
+add cold-start latency to a file that never changes, and bill egress per
+request for bytes a CDN or static host serves for free. If it ever needs to
+move, S3 is the destination, not the API. The layer stays behind its own
+labelled toggle either way — which data is real and which is a fixture does
+not change here.
+
+**The events being served are still fixtures.** The endpoint is real; the data
+is invented. Worth stating plainly because "served by the API" reads as "real"
+and it is not.
+
+**Spec discrepancy found.** UI spec §5 lists the status enum as
+`AMBIGUOUS|REJECTED|STAGE2_RUNNING|CONVERGED`; `frontend/src/api/types.ts`
+uses `AWAITING_REVIEW|STAGE1_REJECTED|STAGE2_RUNNING|CONVERGED`, and so does
+the fixture data and the UI. The backend follows the frontend names, since
+those are what actually exist on both sides. The spec is the stale one.
+
+**Known duplication.** `frontend/src/api/fixtures/events.ts` still holds the
+same three events, because `fixtures/overlays.ts` anchors its overlay geometry
+to their coordinates. Move an event in one file and the other must follow or
+overlays will sit away from the detection they describe. Both files say so.
+This resolves itself when overlays move behind the API too.
+
+---
+
 ## 2026-09-07 — Terraform state bucket stays on SSE-S3, not a customer managed key
 
 **Status:** done · PR #48

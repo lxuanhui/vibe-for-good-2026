@@ -1,5 +1,11 @@
 import type { FireEvent } from '../types'
 
+// NOTE: /api/events is served from backend/app/data/events.json, which is the
+// authoritative copy. This file is kept because fixtures/overlays.ts anchors
+// its overlay geometry to these coordinates -- change an event's position
+// here and the backend copy must move with it, or the overlays will sit away
+// from the detection they describe. It is no longer read by client.ts.
+
 // Case A — obvious non-fire: persistent industrial heat source at a
 // Pekanbaru facility. Demonstrates cheap Stage-1 triage saving investigation
 // budget.
