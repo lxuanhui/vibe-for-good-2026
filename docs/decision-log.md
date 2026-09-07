@@ -6,6 +6,32 @@ more valuable half.
 
 ---
 
+## 2026-09-07 — Terraform state bucket stays on SSE-S3, not a customer managed key
+
+**Status:** done · PR #48
+
+**Decision.** Keep `sse_algorithm = "AES256"` on the state bucket and suppress
+trivy's AWS-0132 inline, rather than moving to SSE-KMS with a CMK.
+
+**Why.** The finding is real but it is a policy opinion, not a hole: the data
+is encrypted at rest either way, and the rule is about who controls the key.
+State does contain sensitive values (`flask_secret_key`), but the bucket is
+private, versioned, has public access blocked, and lives in a single-tenant
+account. A CMK would buy key rotation and an audit trail nobody here would
+read, at the cost of a key policy that every principal touching state — the
+CI role included — has to be granted against. That is a good trade for a
+shared or multi-account setup and a bad one for this.
+
+**How it is suppressed.** A `# trivy:ignore:AWS-0132` comment on the resource
+with the reasoning above it, not a lowered severity threshold. The scan still
+blocks on every other HIGH and CRITICAL; only this specific rule at this
+specific resource is waived, and the waiver is visible in the file it applies
+to.
+
+**Revisit if** state is ever shared across accounts or teams.
+
+---
+
 ## 2026-09-07 — Security scanning in CI: gitleaks over full history, audits that block only on runtime deps
 
 **Status:** done · PR #34
