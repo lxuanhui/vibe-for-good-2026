@@ -27,9 +27,10 @@ DesignSpecs/    The specs the product is built against.
 The Vite dev server proxies `/api/*` to the Flask backend, so the frontend can
 call `fetch('/api/hello')` with no CORS setup in development.
 
-The console currently renders from fixtures (`frontend/src/api/client.ts`),
-which mirror the endpoint contract in the UI spec so the mock can be swapped
-for real calls without touching any caller.
+`GET /api/events` and `GET /api/events/{id}` are served by Flask; the rest of
+the console still renders from fixtures in `frontend/src/api/client.ts`, which
+mirror the endpoint contract in the UI spec so each one can be swapped for a
+real call without touching any caller.
 
 ## Getting started
 
