@@ -5,8 +5,8 @@
     ":dependencyDashboard",
     ":semanticCommits"
   ],
+  "description": "Unscheduled on purpose for the duration of the hackathon: a weekly window means a PR that conflicts sits unrebased for days. Restore a schedule once the pace drops.",
   "timezone": "Asia/Singapore",
-  "schedule": ["before 6am on monday"],
   "prConcurrentLimit": 5,
   "prHourlyLimit": 2,
   "labels": ["dependencies"],
@@ -39,6 +39,16 @@
       "description": "Bump open `>=` ranges in Python deps. Renovate's default leaves a range alone while the new version still satisfies it, so `flask>=3.1.0` would never produce a PR for 3.2. Neither Python project has a lockfile, so the range is the only place a version is recorded.",
       "matchManagers": ["pep621", "pip_requirements"],
       "rangeStrategy": "bump"
+    },
+    {
+      "description": "Vite and its React plugin gate each other's peer ranges, so separate PRs each fail to resolve a lockfile and land as a red `renovate/artifacts` check. One PR moves them together.",
+      "matchPackageNames": ["vite", "@vitejs/plugin-react"],
+      "groupName": "vite"
+    },
+    {
+      "description": "Hold Python at 3.13. The Lambda runtime is pinned to python3.13 in infra/api.tf and build_lambda.sh selects cp313 wheels, so bumping the CI version alone would test on a runtime we do not deploy. Drop this rule when moving all three together.",
+      "matchDepNames": ["python"],
+      "allowedVersions": "<3.14"
     },
     {
       "description": "Group all non-major npm updates into one PR",
