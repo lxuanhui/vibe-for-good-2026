@@ -89,3 +89,41 @@ jobs:
 
       - name: pip-audit — data pipeline
         run: pip-audit --progress-spinner=off -r data_pipeline/requirements.txt
+
+  iac:
+    name: Terraform misconfiguration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Answers a different question from the audits above: not "is this
+      # dependency known-bad" but "is this configuration unsafe as written" --
+      # a bucket without encryption, an IAM policy wider than it needs to be.
+      # Config scanning reads the .tf files; it does not touch AWS or need
+      # credentials, so it runs on forks and PRs like any other check.
+      - uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: config
+          scan-ref: infra
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+
+  sast:
+    name: Python SAST
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+
+      - name: Install ruff
+        run: pip install ruff
+
+      # flake8-bandit rules, run here rather than added to backend's lint
+      # config so one invocation covers data_pipeline too -- which has no
+      # pyproject.toml, and is where the HTTP and TLS handling actually lives.
+      # Tests are excluded: S101 flags every assert, which is what a test is.
+      - name: ruff — flake8-bandit rules
+        run: ruff check --select S --exclude backend/tests backend data_pipeline
