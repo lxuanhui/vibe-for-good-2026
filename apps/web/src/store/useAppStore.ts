@@ -21,6 +21,9 @@ interface AppState {
   layerVisibility: Record<LayerId, boolean>
   toggleLayer: (layer: LayerId) => void
 
+  pipelineFirmsVisible: boolean
+  togglePipelineFirms: () => void
+
   reportEventId: string | null
   openReport: (id: string) => void
   closeReport: () => void
@@ -49,6 +52,9 @@ export const useAppStore = create<AppState>((set) => ({
   },
   toggleLayer: (layer) =>
     set((s) => ({ layerVisibility: { ...s.layerVisibility, [layer]: !s.layerVisibility[layer] } })),
+
+  pipelineFirmsVisible: false,
+  togglePipelineFirms: () => set((s) => ({ pipelineFirmsVisible: !s.pipelineFirmsVisible })),
 
   reportEventId: null,
   openReport: (id) => set({ reportEventId: id }),

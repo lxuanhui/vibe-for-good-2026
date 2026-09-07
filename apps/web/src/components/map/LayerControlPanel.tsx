@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import type { OverlayLayerId, RasterLayerId } from '../../api/types'
-import { KHG_CLASSIFICATION_COLORS, LAYER_COLORS } from '../../lib/layerColors'
+import { PIPELINE_FIRMS_DATE_RANGE } from '../../api/fixtures/pipelineFirms'
+import { KHG_CLASSIFICATION_COLORS, LAYER_COLORS, PIPELINE_FIRMS_COLOR } from '../../lib/layerColors'
 import { useAppStore } from '../../store/useAppStore'
 import { Toggle } from '../ui/Toggle'
 
@@ -51,6 +52,8 @@ const RASTER_LAYERS: { id: RasterLayerId; label: string }[] = [
 export function LayerControlPanel() {
   const layerVisibility = useAppStore((s) => s.layerVisibility)
   const toggleLayer = useAppStore((s) => s.toggleLayer)
+  const pipelineFirmsVisible = useAppStore((s) => s.pipelineFirmsVisible)
+  const togglePipelineFirms = useAppStore((s) => s.togglePipelineFirms)
 
   return (
     <div className="pointer-events-auto w-64 rounded-lg border border-border-strong bg-panel/95 p-3 shadow-lg backdrop-blur">
@@ -66,6 +69,17 @@ export function LayerControlPanel() {
             onChange={() => toggleLayer(l.id)}
           />
         ))}
+      </div>
+      <div className="my-2 border-t border-border" />
+      <div className="mb-2 text-[11px] font-semibold tracking-wide text-text-faint uppercase">Pipeline data (real)</div>
+      <div className="space-y-1">
+        <Toggle
+          label="NASA FIRMS pull (21,519 pts)"
+          caption={`${PIPELINE_FIRMS_DATE_RANGE[0]} → ${PIPELINE_FIRMS_DATE_RANGE[1]} · not linked to timeline`}
+          swatch={<Dot color={PIPELINE_FIRMS_COLOR} />}
+          checked={pipelineFirmsVisible}
+          onChange={togglePipelineFirms}
+        />
       </div>
       <div className="my-2 border-t border-border" />
       <div className="space-y-0.5">

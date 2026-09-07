@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import type { FeatureCollection } from './geojson'
+import type { FeatureCollection, PointGeometry } from './geojson'
 import type { FireEvent, InvestigationReport, OverlayLayerId } from './types'
 import * as client from './client'
+import { fetchPipelineFirms, type PipelineFirmsProperties } from './fixtures/pipelineFirms'
 
 export function useEvents(): FireEvent[] {
   const [events, setEvents] = useState<FireEvent[]>([])
@@ -36,6 +37,24 @@ export function useOverlay(
       active = false
     }
   }, [layer, date, enabled])
+  return data
+}
+
+export function usePipelineFirms(enabled: boolean): FeatureCollection<PointGeometry, PipelineFirmsProperties> | null {
+  const [data, setData] = useState<FeatureCollection<PointGeometry, PipelineFirmsProperties> | null>(null)
+  useEffect(() => {
+    if (!enabled) {
+      setData(null)
+      return
+    }
+    let active = true
+    fetchPipelineFirms().then((fc) => {
+      if (active) setData(fc)
+    })
+    return () => {
+      active = false
+    }
+  }, [enabled])
   return data
 }
 

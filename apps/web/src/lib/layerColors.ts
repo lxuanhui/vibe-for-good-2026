@@ -5,7 +5,7 @@ import type { OverlayLayerId } from '../api/types'
 // the two can never drift apart. See UI spec Section 6: one color scheme,
 // reused everywhere.
 export const LAYER_COLORS: Record<OverlayLayerId, string> = {
-  firms: '#ef4444',
+  firms: '#87091a',
   'sar-backscatter': '#22d3ee',
   khg: '#f97316',
   concessions: '#8b96a8',
@@ -19,4 +19,12 @@ export const KHG_CLASSIFICATION_COLORS = {
 
 export const KHG_FALLBACK_COLOR = '#3f4a5c'
 
+// Real pipeline pull (data_pipeline), kept visually distinct from the mock
+// 'firms' fixture layer above.
+export const PIPELINE_FIRMS_COLOR = '#facc15'
+
 export const BOUNDARY_LINE_COLOR = '#2e3a4a'
+
+// Deep green landmass fill for Indonesia's boundary -- the previous
+// near-black slate (#141a24) barely stood out from the map's background.
+export const INDONESIA_FILL_COLOR = '#364527'
