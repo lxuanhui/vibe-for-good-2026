@@ -117,6 +117,31 @@ Python. `build_lambda.sh` pins wheels to `manylinux2014_aarch64` rather than
 whatever the developer's laptop is, so a compiled dependency added later
 fails at build time instead of at the first invocation.
 
+**The bundle must be byte-identical across machines.** Terraform hashes the
+built directory, so if a laptop and a runner disagree, every plan reports a
+Lambda update and no plan is ever clean — which destroys the value of the
+plan posted on each PR. Three things in `build_lambda.sh` exist only to
+protect that, and should not be "tidied away":
+
+- `bin/` is deleted. pip generates console-script wrappers whose shebang
+  names the interpreter that ran it (`/opt/homebrew/...` vs
+  `/opt/hostedtoolcache/...`). Lambda never runs them.
+- `../../bin/` lines are stripped from each `RECORD`, since they carry those
+  scripts' hash and size.
+- The backend is **copied in, not pip installed.** Installing it would build
+  a wheel, pulling in whatever build-backend version pip resolved that day
+  plus a `direct_url.json` recording the mktemp path it was built in.
+  Dependencies still come from `pyproject.toml`, so there is one source of
+  truth either way.
+
+If you need to smoke-test the bundle by importing from it, copy it first —
+running Python inside `build/lambda` writes `__pycache__` after the build
+cleaned it, and silently changes the hash.
+
+Dependency versions are unpinned (`flask>=3.1.0`), so a build resolving a
+newer wheel legitimately changes the hash. That is a real change, and
+Renovate is what proposes it.
+
 **Timeout is 29s.** API Gateway HTTP API cuts the response off at 30s
 regardless, so a longer Lambda timeout only bills for work no client is still
 waiting on. Anything genuinely long-running (agent rounds, imagery
