@@ -25,7 +25,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  TF_VERSION: '1.16.0'
+  TF_VERSION: '1.16.1'
   PYTHON_VERSION: '3.13'
   AWS_REGION: ap-southeast-1
   # Empty secret/variable falls back to the same defaults declared in
