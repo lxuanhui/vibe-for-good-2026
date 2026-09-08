@@ -445,7 +445,7 @@ type AuditScope = {
   label?: string;
   reviewStart: string;
   reviewEnd: string;
-  geometryR2Key?: string;
+  geometryS3Key?: string;
   bbox: [number, number, number, number];
   centroid: [number, number];
   contextBufferKm: number;
