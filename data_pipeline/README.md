@@ -151,8 +151,8 @@ involves, with the reasoning recorded per task rather than left as a bare
 number. `automated_run.py` chains the real modules above plus two pieces
 built only for this benchmark: `find_neighbouring_events` (a lightweight
 centroid-distance/time-window proximity check, explicitly **not** the
-`FireEventGraph` relationship model of issue #10) and an imagery-metadata
-search reusing `sources/copernicus_cds.search()` directly. `report.py`
+`FireEventGraph` relationship model of issue #10) and a Copernicus STAC
+search followed by the deterministic scene selector. `report.py`
 combines both sides into the comparison and writes
 `data_pipeline/output/workload_reduction_report.json`. Run
 `python -m data_pipeline.benchmark.report` for the live comparison: last
@@ -197,6 +197,24 @@ the state counts and exactly which optional rules were unavailable, rather
 than presenting missing context as benign. Run the benchmark again before
 citing a numeric queue-compression result; it depends on the current cached
 FIRMS sample.
+
+## Deterministic Copernicus scene selection
+
+`imagery/scene_selection.py` turns the Copernicus STAC response into four
+inspectable selection slots: closest usable Sentinel-2 pre/post scenes and
+closest Sentinel-1 pre/post scenes. Sentinel-2 uses the configured scene-level
+cloud-cover threshold (default 50%); Sentinel-1 is not cloud-filtered. The
+selection stores product ID, acquisition time, sensor, orbit metadata, cloud
+cover where available, temporal distance from the event boundary, catalogue
+reference, and product/download reference. Missing optical cloud metadata is
+excluded conservatively when the cloud threshold is active.
+
+The selector is pure and versioned (`copernicus-scene-selector-v1`), so the
+same frozen STAC response and event timestamps reproduce the same result.
+`sources/copernicus_cds.py` keeps the network search separate and exposes the
+selector for callers that already fetched the features. Scene metadata is
+provenance for later evidence processing, not a finding about cause or
+responsibility.
 
 ## FireEventGraph relationship model
 

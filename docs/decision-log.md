@@ -6,6 +6,31 @@ more valuable half.
 
 ---
 
+## 2026-09-08 - Copernicus scenes are selected deterministically from STAC metadata
+
+**Status:** implemented on issue #13 branch
+
+**Decision.** `imagery/scene_selection.py` selects one closest usable
+Sentinel-2 and Sentinel-1 scene on each side of a FireEvent. Optical scenes
+must have catalogue cloud cover at or below a caller-visible threshold;
+missing optical cloud metadata is not treated as cloud-free. SAR scenes are
+not cloud-filtered. Every selected scene keeps its product ID, acquisition
+time, sensor, orbit fields, temporal distance, STAC item reference and
+product/download reference, plus the selector version.
+
+**Why.** The STAC adapter already proved catalogue search and the golden
+fixtures already preserve raw responses, but the pipeline previously only
+listed the first returned features. A pure selection step makes the choice
+reproducible before any large product download and keeps catalogue retrieval,
+scene choice and evidence processing inspectable as separate stages.
+
+**Rejected.** Sorting by cloud percentage alone was rejected: the closest
+usable pass is the temporal priority, with cloud cover acting as an S2
+eligibility gate and deterministic tie-breaker. Pixel-level cloud masking,
+footprint coverage scoring and imagery download remain later evidence-
+processing concerns; scene metadata alone does not establish environmental
+change, cause, or responsibility.
+
 ## 2026-09-08 - Fire Complexity stays a named evidence bundle, not a score
 
 **Status:** implemented on issue #12 branch
