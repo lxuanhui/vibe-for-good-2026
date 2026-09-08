@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { Map, Source, Layer, type MapLayerMouseEvent } from 'react-map-gl/maplibre'
 import type { FeatureCollection, Geometry, GeoJsonProperties } from 'geojson'
+import type { DataDrivenPropertyValueSpecification } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import indonesiaBoundary from '../../assets/indonesia-province-simple.json'
 import {
@@ -36,14 +37,14 @@ export function MapView() {
   // Per-point radius for the close-zoom dot layer below. 'zoom' must be the
   // top-level expression (MapLibre rejects it nested inside e.g. a '+'), so
   // the FRP-based size bump is nested inside each zoom stop instead.
-  const firmsRadius = [
+  const firmsRadius: DataDrivenPropertyValueSpecification<number> = [
     'interpolate',
     ['linear'],
     ['zoom'],
     7, ['interpolate', ['linear'], ['get', 'frp'], 0, 2.5, 25, 4.5],
     9, ['interpolate', ['linear'], ['get', 'frp'], 0, 4, 25, 6.5],
     12, ['interpolate', ['linear'], ['get', 'frp'], 0, 7, 25, 11],
-  ] as const
+  ]
 
   return (
     <div className="relative h-full w-full">
