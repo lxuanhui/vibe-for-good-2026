@@ -78,6 +78,148 @@ extent), last verified run. See the module docstring for the documented
 single-linkage chaining limitation and how FireEvent fields here relate to
 the canonical `FireEvent` type (`Environmental_Assurance_Spec.md` S9).
 
+## Historical weather-window enrichment
+
+`enrichment/weather_enrichment.py` reconstructs the weather context around a
+`FireEvent` -- `fetch_weather_evidence_for_event(event, lat, lon)` returns a
+`WeatherEvidenceBundle` covering seven windows relative to the event's own
+timestamps (T-90d/T-30d/T-7d/T-72h/T-24h lookbacks ending at
+`first_detection`, `event_duration`, and `T0_to_T+48h`), each with rainfall
+accumulation, rainfall-free days, max temperature, mean relative humidity,
+mean wind speed, circular-mean wind direction, topsoil moisture where
+available, a rainfall anomaly against a multi-year seasonal baseline, and
+disagreement against NASA POWER's independent daily estimate for the same
+window. `to_evidence_objects()` converts the bundle into
+`Environmental_Assurance_Spec.md` §16 `EvidenceObject`s, one per
+window/metric so each is independently traceable. `compute_weather_windows()`
+is pure (no network) and is what the tests exercise directly against
+synthetic Open-Meteo-shaped DataFrames; only `fetch_weather_evidence_for_event`
+and its `_demo()` touch the network. Run
+`python -m data_pipeline.enrichment.weather_enrichment` for a live demo
+against the largest FireEvent in the 2019 haze sample: last verified run
+produced 49 evidence objects (7 windows x 7 metrics, all present) for
+`FE-20190901-ce19162367`, correctly flagging T-72h/T-24h rainfall as ~100%
+below the 5-year seasonal baseline (the dry-season conditions the 2019 haze
+event is known for) and a NASA POWER rainfall disagreement of up to 74mm on
+the T-90d window -- itself evidence of how much two independent reanalysis
+products can differ over a 90-day accumulation. See the module docstring for
+why NASA POWER is a disagreement check rather than a second primary source,
+and why historical anomaly is computed for rainfall only.
+
+## Peat intersection and context service
+
+`enrichment/peat_context.py` makes peat a first-class environmental attribute
+of every `FireEvent` -- `get_peat_context_for_event(event)` returns a
+`PeatContext` covering direct footprint intersection, peat fraction within
+the event's footprint and a configurable buffer, distance to the nearest
+mapped peat if none intersects, and (via `peat_fraction_along_corridor`) the
+peat fraction of a straight-line corridor between two linked events'
+centroids. It reads the Greifswald Mire Centre's Global Peatland Map 2.0 (a
+single static 3.6MB zip containing one ~550MP unprojected-WGS84 GeoTIFF) with
+Pillow plus hand-rolled affine math rather than pulling in a GDAL/rasterio
+stack, downloads and crops it to `INDONESIA_BBOX` exactly once, and caches
+the crop as a `.npy` array (~9MB on disk) in `data_pipeline/output/` so every
+later call in the same or a later process skips the network entirely.
+`compute_peat_context()` is pure (no network) and is what the tests exercise
+directly against a small synthetic raster; only `load_peat_raster()` and its
+`_demo()` touch the network. `to_evidence_objects()` converts a `PeatContext`
+into `Environmental_Assurance_Spec.md` §16 `EvidenceObject`s, and always
+attaches a non-inference limitation stating that peat overlap is geometric
+context only -- never a claim of underground combustion, smouldering, or
+fire persistence, which stays an interpretation layer's hypothesis to weigh
+against SAR persistence and elapsed time (§15). Run
+`python -m data_pipeline.enrichment.peat_context` for a live demo against the
+same largest FireEvent used in the weather-enrichment demo above: last
+verified run found the event's footprint and 5km buffer 100% mapped peat
+(`FE-20190901-ce19162367`, direct on-peat centroid) and flagged that the
+event's 20.6km spatial extent exceeds the default 5km buffer radius, so the
+footprint check -- not the buffer -- is the representative intersection
+result for a fire complex this large.
+
+## Auditor workload-reduction benchmark
+
+`benchmark/` compares a documented manual-evidence-reconstruction estimate
+against a real, timed run of this repo's own pipeline for one representative
+FireEvent case -- the same largest event (`FE-20190901-ce19162367`) the
+weather and peat modules above demo against, so all three sections describe
+the same case. `manual_estimate.py` is a **reasoned estimate**, not a timed
+human trial: each of the seven manual tasks (retrieve FIRMS history,
+reconstruct event chronology, retrieve historical weather, inspect peat
+context, identify neighbouring events, find imagery metadata, assemble an
+evidence summary) is costed from what actually operating the real public tool
+involves, with the reasoning recorded per task rather than left as a bare
+number. `automated_run.py` chains the real modules above plus two pieces
+built only for this benchmark: `find_neighbouring_events` (a lightweight
+centroid-distance/time-window proximity check, explicitly **not** the
+`FireEventGraph` relationship model of issue #10) and an imagery-metadata
+search reusing `sources/copernicus_cds.search()` directly. `report.py`
+combines both sides into the comparison and writes
+`data_pipeline/output/workload_reduction_report.json`. Run
+`python -m data_pipeline.benchmark.report` for the live comparison: last
+verified run costed the manual estimate at 140.0 minutes, the automated run
+completed the same evidence-reconstruction case in ~26-31s (dominated by the
+FIRMS clustering step re-run on 21,519 observations and the Copernicus STAC
+search; both are network/CPU calls, not fixed costs), a 99%+ reduction,
+21,519 observations compressed to 3,683 FireEvents (5.84x), and full
+(49/49 weather + 4/4 peat) evidence-field completeness for this case.
+
+**Read the scope note before citing any of these numbers.** This benchmarks
+one task -- reconstructing the evidence for one FireEvent -- not the audit
+workflow as a whole, which also includes scope definition, screening
+judgement across many events, field verification, and report sign-off. Do
+not extrapolate "99% faster evidence reconstruction" into "the audit is 99%
+faster."
+
+**`events_to_human_review_queue_compression` is deliberately 1.0 (no
+compression), not a fabricated number.** Stage-1 triage (issue #9) doesn't
+exist yet, so every FireEvent clustering produces currently reaches a human
+reviewer undiminished -- an honest measurement of the pipeline's current
+state, to be re-measured once #9 lands, not a placeholder target invented to
+fill the metric.
+
+## Golden historical regression cases
+
+`golden/` freezes real 2019 haze-window data end to end so the pipeline's
+output for known input never silently drifts as the code around it changes.
+`golden/cases.py` defines three cases, each a real FIRMS-detected FireEvent
+picked from the cached Sumatra/Kalimantan sample: `simple`
+(`FE-20190904-4904392c16`, 3 detections, 0.16km extent -- the smallest
+non-degenerate shape), `complex_multilobe` (`FE-20190901-ce19162367`, the
+1,135-detection/107h/20.6km event already used as the worked example
+elsewhere in this README), and `peat_related` (`FE-20190901-15f6721402`, East
+Kalimantan, 71.4% footprint peat fraction -- picked because it is *partial*,
+exercising the peat-fraction metric's actual range rather than the complex
+case's saturated 100%). All three happen to sit on mapped peat, since the
+sampled bbox is peat-dominated lowland; `peat_related` is the one chosen to
+make that metric interesting, not the only one that has it.
+
+Each case directory holds real, frozen inputs -- FIRMS observations, an
+Open-Meteo/NASA POWER weather window, a small crop of the actual Global
+Peatland Map 2.0 raster (padded so the default buffer/search radii never run
+off its edge), and a Copernicus STAC search response -- plus `expected/`,
+the output of `cluster_events`, `compute_weather_windows`,
+`compute_peat_context`, and this module's own imagery-candidate mapping
+against those frozen inputs. `tests/test_golden_regression.py` recomputes
+each from the frozen inputs and asserts it still matches `expected/` --
+**no network access**, so it runs in CI like any other test. Run
+`python -m data_pipeline.golden.build_golden_cases` only when a case's
+frozen inputs genuinely need to change (a new case, or a source's response
+shape changing); it overwrites every fixture from live sources, so review
+the diff it produces rather than trusting it blindly.
+
+Weather observation text rounds to two decimal places for readability;
+the structured `value` retains the computed precision. Formatting-only
+changes should update only expected observation strings, leaving frozen
+source inputs and numeric expectations intact.
+
+One dtype trap worth knowing before touching this: Open-Meteo's response
+decodes to `float32` (`sources/open_meteo.py`'s `_hourly_to_df`), but
+`pd.read_csv` on the frozen CSV infers `float64` from the written decimal
+text -- summing the extra precision gives a value that differs from the
+frozen one in the last couple of decimal places. The test casts the relevant
+columns back to `float32` after loading for exactly this reason; don't
+remove that cast to "simplify" the loader.
+
 ## Provider interface
 
 `nasa_firms.py`, `open_meteo.py`, `nasa_power.py`, `copernicus_cds.py`, and
