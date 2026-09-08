@@ -55,6 +55,18 @@ function square(center: Position, halfWidthDeg: number): Position[][] {
   ]
 }
 
+// FAKE DATA -- replace with a real endpoint call when the backend exists.
+// Target: GET /api/overlays/firms?bbox={minLon,minLat,maxLon,maxLat}&date={date}
+// (assurance_console_ui_spec.md Section 2.2 -- same contract as every other
+// overlay, see isLayerAvailable/getOverlay below), returning this same
+// FeatureCollection<PointGeometry, FirmsProperties> shape. That endpoint's
+// backing ingestion is NASA FIRMS's area/csv API, proven out in
+// data_pipeline/sources/nasa_firms.py (fetch_area()) -- MAP_KEY-gated,
+// day_range capped at 5, ~daily cadence (VIIRS ~2x/day overpass); see
+// data_pipeline/README.md. Once that Worker exists, delete this function
+// (and fixtures/pipelineFirms.ts + public/pipeline/, the interim static
+// stand-in -- see hooks.ts useFirms()) and call client.fetchOverlay('firms',
+// date) exactly as today; no caller changes needed.
 function firmsForDate(date: string): FeatureCollection<PointGeometry, FirmsProperties> {
   if (!FIRMS_AVAILABLE_DATES.has(date)) return featureCollection([])
   const features: Feature<PointGeometry, FirmsProperties>[] = []
