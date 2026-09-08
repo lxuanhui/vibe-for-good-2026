@@ -17,3 +17,13 @@ output "lambda_log_group" {
   description = "CloudWatch log group carrying the Flask application logs."
   value       = aws_cloudwatch_log_group.api.name
 }
+
+output "console_url" {
+  description = "Live console. Set var.cors_origins to this (or the custom domain) to narrow the API's CORS from `*` once the final origin is fixed."
+  value       = "https://${aws_amplify_branch.main.branch_name}.${aws_amplify_app.console.default_domain}"
+}
+
+output "console_app_id" {
+  description = "Amplify app id -- needed to finish the one-time GitHub App connection in the console."
+  value       = aws_amplify_app.console.id
+}

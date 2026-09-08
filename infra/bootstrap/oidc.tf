@@ -130,6 +130,15 @@ data "aws_iam_policy_document" "github_actions" {
     resources = [local.project_role_arn]
   }
 
+  # Amplify ARNs are id-based (apps/{id}) and the id is not known until
+  # creation, so this cannot be name-scoped the way Lambda is -- same reason
+  # the API Gateway statement above is broad. Scoped to this account.
+  statement {
+    sid       = "AmplifyConsoleHosting"
+    actions   = ["amplify:*"]
+    resources = ["arn:${data.aws_partition.current.partition}:amplify:*:${data.aws_caller_identity.current.account_id}:apps/*"]
+  }
+
   statement {
     sid = "Logs"
     actions = [
