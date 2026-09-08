@@ -6,6 +6,31 @@ more valuable half.
 
 ---
 
+## 2026-09-08 — FireEventGraph stays a deterministic pipeline boundary
+
+**Status:** implemented on issue #10 branch
+
+**Decision.** Build `FireEventGraph` from clustered `FireEvent` summaries, not
+raw FIRMS rows. Candidate edges are spatially indexed and time-gated, carry
+the requested deterministic relationship features, preserve optional missing
+context as `None`, and record supporting/contradicting evidence IDs plus
+`fire-event-graph-v1`. Earlier non-overlapping events are the source of a
+directed edge; overlapping windows are explicitly non-directional.
+
+**Why.** Relationship screening must remain inspectable and bounded before any
+AI interpretation. The first-order surface-speed check is a compatibility
+screen, not a fire forecast or a conclusion about cause, intent, responsibility,
+or legality. Weather, peat-corridor, shared-episode, and recurrence values are
+accepted only as already-derived context; acquisition remains outside this
+pure model.
+
+**Rejected.** An all-pairs graph was rejected because historical FireEvent
+collections can be large; a cKDTree candidate gate is used instead. Inferring
+missing environmental context as negative evidence was also rejected because
+it would turn source gaps into unsupported independence claims.
+
+---
+
 ## 2026-09-08 — Stage-1 triage stays deterministic, provenance-bound, and conservative
 
 **Status:** implemented on issue #9 branch

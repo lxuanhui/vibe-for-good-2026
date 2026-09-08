@@ -198,6 +198,26 @@ than presenting missing context as benign. Run the benchmark again before
 citing a numeric queue-compression result; it depends on the current cached
 FIRMS sample.
 
+## FireEventGraph relationship model
+
+`graph/fire_event_graph.py` builds a deterministic, versioned candidate graph
+over the coherent `FireEvent` nodes produced by clustering. It does not accept
+raw FIRMS rows and does not ask an LLM to infer relationships. Candidate edges
+carry geographic distance, elapsed time and temporal ordering, event-buffer
+overlap, first-order surface-spread compatibility, and optional wind alignment,
+directional compatibility, peat-corridor fraction, shared environmental
+episode, and historical recurrence. Optional context is supplied as already
+derived weather/peat/history values; unavailable context remains `None`.
+
+Edges are routed to `RELATED_POSSIBLE`, `PROPAGATION_COMPATIBLE`,
+`PROPAGATION_WEAK`, `INDEPENDENT_PLAUSIBLE`, or `UNRESOLVED`. Each edge keeps
+supporting/contradicting derived-evidence IDs and `fire-event-graph-v1`, so a
+map or later analysis can inspect why a relationship was proposed. A directed
+edge points from the earlier non-overlapping event to the later one; an
+overlapping pair is explicitly non-directional. These are investigative
+relationships only: geographic or environmental association is not a finding
+about cause, intent, responsibility, or legality.
+
 ## Golden historical regression cases
 
 `golden/` freezes real 2019 haze-window data end to end so the pipeline's
