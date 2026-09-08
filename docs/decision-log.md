@@ -6,6 +6,31 @@ more valuable half.
 
 ---
 
+## 2026-09-08 - Investigator/Skeptic analysis is a bounded structured boundary
+
+**Status:** implemented on issue #15 branch
+
+**Decision.** `data_pipeline/analysis/investigator_skeptic.py` owns the
+provider-neutral Investigator/Skeptic contract after deterministic
+reconstruction. It supplies structured EvidenceObjects and evidence IDs,
+executes independent, rebuttal, and final rounds, validates every finding and
+question against the evidence pack, and persists only concise summaries,
+support/counter references, and unresolved questions.
+
+**Why.** A fixed three-round boundary makes the adversarial workflow bounded
+and testable without coupling reconstruction to an LLM vendor. Keeping the
+opponent input as a prior structured assessment preserves rebuttal while
+avoiding a conversation transcript or private chain-of-thought. Disagreement
+is retained as a human verification question rather than forced into a single
+explanation.
+
+**Rejected.** Free-form agent conversation and unreferenced factual summaries
+were rejected because they cannot be audited against EvidenceObjects. The
+runner does not infer responsibility, intent, or cause; it validates the
+interpretation layer only.
+
+---
+
 ## 2026-09-08 - Investigation Priority is an evidence-backed routing score
 
 **Status:** implemented on issue #14 branch

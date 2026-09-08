@@ -66,11 +66,27 @@ export interface TopTheory {
   counterEvidenceIds: string[]
 }
 
-export interface ReasoningRound {
+export interface AnalysisQuestion {
+  question: string
+  evidenceIds: string[]
+  reason?: string
+}
+
+export interface AnalysisFinding {
+  hypothesis: string
+  support: number
+  contra: number
+  summary: string
+  evidenceIds: string[]
+  counterEvidenceIds: string[]
+}
+
+export interface AnalysisRound {
   round: number
-  converged: boolean
-  investigator: { hypothesis: string; support: number; contra: number; text: string }
-  skeptic: { hypothesis: string; support: number; contra: number; text: string }
+  phase: 'independent_assessment' | 'rebuttal' | 'final_assessment'
+  investigator: AnalysisFinding
+  skeptic: AnalysisFinding
+  unresolvedQuestions: AnalysisQuestion[]
 }
 
 export interface Stage1Check {
@@ -136,7 +152,8 @@ export interface InvestigationReport {
     fireGrowthProjection: FireGrowthProjection | null
   }
   limitations: string[]
-  reasoningLog: ReasoningRound[]
+  analysisRounds: AnalysisRound[]
+  unresolvedQuestions: AnalysisQuestion[]
   evidence: Record<string, EvidenceObject>
 }
 

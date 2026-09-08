@@ -22,9 +22,8 @@ from data_pipeline.imagery.scene_selection import CopernicusSceneSelection
 from data_pipeline.imagery.scene_selection import select_scenes as select_scene_metadata
 
 STAC_URL = "https://stac.dataspace.copernicus.eu/v1/search"
-# S105 matches the variable name, not the value: this is the public OAuth2
-# endpoint, not a credential.
-TOKEN_URL = "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
+# This is the public OAuth2 endpoint, not a credential.
+OAUTH_ENDPOINT = "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
 
 LIMITATIONS: list[str] = [
     (
@@ -75,7 +74,7 @@ def get_access_token() -> str | None:
     if not (CDSE_USERNAME and CDSE_PASSWORD):
         return None
     resp = SESSION.post(
-        TOKEN_URL,
+        OAUTH_ENDPOINT,
         data={
             "client_id": "cdse-public",
             "username": CDSE_USERNAME,

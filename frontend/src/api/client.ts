@@ -64,26 +64,26 @@ export async function fetchReport(eventId: string): Promise<InvestigationReport 
 }
 
 /**
- * Simulates the Investigator/Skeptic agent run: reveals reasoning rounds
- * progressively (status "running") before settling on the final cached
- * report (status per fixture, usually "converged"). Returns a cancel
- * function; ignores cases with no Stage-2 rounds to run (rejected events).
+ * Simulates the bounded Investigator/Skeptic run: reveals structured analysis
+ * rounds progressively (status "running") before settling on the final
+ * cached report. Returns a cancel function; rejected events have no rounds.
  */
 export function generateReport(eventId: string, onUpdate: (report: InvestigationReport) => void): () => void {
   const final = REPORTS[eventId]
-  if (!final || final.reasoningLog.length === 0) {
+  if (!final || final.analysisRounds.length === 0) {
     if (final) onUpdate(final)
     return () => {}
   }
 
   let cancelled = false
   const timers: ReturnType<typeof setTimeout>[] = []
-  const totalRounds = final.reasoningLog.length
+  const totalRounds = final.analysisRounds.length
 
   onUpdate({
     ...final,
     status: 'running',
-    reasoningLog: [],
+    analysisRounds: [],
+    unresolvedQuestions: [],
     executiveSummary: '',
     topTheories: [],
     limitations: [],
@@ -97,7 +97,8 @@ export function generateReport(eventId: string, onUpdate: (report: Investigation
         onUpdate({
           ...final,
           status: isLast ? final.status : 'running',
-          reasoningLog: final.reasoningLog.slice(0, round),
+          analysisRounds: final.analysisRounds.slice(0, round),
+          unresolvedQuestions: isLast ? final.unresolvedQuestions : [],
           executiveSummary: isLast ? final.executiveSummary : '',
           topTheories: isLast ? final.topTheories : [],
           limitations: isLast ? final.limitations : [],
