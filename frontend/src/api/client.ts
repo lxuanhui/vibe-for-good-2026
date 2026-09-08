@@ -1,5 +1,15 @@
 import type { FeatureCollection } from './geojson'
-import type { AuditScope, BBox, EventStatus, FireEvent, InvestigationReport, OverlayLayerId } from './types'
+import type {
+  AuditEventDetail,
+  AuditEventPage,
+  AuditScope,
+  BBox,
+  EventStatus,
+  FireEvent,
+  InvestigationReport,
+  OverlayLayerId,
+  Stage1State,
+} from './types'
 import { getOverlay, isLayerAvailable } from './fixtures/overlays'
 import { REPORTS } from './fixtures/reports'
 
@@ -61,6 +71,51 @@ export async function uploadAuditScope(auditId: string, file: File): Promise<Aud
 
 export async function buildFireHistory(auditId: string): Promise<{ audit_id: string; scope_id: string; status: 'HISTORY_BUILD_READY' }> {
   return apiPost(`/audits/${encodeURIComponent(auditId)}/history/build`, null)
+}
+
+// The only audit scope with a reconstructed history: the 2019 haze window
+// baked into the committed pipeline artifact. An audit created through
+// `POST /api/audits` has no history until reconstruction runs for it, and the
+// API says so with `status: PENDING_RECONSTRUCTION` rather than a bare 404.
+export const DEMO_AUDIT_ID = 'demo-2019-haze'
+
+export interface AuditEventQuery {
+  bbox?: BBox
+  since?: string
+  until?: string
+  state?: Stage1State
+  limit?: number
+  offset?: number
+}
+
+export async function fetchAuditEvents(
+  auditId: string,
+  opts: AuditEventQuery = {},
+): Promise<AuditEventPage> {
+  const params = new URLSearchParams()
+  if (opts.bbox) {
+    const { minLon, minLat, maxLon, maxLat } = opts.bbox
+    params.set('bbox', `${minLon},${minLat},${maxLon},${maxLat}`)
+  }
+  if (opts.since) params.set('since', opts.since)
+  if (opts.until) params.set('until', opts.until)
+  if (opts.state) params.set('state', opts.state)
+  if (opts.limit !== undefined) params.set('limit', String(opts.limit))
+  if (opts.offset !== undefined) params.set('offset', String(opts.offset))
+
+  const query = params.toString()
+  return apiGet<AuditEventPage>(
+    `/audits/${encodeURIComponent(auditId)}/events${query ? `?${query}` : ''}`,
+  )
+}
+
+export async function fetchAuditEvent(
+  auditId: string,
+  eventId: string,
+): Promise<AuditEventDetail> {
+  return apiGet<AuditEventDetail>(
+    `/audits/${encodeURIComponent(auditId)}/events/${encodeURIComponent(eventId)}`,
+  )
 }
 
 export async function fetchEvents(opts?: { bbox?: BBox; since?: string; status?: EventStatus }): Promise<FireEvent[]> {

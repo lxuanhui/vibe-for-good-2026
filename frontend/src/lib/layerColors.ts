@@ -1,4 +1,4 @@
-import type { OverlayLayerId } from '../api/types'
+import type { OverlayLayerId, Stage1State } from '../api/types'
 
 // Single source of truth for overlay layer colors — used both for MapLibre
 // paint expressions (MapView) and the layer legend (LayerControlPanel), so
@@ -38,3 +38,23 @@ export const INDONESIA_GLOW_COLOR = '#8fbf5c'
 
 export const AUDIT_SCOPE_BOUNDARY_COLOR = '#22d3ee'
 export const AUDIT_SCOPE_BUFFER_COLOR = '#eab308'
+
+// Stage-1 triage states (`Environmental_Assurance_Spec.md` §10), mapped onto
+// the same --color-status-* ramp every other confidence signal in the console
+// uses. These say how well the observations support "this is a fire" -- they
+// are not a severity, a priority, or anything about cause, so LIKELY_FIRE
+// deliberately does not get the urgent red reserved for escalation.
+export const STAGE1_STATE_COLORS: Record<Stage1State, string> = {
+  LIKELY_FIRE: '#f97316', // --color-status-elevated
+  AMBIGUOUS: '#eab308', // --color-status-moderate
+  LIKELY_NON_FIRE: '#3f4a5c', // --color-status-quiet
+}
+
+// Plain-language gloss for the enum. The canonical name stays visible next to
+// it: an auditor tracing a decision needs the token the algorithm emitted, not
+// only our rendering of it.
+export const STAGE1_STATE_LABELS: Record<Stage1State, string> = {
+  LIKELY_FIRE: 'Likely fire',
+  AMBIGUOUS: 'Ambiguous',
+  LIKELY_NON_FIRE: 'Likely non-fire',
+}

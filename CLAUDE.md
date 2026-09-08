@@ -108,13 +108,13 @@ artifact, because scipy/pandas would take the Lambda bundle to the edge of its
 250 MB limit and the derivation is identical for every caller. Nothing
 persists yet: no module touches a database, an S3 bucket, or any store.
 
-**No frontend calls those endpoints** — `FireEvent` in
-`frontend/src/api/types.ts` requires `location`, `peatClassification` and
-`currentConditions`, none of which FIRMS-only data can honestly supply.
-Filling them with placeholders is exactly the blurring the product boundary
-forbids, so the register needs its own view. That gap between the engine and
-the console, not any single endpoint, is the largest thing between here and
-the demo in §31.
+The console's landing map (`components/console/`) renders them, typed as
+`AuditEvent` — deliberately not `FireEvent`, which requires `location`,
+`peatClassification` and `currentConditions` that FIRMS-only data cannot
+honestly supply. Keep the two types apart; widening `FireEvent` with
+optionals would make a real event and a fixture indistinguishable to the
+compiler. The legacy `MapView`/`EventTable`/`ReportPanel` console is not
+mounted anywhere and still reads fixtures.
 
 Stage-1 triage does not compress this dataset and is not meant to. On
 FIRMS-only input `LIKELY_NON_FIRE` is unreachable (max non-fire score 2,

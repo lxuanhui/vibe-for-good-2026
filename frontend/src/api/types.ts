@@ -186,3 +186,111 @@ export interface OverlayAvailability {
   date: string
   layers: Partial<Record<OverlayLayerId | RasterLayerId, boolean>>
 }
+
+// --- Reconstructed audit history -------------------------------------------
+// The shape served by `GET /api/audits/{id}/events`: FireEvents derived from
+// real FIRMS observations by `data_pipeline/export_audit_events.py`.
+//
+// Deliberately NOT `FireEvent`. That type requires `location`,
+// `peatClassification` and `currentConditions`, which FIRMS-only data cannot
+// supply. Widening it with optional fields would make a real event and an
+// invented fixture indistinguishable at the type level, which is precisely
+// the blurring the product boundary forbids. Two types, so the compiler keeps
+// them apart.
+
+/** Stage-1 triage outcome (`Environmental_Assurance_Spec.md` §10). */
+export type Stage1State = 'LIKELY_FIRE' | 'LIKELY_NON_FIRE' | 'AMBIGUOUS'
+
+export interface AuditEventTriage {
+  state: Stage1State
+  fireSupportScore: number
+  nonFireSupportScore: number
+  requiresAiReview: boolean
+  deeperInvestigationEligible: boolean
+  decisiveRuleIds: string[]
+  decisionReasons: string[]
+  budgetReason: string
+  algorithmVersion: string
+}
+
+export interface AuditEvent {
+  eventId: string
+  auditId: string
+  firstDetection: string
+  lastDetection: string
+  durationHours: number
+  observationCount: number
+  centroid: { lat: number; lon: number }
+  bbox: [number, number, number, number]
+  spatialExtentKm: number
+  maxFrp: number | null
+  meanFrp: number | null
+  /** Absent when the source export carries no satellite/instrument column. */
+  sensorMix?: string[]
+  triage: AuditEventTriage
+}
+
+/** One Stage-1 rule's contribution, each pointing at the evidence it read. */
+export interface TriageRule {
+  rule_id: string
+  feature: string
+  effect: string
+  points: number
+  explanation: string
+  evidence_ids: string[]
+}
+
+/** An observed or derived fact. Every claim in the UI traces to one of these. */
+export interface TriageEvidence {
+  evidence_id: string
+  category: string
+  source: string
+  observation: string
+  quality: number
+  limitations: string[]
+  time_window: string
+  raw_reference: string
+  algorithm_version: string
+  retrieved_at: string
+}
+
+export interface AuditEventDetail extends AuditEvent {
+  triageDetail: {
+    rules: TriageRule[]
+    evidence: TriageEvidence[]
+    algorithm_version: string
+    evaluated_at: string
+  } | null
+}
+
+export interface AuditEventScope {
+  id: string
+  label: string
+  reviewStart: string
+  reviewEnd: string
+  contextBufferKm: number
+  eventCount: number
+  reviewQueueCount: number
+  compression: number
+}
+
+/** Provenance for the observations behind the events, served alongside them. */
+export interface AuditEventSource {
+  dataset: string
+  window: string
+  region: string
+  file: string
+  observationsUsed: number
+  excluded: string
+  note: string
+}
+
+export interface AuditEventPage {
+  auditId: string
+  scope: AuditEventScope
+  source: AuditEventSource
+  total: number
+  limit: number
+  offset: number
+  events: AuditEvent[]
+}
