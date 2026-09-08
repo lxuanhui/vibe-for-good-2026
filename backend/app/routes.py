@@ -2,6 +2,7 @@ import json
 
 from flask import Blueprint, jsonify, request
 
+from app import audit_events
 from app.audits import AuditValidationError, build_history, create_audit, upload_scope
 from app.events import (
     FilterError,
@@ -86,4 +87,48 @@ def get_event(event_id: str):
     event = find_event(event_id)
     if event is None:
         return jsonify(error=f"No event with id {event_id}"), 404
+    return jsonify(event)
+
+
+@api.get("/audits/<audit_id>/events")
+def list_audit_events(audit_id: str):
+    """Reconstructed history for one audit scope (Environmental_Assurance_Spec.md Section 24)."""
+    status = audit_events.history_status(audit_id)
+    if status != "AVAILABLE":
+        return jsonify(error=f"No reconstructed history for audit {audit_id}", status=status), 404
+
+    try:
+        bbox = audit_events.parse_bbox(request.args.get("bbox"))
+        since = audit_events.parse_timestamp(request.args.get("since"), "since")
+        until = audit_events.parse_timestamp(request.args.get("until"), "until")
+        state = audit_events.parse_state(request.args.get("state"))
+        limit, offset = audit_events.parse_paging(
+            request.args.get("limit"), request.args.get("offset")
+        )
+    except audit_events.FilterError as exc:
+        return jsonify(error=str(exc)), 400
+
+    audit = audit_events.get_audit(audit_id)
+    matched = audit_events.filter_events(
+        audit["events"], bbox=bbox, since=since, until=until, state=state
+    )
+    return jsonify(
+        auditId=audit_id,
+        scope=audit["scope"],
+        source=audit_events.source_provenance(),
+        total=len(matched),
+        limit=limit,
+        offset=offset,
+        events=matched[offset : offset + limit],
+    )
+
+
+@api.get("/audits/<audit_id>/events/<event_id>")
+def get_audit_event(audit_id: str, event_id: str):
+    event = audit_events.find_event(audit_id, event_id)
+    if event is None:
+        status = audit_events.history_status(audit_id)
+        if status != "AVAILABLE":
+            return jsonify(error=f"No reconstructed history for audit {audit_id}", status=status), 404
+        return jsonify(error=f"No event with id {event_id} in audit {audit_id}"), 404
     return jsonify(event)

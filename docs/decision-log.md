@@ -6,6 +6,51 @@ more valuable half.
 
 ---
 
+## 2026-09-08 - Clustering runs offline; the API serves a committed artifact
+
+**Status:** done · PR #<pr>
+
+`GET /api/audits/{id}/events` returns FireEvents derived from real FIRMS
+observations: 20,471 detections in the 2019 haze window, clustered into 3,610
+events and run through Stage-1 triage.
+
+None of that runs in the request. `cluster_events` needs pandas, numpy and
+scipy — about 200 MB unzipped, against Lambda's 250 MB ceiling — and the
+derivation is identical for every caller, so paying for it per request buys
+nothing. `data_pipeline/export_audit_events.py` runs it once and writes two
+gzipped artifacts into `backend/app/data/`.
+
+**Rejected: generating the artifacts in CI.** `triage_events` stamps every
+evidence object with its retrieval time, so a re-export rewrites both files
+byte-for-byte whether or not any derived value changed. Building them in CI
+would churn the Lambda bundle's `source_code_hash` on every run and deploy a
+"new" function that computes the same answers. They are committed instead;
+re-exporting is a deliberate act, and its diff is expected to be total.
+
+**Rejected: a container or an EC2 worker for the clustering.** Neither is
+needed while the scope is fixed. When scopes become user-defined this has to
+be reopened — clustering an arbitrary uploaded boundary cannot be precomputed
+— and that is the point at which a container is worth its cost.
+
+Both artifacts are gzipped: 23 MB of repetitive JSON becomes 853 KB. The 19
+MB half is the rule-by-rule triage detail, loaded lazily so a list request
+never pays for it.
+
+**Stage-1 does not reduce the review queue on FIRMS alone.** All 3,610 events
+are queued: 396 LIKELY_FIRE, 3,214 AMBIGUOUS, 0 LIKELY_NON_FIRE — compression
+1.0. Most rules return NOT_EVALUATED because FIRMS carries no peat, land-use
+or weather context. This is a property of the input, not a bug in the rules,
+and it is the argument for enrichment: without it there is no triage benefit
+to demonstrate.
+
+**No frontend consumes these endpoints yet, deliberately.** `FireEvent` in
+`frontend/src/api/types.ts` requires `location`, `peatClassification` and
+`currentConditions`. FIRMS-only data supplies none of them, and inventing
+them would blur real and fixture data in exactly the way the product boundary
+forbids. The register needs its own view instead of a coerced legacy shape.
+
+---
+
 ## 2026-09-08 - Audit-scope sessions use a small adapter until persistence is chosen
 
 **Status:** implemented on issue #56

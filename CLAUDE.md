@@ -76,10 +76,23 @@ Real: `GET /api/events` and `GET /api/events/{id}`, served by Flask from
 the Investigator/Skeptic loop with `setTimeout`, and is where a real agent
 goes.
 
-The events being served are still *fixture cases*; the endpoint is real, the
-data is invented. Nothing yet derives an event from an observation.
+The events `GET /api/events` serves are still *fixture cases*; that endpoint
+is real, its data is invented.
 
-`data_pipeline/` writes to no database by design — it answers "can this
+Events derived from real observations live behind
+`GET /api/audits/{id}/events` instead — 3,610 FireEvents clustered from
+20,471 FIRMS detections in the 2019 haze window and run through Stage-1
+triage. Clustering happens offline in
+`data_pipeline/export_audit_events.py`; the API only serves the committed
+artifact, because scipy/pandas would take the Lambda bundle to the edge of
+its 250 MB limit and the derivation is identical for every caller. **No
+frontend calls these endpoints yet** — `FireEvent` in
+`frontend/src/api/types.ts` requires `location`, `peatClassification` and
+`currentConditions`, none of which FIRMS-only data can honestly supply.
+Filling them with placeholders is exactly the blurring the product boundary
+forbids, so the register needs its own view.
+
+`data_pipeline/` otherwise writes to no database by design — it answers "can this
 source be pulled, and pulled *historically*". Its negative results (FIRMS
 `day_range` caps at 5 not 10; Overpass attic queries silently return empty;
 NASA FIRMS needs `truststore` for TLS) are the valuable part.
