@@ -134,6 +134,15 @@ def get_audit_event(audit_id: str, event_id: str):
     return jsonify(event)
 
 
+@api.get("/audits/<audit_id>/events/<event_id>/evidence")
+def get_audit_event_evidence(audit_id: str, event_id: str):
+    evidence = audit_events.evidence_for_event(audit_id, event_id)
+    if evidence is None:
+        status = audit_events.history_status(audit_id)
+        return jsonify(error=f"No evidence for event {event_id} in audit {audit_id}", status=status), 404
+    return jsonify(evidence)
+
+
 @api.get("/audits/<audit_id>/graph")
 def get_audit_graph(audit_id: str):
     raw_ids = request.args.get("event_ids", "")

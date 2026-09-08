@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Map, Source, Layer } from 'react-map-gl/maplibre'
+import { Map, Marker, Source, Layer } from 'react-map-gl/maplibre'
 import type { FeatureCollection, Point, LineString, Geometry } from 'geojson'
 import type { AuditEventSummary, AuditScope, InvestigationMap } from '../../api/types'
 import { fetchAuditRegister, fetchInvestigationMap } from '../../api/client'
 import { useAppStore } from '../../store/useAppStore'
 import { Button } from '../ui/Button'
 import 'maplibre-gl/dist/maplibre-gl.css'
+import { EvidenceDrawer } from './EvidenceDrawer'
 
 const RELATION_COLORS = { INSIDE_SCOPE: '#22d3ee', BOUNDARY_INTERSECTING: '#eab308', EXTERNAL_CONTEXT: '#a78bfa' } as const
 
@@ -27,6 +28,7 @@ function eventRows(events: AuditEventSummary[], selected: string[], toggle: (id:
 }
 
 function InvestigationMapView({ investigation, scope, onBack }: { investigation: InvestigationMap; scope: AuditScope; onBack: () => void }) {
+  const [drawerEventId, setDrawerEventId] = useState<string | null>(null)
   const nodes = investigation.nodes
   const points: FeatureCollection<Point> = { type: 'FeatureCollection', features: nodes.map((node) => eventPoint(node, { id: node.eventId, role: node.mapRole, relation: node.scopeRelation })) }
   const edges: FeatureCollection<LineString> = {
@@ -44,6 +46,7 @@ function InvestigationMapView({ investigation, scope, onBack }: { investigation:
       {scope.buffer_geometry && <Source id="audit-buffer" type="geojson" data={{ type: 'Feature', geometry: scope.buffer_geometry, properties: {} }}><Layer id="audit-buffer-line" type="line" paint={{ 'line-color': '#eab308', 'line-width': 1, 'line-dasharray': [2, 2] }} /></Source>}
       <Source id="graph" type="geojson" data={edges}><Layer id="graph-lines" type="line" paint={{ 'line-color': '#f97316', 'line-width': 2, 'line-dasharray': [1, 1] }} /></Source>
       <Source id="events" type="geojson" data={points}><Layer id="event-points" type="circle" paint={{ 'circle-radius': ['case', ['==', ['get', 'role'], 'SELECTED'], 9, 5], 'circle-color': ['match', ['get', 'relation'], 'INSIDE_SCOPE', RELATION_COLORS.INSIDE_SCOPE, 'BOUNDARY_INTERSECTING', RELATION_COLORS.BOUNDARY_INTERSECTING, RELATION_COLORS.EXTERNAL_CONTEXT], 'circle-stroke-color': '#10151d', 'circle-stroke-width': 2 }} /></Source>
+      {nodes.map((node) => <Marker key={node.eventId} longitude={node.centroid.lon} latitude={node.centroid.lat} onClick={(event) => { event.originalEvent.stopPropagation(); setDrawerEventId(node.eventId) }}><button aria-label={`Open evidence for ${node.eventId}`} className="h-5 w-5 rounded-full border-2 border-bg bg-accent shadow-lg" /></Marker>)}
     </Map>
     <div className="absolute top-3 left-3 rounded-lg border border-border-strong bg-panel/95 p-3 text-xs shadow-lg">
       <div className="mb-2 font-semibold">Spatial investigation</div>
@@ -51,6 +54,7 @@ function InvestigationMapView({ investigation, scope, onBack }: { investigation:
       <p className="mt-2 max-w-[230px] text-[10px] leading-4 text-text-faint">External-context events inform interpretation; they are not audit subjects. Geographic intersection is context, not responsibility.</p>
       <Button className="mt-3 w-full" onClick={onBack}>RETURN TO REGISTER</Button>
     </div>
+    {drawerEventId && <EvidenceDrawer auditId={investigation.auditId} eventId={drawerEventId} onClose={() => setDrawerEventId(null)} />}
   </div>
 }
 

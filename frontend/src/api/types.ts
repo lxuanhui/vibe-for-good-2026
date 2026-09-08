@@ -51,11 +51,18 @@ export interface FireEvent {
 }
 
 export interface EvidenceObject {
-  evidenceId: string
+  evidenceId?: string
   category: string
   type: string
   observation: string
   source: string
+  evidence_id?: string
+  time_window?: string
+  value?: unknown
+  quality?: number | null
+  limitations?: string[]
+  algorithm_version?: string | null
+  raw_reference?: string | null
 }
 
 export interface TopTheory {
@@ -211,6 +218,17 @@ export interface InvestigationMap {
   nodes: InvestigationMapNode[]
   edges: { sourceEventId: string; targetEventId: string; state: string; distanceKm: number; modelVersion: string }[]
   layers: Record<string, boolean>
+}
+
+export interface EventEvidenceResponse {
+  auditId: string
+  event: AuditEventSummary & { triageDetail?: Record<string, unknown> }
+  scopeRelation: ScopeRelation
+  observedEvidence: EvidenceObject[]
+  derivedEvidence: EvidenceObject[]
+  availability: { kind: 'peat' | 'weather' | 'imagery'; status: 'unavailable' | 'no_suitable_pass' | 'available'; reason: string }[]
+  evidenceSufficiency: { value: 'SUFFICIENT' | 'PARTIAL' | 'INSUFFICIENT'; reason: string; algorithmVersion: string }
+  provenance: { source: Record<string, unknown>; algorithmVersions: string[] }
 }
 
 export interface OverlayAvailability {

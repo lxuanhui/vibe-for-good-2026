@@ -97,6 +97,29 @@ def test_single_event_adds_the_inspectable_triage_detail(client):
     assert event["triageDetail"]["rules"]
 
 
+def test_event_evidence_separates_real_observed_derived_and_missing_context(client):
+    event_id = client.get(f"{BASE}?limit=1").get_json()["events"][0]["eventId"]
+
+    response = client.get(f"{BASE}/{event_id}/evidence")
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["event"]["eventId"] == event_id
+    assert body["observedEvidence"]
+    assert body["derivedEvidence"]
+    assert any(item["source"] == "NASA FIRMS" for item in body["observedEvidence"])
+    assert any(item["algorithm_version"] == "stage1-rules-v1" for item in body["derivedEvidence"])
+    assert body["evidenceSufficiency"]["value"] == "PARTIAL"
+    assert {item["kind"] for item in body["availability"]} == {"peat", "weather", "imagery"}
+    assert all(item["status"] == "unavailable" for item in body["availability"])
+
+
+def test_unknown_event_evidence_is_explicitly_not_found(client):
+    response = client.get(f"{BASE}/FE-does-not-exist/evidence")
+
+    assert response.status_code == 404
+
+
 def test_graph_handoff_returns_selected_events_and_context_neighbours(client):
     selected = client.get(f"{BASE}?limit=1").get_json()["events"][0]["eventId"]
     response = client.get(f"/api/audits/{AUDIT}/graph?event_ids={selected}")

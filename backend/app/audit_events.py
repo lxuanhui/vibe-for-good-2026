@@ -315,3 +315,139 @@ def find_event(audit_id: str, event_id: str) -> dict[str, Any] | None:
     # The rule-by-rule breakdown and its evidence objects: what makes the
     # Stage-1 outcome inspectable rather than asserted (§17).
     return {**summary, "triageDetail": detail}
+
+
+def _evidence_object(
+    evidence_id: str,
+    category: str,
+    evidence_type: str,
+    observation: str,
+    source: str,
+    time_window: str,
+    *,
+    value: Any = None,
+    quality: float | None = None,
+    limitations: list[str] | None = None,
+    algorithm_version: str | None = None,
+    raw_reference: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "evidence_id": evidence_id,
+        "category": category,
+        "type": evidence_type,
+        "observation": observation,
+        "source": source,
+        "time_window": time_window,
+        "value": value,
+        "quality": quality,
+        "limitations": limitations or [],
+        "algorithm_version": algorithm_version,
+        "raw_reference": raw_reference,
+    }
+
+
+def evidence_for_event(audit_id: str, event_id: str) -> dict[str, Any] | None:
+    """Return the drawer contract from the current audit artifact.
+
+    The committed demo artifact contains FIRMS clustering and Stage-1 output,
+    not optional enrichment runs. Missing sources are returned as explicit
+    availability records so the UI cannot mistake an absent result for a
+    negative environmental finding.
+    """
+    event = find_event(audit_id, event_id)
+    audit = get_audit(audit_id)
+    if event is None or audit is None:
+        return None
+
+    start = event["firstDetection"]
+    end = event["lastDetection"]
+    window = f"{start} to {end}"
+    scope = audit["scope"]
+    session = get_audit_session(audit_id)
+    scope_context = {**scope, **(session or {})}
+    private_geometry = get_scope_geometry(audit_id)
+    if private_geometry is not None:
+        scope_context["geometry"] = private_geometry
+    relation = _relation(event, scope_context)
+    observed = [
+        _evidence_object(
+            f"OBSERVED_{event_id}_chronology", "thermal", "chronology",
+            f"The FireEvent spans {start} to {end}.", "NASA FIRMS",
+            window, value={"first_detection": start, "last_detection": end},
+            quality=0.82, limitations=["FIRMS acquisition times describe detections, not ignition time."],
+            raw_reference=event_id,
+        ),
+        _evidence_object(
+            f"OBSERVED_{event_id}_observations", "thermal", "observation_count",
+            f"The cluster contains {event['observationCount']} linked FIRMS observations.", "NASA FIRMS",
+            window, value=event["observationCount"], quality=0.82,
+            limitations=["Raw observations are clustered into one FireEvent; they are not independent fires."],
+            raw_reference=event_id,
+        ),
+        _evidence_object(
+            f"OBSERVED_{event_id}_frp", "thermal", "frp_summary",
+            f"FRP ranges from the available summary mean of {event['meanFrp'] or 0:.2f} MW to a maximum of {event['maxFrp'] or 0:.2f} MW.", "NASA FIRMS",
+            window, value={"mean_mw": event["meanFrp"], "max_mw": event["maxFrp"]}, quality=0.82,
+            limitations=["FRP is a thermal detection measurement, not burned area or fire intensity at ground level."],
+            raw_reference=event_id,
+        ),
+    ]
+    derived = list(event.get("triageDetail", {}).get("evidence", []))
+    derived.append(_evidence_object(
+        f"DERIVED_SCOPE_{event_id}_relation", "scope", "scope_relation",
+        f"The event centroid is classified as {relation} against the private audit scope.", "Audit scope geometry / FireEvent centroid",
+        window, value=relation, quality=1.0,
+        limitations=["Geographic intersection is context, not responsibility or attribution."],
+        algorithm_version="audit-scope-relation-v1", raw_reference=event_id,
+    ))
+
+    complexity_names = [
+        "duration", "observation_count", "spatial_extent", "centroid_movement",
+        "directional_consistency", "wind_alignment", "frp_variability",
+        "distinct_thermal_lobes", "peat_overlap", "nearby_event_count",
+        "historical_recurrence", "unexplained_detections", "surface_propagation_mismatch",
+    ]
+    priority_names = [
+        "event_validity", "environmental_significance", "event_complexity",
+        "evidence_inconsistency", "unresolved_event_relationships", "evidence_sufficiency",
+        "peat_involvement", "land_change_indicators", "propagation_uncertainty",
+    ]
+    unavailable = "This current audit artifact has no completed enrichment output for this component."
+    for name in complexity_names:
+        derived.append(_evidence_object(
+            f"DERIVED_COMPLEXITY_{event_id}_{name}", "fire-complexity", name,
+            f"Not evaluated: {unavailable}", "Fire Complexity pipeline",
+            window, value=None, quality=0.0,
+            limitations=[unavailable, "Missing evidence is not treated as low complexity."],
+            algorithm_version="fire-complexity-evidence-v1", raw_reference=event_id,
+        ))
+    for name in priority_names:
+        derived.append(_evidence_object(
+            f"DERIVED_PRIORITY_{event_id}_{name}", "investigation-priority", name,
+            f"Not evaluated: {unavailable}", "Investigation Priority pipeline",
+            window, value=None, quality=0.0,
+            limitations=[unavailable, "Priority is a review-routing aid, not culpability or responsibility."],
+            algorithm_version="investigation-priority-v1", raw_reference=event_id,
+        ))
+
+    return {
+        "auditId": audit_id,
+        "event": event,
+        "scopeRelation": relation,
+        "observedEvidence": observed,
+        "derivedEvidence": derived,
+        "availability": [
+            {"kind": "peat", "status": "unavailable", "reason": unavailable},
+            {"kind": "weather", "status": "unavailable", "reason": unavailable},
+            {"kind": "imagery", "status": "unavailable", "reason": "No imagery acquisition or scene-selection result is present for this audit artifact."},
+        ],
+        "evidenceSufficiency": {
+            "value": "PARTIAL",
+            "reason": "FIRMS observations and Stage-1 derivations are available; optional environmental enrichment is missing.",
+            "algorithmVersion": "evidence-sufficiency-v1",
+        },
+        "provenance": {
+            "source": source_provenance(),
+            "algorithmVersions": ["stage1-rules-v1", "audit-scope-relation-v1", "fire-complexity-evidence-v1", "investigation-priority-v1"],
+        },
+    }

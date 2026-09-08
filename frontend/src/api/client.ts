@@ -1,5 +1,5 @@
 import type { FeatureCollection } from './geojson'
-import type { AuditEventSummary, AuditScope, BBox, EventStatus, FireEvent, InvestigationMap, InvestigationReport, OverlayLayerId } from './types'
+import type { AuditEventSummary, AuditScope, BBox, EventEvidenceResponse, EventStatus, FireEvent, InvestigationMap, InvestigationReport, OverlayLayerId } from './types'
 import { getOverlay, isLayerAvailable } from './fixtures/overlays'
 import { REPORTS } from './fixtures/reports'
 
@@ -81,6 +81,10 @@ export async function fetchAuditRegister(auditId: string, filters?: { since?: st
 export async function fetchInvestigationMap(auditId: string, eventIds: string[]): Promise<InvestigationMap> {
   const query = encodeURIComponent(eventIds.join(','))
   return apiGet<InvestigationMap>(`/audits/${encodeURIComponent(auditId)}/graph?event_ids=${query}`)
+}
+
+export async function fetchAuditEventEvidence(auditId: string, eventId: string): Promise<EventEvidenceResponse> {
+  return apiGet<EventEvidenceResponse>(`/audits/${encodeURIComponent(auditId)}/events/${encodeURIComponent(eventId)}/evidence`)
 }
 
 export async function fetchEvents(opts?: { bbox?: BBox; since?: string; status?: EventStatus }): Promise<FireEvent[]> {
