@@ -78,6 +78,34 @@ extent), last verified run. See the module docstring for the documented
 single-linkage chaining limitation and how FireEvent fields here relate to
 the canonical `FireEvent` type (`Environmental_Assurance_Spec.md` S9).
 
+## Historical weather-window enrichment
+
+`enrichment/weather_enrichment.py` reconstructs the weather context around a
+`FireEvent` -- `fetch_weather_evidence_for_event(event, lat, lon)` returns a
+`WeatherEvidenceBundle` covering seven windows relative to the event's own
+timestamps (T-90d/T-30d/T-7d/T-72h/T-24h lookbacks ending at
+`first_detection`, `event_duration`, and `T0_to_T+48h`), each with rainfall
+accumulation, rainfall-free days, max temperature, mean relative humidity,
+mean wind speed, circular-mean wind direction, topsoil moisture where
+available, a rainfall anomaly against a multi-year seasonal baseline, and
+disagreement against NASA POWER's independent daily estimate for the same
+window. `to_evidence_objects()` converts the bundle into
+`Environmental_Assurance_Spec.md` §16 `EvidenceObject`s, one per
+window/metric so each is independently traceable. `compute_weather_windows()`
+is pure (no network) and is what the tests exercise directly against
+synthetic Open-Meteo-shaped DataFrames; only `fetch_weather_evidence_for_event`
+and its `_demo()` touch the network. Run
+`python -m data_pipeline.enrichment.weather_enrichment` for a live demo
+against the largest FireEvent in the 2019 haze sample: last verified run
+produced 49 evidence objects (7 windows x 7 metrics, all present) for
+`FE-20190901-ce19162367`, correctly flagging T-72h/T-24h rainfall as ~100%
+below the 5-year seasonal baseline (the dry-season conditions the 2019 haze
+event is known for) and a NASA POWER rainfall disagreement of up to 74mm on
+the T-90d window -- itself evidence of how much two independent reanalysis
+products can differ over a 90-day accumulation. See the module docstring for
+why NASA POWER is a disagreement check rather than a second primary source,
+and why historical anomaly is computed for rainfall only.
+
 ## Provider interface
 
 `nasa_firms.py`, `open_meteo.py`, `nasa_power.py`, `copernicus_cds.py`, and
