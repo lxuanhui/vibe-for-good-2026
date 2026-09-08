@@ -16,7 +16,8 @@ nobody has to go digging. Nothing on this page is a credential.
 | Logs | `/aws/lambda/vibe-for-good-2026-dev-api`, `/aws/apigateway/vibe-for-good-2026-dev-api` (14-day retention) |
 | Terraform state | `s3://vibe-for-good-2026-tfstate-apse1/infra/terraform.tfstate`, native `use_lockfile` |
 | CI role | `vibe-for-good-2026-github-actions` (assumed over OIDC) |
-| Console | Amplify app `vibe-for-good-2026-dev-console`. Terraform creates the app; the repository, the `main` branch and previews are connected by hand (see below). URL is the `console_url` output; fill it in here once `main` has built. |
+| Console | Amplify app `vibe-for-good-2026-dev-console`, id `dz8w2n4hd2d22`. Terraform creates the app; the repository, the `main` branch and previews are connected by hand (see below). |
+| Console URL | `https://main.dz8w2n4hd2d22.amplifyapp.com` — 404s until the repository is connected and `main` has built. |
 
 The `environment` Terraform variable defaults to `dev` and feeds every
 resource name, so a second environment is `-var environment=staging` plus a
@@ -51,7 +52,8 @@ over OIDC so that none is needed. The connection is a manual step instead.
 
 Once per account, after the first apply:
 
-1. Amplify console → the app named by the `console_app_id` output.
+1. [The app in the Amplify console](https://ap-southeast-1.console.aws.amazon.com/amplify/apps/dz8w2n4hd2d22)
+   (also the `console_app_id` Terraform output, if the id ever changes).
 2. **Connect a repository** → GitHub → authorize the AWS Amplify GitHub App.
    The authorization is between GitHub and Amplify; no token reaches this repo
    or Terraform.
