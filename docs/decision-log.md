@@ -10,6 +10,8 @@ more valuable half.
 
 **Status:** done · issue #80
 
+Implements the measurement recorded in the 2026-09-08 entry below.
+
 The console now treats Stage-1 as a classifier of fire support, not a promise
 to remove FIRMS-only events from the review queue. The API derives the useful
 progression from the committed artifact: FIRMS observations -> FireEvents,
@@ -23,6 +25,89 @@ haze artifact has 396 `LIKELY_FIRE`, 3,214 `AMBIGUOUS`, and zero
 classify more events as fire-support and would not shrink the queue. Scope is
 the actual product compression boundary, and priority ranking remains a
 separate concern.
+## 2026-09-08 — Stage-1 is a classifier, not the compressor; workload reduction comes from scope and ranking
+
+**Status:** measured · issues #80 #83 #89 (#81 and #82 closed as duplicates)
+
+**Decision.** The product's efficiency claim is observations → FireEvents →
+in-scope (+ buffer) → ranked. Stage-1 triage is a *label* on that chain, not
+a step in it. Do not try to make Stage-1 narrow the queue by adding context
+fields, and do not present its 1.0× as a gap that more data would close.
+
+**What was measured, on the committed 2019 artifact.** 20,471 detections
+cluster to 3,610 events (5.7×). Stage-1 leaves 396 LIKELY_FIRE, 3,214
+AMBIGUOUS and 0 LIKELY_NON_FIRE. The zero is structural: on FIRMS-only input
+the highest non-fire score any event reaches is 2 (singleton +1, FRP ≤2 MW
++1) against a threshold of 4. Only a persistent-heat-source match or a
+volcano within 3 km (+5 each) flips an event alone.
+
+Supplying the context most likely to apply in dry-season Sumatra/Kalimantan
+(vegetated ≥0.5 → +1, rainfall ≤2 mm → +1) would move ~979 events *into*
+LIKELY_FIRE (396 → ~1,375) and leave the queue at 3,610, because LIKELY_FIRE
+and AMBIGUOUS both stay in review. Stage-1 is a false-positive filter and
+haze-season Indonesia has few false positives. That is the rules working.
+
+A synthetic 30×30 km management unit at the densest cell plus a 10 km
+buffer holds 80 events — 2.2% of the history, ~45×. Scope is the compressor
+the product already designed (#56); the demo scope has no boundary, which is
+why the console shows 1.0×.
+
+**Rejected: tuning Stage-1 thresholds or adding rules to reach non-fire.**
+Lowering `NON_FIRE_DECISION_THRESHOLD` so singleton + low-FRP qualifies would
+label 337 real dry-season detections non-fire on no evidence. The rules are
+right; the framing around them was wrong (#80).
+
+**Rejected: tightening clustering to shrink the mega-events.** 22 events
+with ≥100 observations hold 32% of all detections (largest: 1,103
+observations, 107 h, 20.5 km, near Jambi) — transitive closure across the
+peak week. A tighter radius would fragment genuine fire complexes and change
+every downstream count. The review-unit problem is #82, solved by exposing
+the complexity module's subclusters, not by re-clustering.
+
+**Follow-through.** Ranking already runs inside PR #78's history adapter
+(`compute_fire_complexity`, `compute_investigation_priority`), which degrades
+honestly on FIRMS-only input — 40 of 100 weight evaluable, reported as
+`evidence_coverage`. What is unsettled is *where* that runs: #89 measures the
+Lambda bundle and chooses zip, container image, or EC2, and supersedes the
+offline-artifact decision below if the adapter wins. #85 calibrates the
+routing layer, #86 the clustering diagnostics, #83 points the benchmark at
+the artifact instead of live FIRMS. Method for re-running the measurement is
+in the `audit-artifact` skill.
+## 2026-09-08 — Issue-first is part of `branch-and-pr`, not a second skill
+
+**Status:** done · PR #77 · issue #76
+
+**Decision.** "Open an issue before starting" is enforced in the existing
+`branch-and-pr` skill, whose description now triggers loading before work
+starts rather than only before merging.
+
+**Why not a separate `issue-first` skill.** Issue → branch → PR → merge is one
+workflow, and splitting it across two skills means one of them gets loaded and
+the other does not — reliably the one that runs first, because a session
+usually reaches for the skill when it is about to commit. A second skill would
+also duplicate the branch-prefix table and the "two agents, one trunk"
+rationale, which is how two documents start disagreeing.
+
+**Why the rule exists.** Three failures in one session that it would have
+caught: PR #74 implemented the backend half of #57 without referencing it,
+leaving a stale checklist; issue #75 (map-first landing) contradicts the
+register-before-map ordering in #57 and #58, which surfaced only by luck of
+reading order; and `backend/app/audits.py` was clobbered because two
+workstreams reached for the same filename with nothing signalling it was
+taken.
+
+**The rule names its own exceptions** — typos, fixing your own open PR,
+Renovate bumps, and work the user asked for directly. A rule with no
+exceptions gets ignored wholesale, and an issue-per-typo policy would be
+ignored within a day. The exception for direct user requests is deliberately
+narrow: the ask is the mandate, but an issue is still expected when the work
+touches a surface the other person is building on.
+
+**Rejected: GitHub issue templates.** They enforce shape, not the reading step
+that actually matters, and the house format is already legible from the
+existing issues. Rejected again: required-status or branch-protection rules to
+enforce the link — unavailable on this plan for a private repo, returning 403
+on every ruleset call.
 
 ---
 

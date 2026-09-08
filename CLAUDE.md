@@ -116,6 +116,16 @@ forbids, so the register needs its own view. That gap between the engine and
 the console, not any single endpoint, is the largest thing between here and
 the demo in §31.
 
+Stage-1 triage does not compress this dataset and is not meant to. On
+FIRMS-only input `LIKELY_NON_FIRE` is unreachable (max non-fire score 2,
+threshold 4), and supplying context would widen the fire set, not shrink the
+queue — haze-season data has few false positives to remove. The efficiency
+chain is observations → events → **in scope** → **ranked**; Stage-1 is a
+label along it. Don't present its 1.0× as a gap more data would close, and
+don't tune its thresholds to manufacture a reduction. Numbers and rejected
+alternatives are in the decision log (2026-09-08, "Stage-1 is a
+classifier"); the `audit-artifact` skill says how to re-measure.
+
 The spike's negative results are still the valuable part of `sources/` (FIRMS
 `day_range` caps at 5 not 10; Overpass attic queries silently return empty;
 NASA FIRMS needs `truststore` for TLS).
@@ -133,12 +143,22 @@ which data is real and which is a fixture.
 | `add-data-source` | Adding or re-checking a source in `data_pipeline/` |
 | `deploy-api` | Deploying or debugging the Lambda-hosted API |
 | `branch-and-pr` | Before the first edit of any task, and again before merging |
+| `audit-artifact` | Regenerating, inspecting or measuring `backend/app/data/audit_events.json.gz` |
 
 ## Working in this repo
 
+**Start from an issue.** `gh issue list --state open` before writing anything
+— the backlog is real and specific, and most work already has an issue with
+deliverables and acceptance criteria written down. Work to it rather than
+beside it. If nothing covers the work, open one first; if the work
+*contradicts* an existing issue, say so in the issue before building the
+opposite of what it specifies. The queue runs `#56 → #57 → #58 → #59 → #60 →
+#61 → #62 → #64`; a new issue joins that order rather than jumping it.
+Exceptions and the full rule are in the `branch-and-pr` skill.
+
 **Never commit to `main`.** Every change goes on a branch and lands through a
 pull request, so the two of us can see what the other's Claude did before it
-is in the trunk. Name the branch `<type>/<short-kebab-description>`, using the
+is in the trunk. Reference the issue in the PR body. Name the branch `<type>/<short-kebab-description>`, using the
 same type you would put on the commit:
 
 | Prefix | For |
