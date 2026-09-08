@@ -8,7 +8,7 @@ more valuable half.
 
 ## 2026-09-08 — Issue-first is part of `branch-and-pr`, not a second skill
 
-**Status:** done · PR #<pr> · issue #76
+**Status:** done · PR #77 · issue #76
 
 **Decision.** "Open an issue before starting" is enforced in the existing
 `branch-and-pr` skill, whose description now triggers loading before work
