@@ -1,13 +1,18 @@
 import type { FeatureCollection } from './geojson'
 import type { BBox, EventStatus, FireEvent, InvestigationReport, OverlayLayerId } from './types'
-import { ALL_EVENTS } from './fixtures/events'
 import { getOverlay, isLayerAvailable } from './fixtures/overlays'
 import { REPORTS } from './fixtures/reports'
 
-// Every function here mirrors the real endpoint contract in
+// Every function here mirrors the endpoint contract in
 // assurance_console_ui_spec.md Section 5 (bbox/date/status filters, response
-// shapes). Swapping this module for real `fetch()` calls against a Cloudflare
-// Workers backend should not require changing any caller.
+// shapes). Functions move from fixture to real `fetch()` one at a time
+// without any caller changing -- events have moved; overlays and reports
+// have not.
+
+// Empty in dev: Vite proxies /api to the Flask server on :5001. Set
+// VITE_API_BASE_URL when the console is served from somewhere that is not
+// the same origin as the API.
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
 
 const LATENCY_MS = 220
 
@@ -15,20 +20,37 @@ function delay<T>(value: T, ms = LATENCY_MS): Promise<T> {
   return new Promise((resolve) => setTimeout(() => resolve(value), ms))
 }
 
-function inBBox(event: FireEvent, bbox?: BBox): boolean {
-  if (!bbox) return true
-  return event.lon >= bbox.minLon && event.lon <= bbox.maxLon && event.lat >= bbox.minLat && event.lat <= bbox.maxLat
+async function apiGet<T>(path: string): Promise<T> {
+  const response = await fetch(`${API_BASE}/api${path}`)
+  if (!response.ok) {
+    throw new Error(`GET /api${path} failed with ${response.status}`)
+  }
+  return (await response.json()) as T
 }
 
 export async function fetchEvents(opts?: { bbox?: BBox; since?: string; status?: EventStatus }): Promise<FireEvent[]> {
-  const events = ALL_EVENTS.filter((e) => inBBox(e, opts?.bbox))
-    .filter((e) => !opts?.since || e.firstDetected >= opts.since)
-    .filter((e) => !opts?.status || e.status === opts.status)
-  return delay(events)
+  const params = new URLSearchParams()
+  if (opts?.bbox) {
+    const { minLon, minLat, maxLon, maxLat } = opts.bbox
+    params.set('bbox', `${minLon},${minLat},${maxLon},${maxLat}`)
+  }
+  if (opts?.since) params.set('since', opts.since)
+  if (opts?.status) params.set('status', opts.status)
+
+  const query = params.toString()
+  const { events } = await apiGet<{ events: FireEvent[] }>(`/events${query ? `?${query}` : ''}`)
+  return events
 }
 
 export async function fetchEvent(eventId: string): Promise<FireEvent | undefined> {
-  return delay(ALL_EVENTS.find((e) => e.id === eventId))
+  const response = await fetch(`${API_BASE}/api/events/${encodeURIComponent(eventId)}`)
+  // Absent is not an error here: the mock returned undefined for an unknown
+  // id and callers still branch on that.
+  if (response.status === 404) return undefined
+  if (!response.ok) {
+    throw new Error(`GET /api/events/${eventId} failed with ${response.status}`)
+  }
+  return (await response.json()) as FireEvent
 }
 
 export async function fetchOverlay(layer: OverlayLayerId, date: string): Promise<FeatureCollection<unknown, unknown>> {

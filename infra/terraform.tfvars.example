@@ -1,0 +1,13 @@
+# Copy to terraform.tfvars and adjust. terraform.tfvars is gitignored --
+# it is the file most likely to end up holding a real secret.
+
+aws_region  = "ap-southeast-1"
+environment = "dev"
+
+# Origin the deployed frontend is served from. Leave "*" only while the
+# frontend still runs on localhost.
+# cors_origins = "https://console.example.org"
+
+# Read from state in plain text -- see the variable description in
+# variables.tf before putting anything real here.
+# flask_secret_key = "..."

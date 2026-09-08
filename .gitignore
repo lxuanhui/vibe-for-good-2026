@@ -150,3 +150,30 @@ venv/
 data_pipeline/.cache*
 data_pipeline/output/
 data_pipeline/.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Terraform
+**/.terraform/
+# .terraform.lock.hcl is deliberately NOT ignored -- it pins provider
+# versions so everyone applies with the same AWS provider build.
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfvars
+!*.tfvars.example
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+infra/build/
