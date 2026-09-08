@@ -6,6 +6,51 @@ more valuable half.
 
 ---
 
+## 2026-09-08 — The console lands on the scoped map; scope-first governs content, not screen order
+
+**Status:** done · PR #79 · issue #75
+
+**Decision.** `App.tsx` renders a full-bleed map framed to the audit scope,
+showing the reconstructed 2019 events coloured by Stage-1 state. The
+scope-entry flow from #56 opens over it rather than gating it.
+
+**The conflict this resolves, and how.** #57 and #58 specify
+register-before-map: the map is "a second-stage spatial reasoning tool after
+table screening", and the regional FIRMS archive stays hidden. Both reasons
+hold — a sortable table screens a multi-year history better than panning, and
+an Indonesia-wide detection browser invites the "whose land is that"
+inference the product does not make. So the landing map fits to the scope's
+extent, never to the country; the FIRMS raw archive is not on it; and the
+register remains the screening surface when #57 builds it — as a panel over
+this map. Scope-first governs what the map shows, not which screen loads
+first. The conflict was raised in #75 before code was written so the other
+half of the team could object there.
+
+**Rejected: coercing the artifact into `FireEvent`.** That type requires
+`location`, `peatClassification` and `currentConditions`. Inventing them
+would blur real and fixture data at the type level, so the map uses its own
+`AuditEvent` type and the legacy console stays unmounted.
+
+**Rejected: a heatmap for the events.** The FIRMS layer uses one because
+20,471 raw detections stack into a mass at country zoom. The events are
+already clustered to 3,610 and each is clickable evidence; blurring them back
+into a density field would discard the derivation the pipeline just did.
+
+**Rejected: FRP-driven marker size.** Radius encodes observation count, which
+is observed. FRP would read as an intensity the event was not measured for.
+
+**Caught in the browser, not the build.** The first cut wrapped a shared
+zoom-interpolated radius in `['*', radius, 0.55]`. MapLibre rejects `zoom`
+anywhere but the top level of an expression, dropped the layer at `addLayer`,
+and the map rendered the glow but not the clickable dots. `tsc`, lint and
+`vite build` were all green. The `branch-and-pr` skill's "open the app and
+look at it" rule is not advice.
+
+**Known and left.** The FIRMS export's bbox includes Malaysian Borneo and the
+peninsula, and the basemap asset is Indonesia-only, so some real events sit
+over what looks like sea. They are real; the basemap is the limitation.
+`AuditStart` carries its own header, so the overlay shows two — not changed,
+because it is the other team member's component and cosmetic.
 ## 2026-09-08 — Stage-1 is a classifier, not the compressor; workload reduction comes from scope and ranking
 
 **Status:** measured · issues #80 #83 #89 (#81 and #82 closed as duplicates)
