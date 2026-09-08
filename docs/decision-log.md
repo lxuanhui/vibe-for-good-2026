@@ -6,6 +6,27 @@ more valuable half.
 
 ---
 
+## 2026-09-08 - Audit-scope sessions use a small adapter until persistence is chosen
+
+**Status:** implemented on issue #56
+
+**Decision.** The audit-first entry flow creates an anonymised `audit_id` and
+`scope_id`, validates the uploaded private GeoJSON boundary, and carries dates,
+bbox, centroid, context buffer, and buffer preview through a minimal Flask
+contract. The current adapter keeps sessions process-local and exposes the
+history-build handoff without reconstructing history.
+
+**Why.** The repository's real deployment path is Flask on AWS Lambda behind
+API Gateway HTTP API, while application persistence is explicitly not yet
+provisioned. A small interface gives #57 a stable scope contract without
+silently inventing a DynamoDB/S3 design or moving the product to the stale
+Cloudflare Workers/D1/R2/KV wording in the earlier spec.
+
+**Rejected.** Company identity, public concession lookup, and KML/KMZ/SHP
+parsers are outside the audit-scope boundary. A process-local session is not a
+production retention model and must be replaced by the later persistence
+decision before multi-instance or multi-tenant use.
+
 ## 2026-09-08 - Investigator/Skeptic analysis is a bounded structured boundary
 
 **Status:** implemented on issue #15 branch

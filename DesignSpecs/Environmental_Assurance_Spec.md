@@ -5,7 +5,7 @@
 **Project:** Vibe For Good 2026 hackathon MVP  
 **Challenge:** ACCA Challenge Statement #1  
 **Primary geography:** Indonesia  
-**Stack:** Vite + React; Cloudflare Workers; D1 + R2 + KV  
+**Stack:** Vite + React frontend; Flask API on AWS Lambda behind API Gateway HTTP API; Terraform-managed AWS infrastructure
 
 > This file is the single source of truth. It consolidates the original Claude Code build specification, peat-aware v2 architecture, and Assurance Console UI specification. Where older documents conflict, this file wins.
 
@@ -123,21 +123,25 @@ Store uploaded geometry privately, tenant-scoped, encrypted/access-controlled wh
 
 | Evidence | Source | Role | Persistence default |
 |---|---|---|---|
-| thermal observations | NASA FIRMS VIIRS/MODIS | historical observations/qualifier | R2 historical; cache recent |
-| weather | Open-Meteo / NASA POWER | event context, wind/rain/RH/temp | KV raw cache; D1 finalized derived evidence |
-| optical | Sentinel-2 / Landsat | pre/post visual/burn/vegetation evidence | metadata D1; selected derived imagery R2 |
-| SAR | Sentinel-1 | cloud-independent change evidence | metadata D1; selected derived imagery R2 |
-| peat | Greifswald/KHG where legally/technically suitable | peat context | versioned R2; derived facts D1 |
-| land cover | ESA WorldCover | contextual class only | versioned R2/static |
-| roads/settlements | OSM | context | KV cache |
+| thermal observations | NASA FIRMS VIIRS/MODIS | historical observations/qualifier | bulky evidence store; cache recent |
+| weather | Open-Meteo / NASA POWER | event context, wind/rain/RH/temp | disposable cache; finalized derived evidence store |
+| optical | Sentinel-2 / Landsat | pre/post visual/burn/vegetation evidence | metadata store; selected derived imagery store |
+| SAR | Sentinel-1 | cloud-independent change evidence | metadata store; selected derived imagery store |
+| peat | Greifswald/KHG where legally/technically suitable | peat context | versioned evidence store; derived facts metadata store |
+| land cover | ESA WorldCover | contextual class only | versioned evidence store/static |
+| roads/settlements | OSM | context | disposable cache |
 
 WorldCover 2020/2021 must not be presented as contemporaneous 2019 land cover. Historical land change should come from contemporaneous imagery.
 
 # 8. Persistence architecture
 
-**D1 stores what the product learned or humans decided. R2 stores bulky/historical evidence. KV stores disposable/re-fetchable cache.**
+The repository currently deploys the API as Flask on AWS Lambda behind API
+Gateway HTTP API and does not yet provision application persistence. The
+logical storage roles below remain canonical; the AWS service mapping is a
+separate infrastructure decision and must not be replaced with an unselected
+provider stack.
 
-D1:
+Durable metadata store (AWS service not yet chosen):
 - audit scopes metadata
 - FireEvent summaries
 - membership/index references
@@ -149,7 +153,7 @@ D1:
 - source runs/checkpoints
 - algorithm/model versions
 
-R2:
+Bulky/private evidence store (AWS service not yet chosen):
 - historical FIRMS Parquet/GeoParquet partitions
 - uploaded private scope geometry
 - reference rasters/datasets
@@ -157,7 +161,7 @@ R2:
 - frozen report evidence snapshots
 - PDFs/demo fixtures
 
-KV:
+Disposable/re-fetchable cache (AWS service not yet chosen):
 - weather responses
 - STAC searches
 - OSM responses
@@ -439,7 +443,7 @@ type AuditScope = {
   label?: string;
   reviewStart: string;
   reviewEnd: string;
-  geometryR2Key?: string;
+  geometryObjectKey?: string;
   bbox: [number, number, number, number];
   centroid: [number, number];
   contextBufferKm: number;
@@ -452,12 +456,16 @@ type AuditScope = {
 Every provider declares storage semantics:
 ```python
 storage_policy = {
-  "raw": "R2|NONE",
-  "metadata": "D1",
-  "cache": "KV|NONE",
-  "cache_ttl": 86400,
+    "raw": "EVIDENCE_STORE|NONE",
+    "metadata": "METADATA_STORE",
+    "cache": "DISPOSABLE_CACHE|NONE",
+    "cache_ttl": 86400,
 }
 ```
+
+These are logical roles, not provider names. The current AWS service mapping
+remains intentionally undecided until the ingestion and persistence work is
+scoped.
 
 Do not duplicate overlapping weather windows per event when a shared cached query can serve them.
 

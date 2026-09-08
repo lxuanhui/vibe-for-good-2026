@@ -1,5 +1,5 @@
 import type { FeatureCollection } from './geojson'
-import type { BBox, EventStatus, FireEvent, InvestigationReport, OverlayLayerId } from './types'
+import type { AuditScope, BBox, EventStatus, FireEvent, InvestigationReport, OverlayLayerId } from './types'
 import { getOverlay, isLayerAvailable } from './fixtures/overlays'
 import { REPORTS } from './fixtures/reports'
 
@@ -26,6 +26,41 @@ async function apiGet<T>(path: string): Promise<T> {
     throw new Error(`GET /api${path} failed with ${response.status}`)
   }
   return (await response.json()) as T
+}
+
+async function apiPost<T>(path: string, body: BodyInit | null, headers?: HeadersInit): Promise<T> {
+  const response = await fetch(`${API_BASE}/api${path}`, { method: 'POST', body, headers })
+  if (!response.ok) {
+    const details = (await response.json().catch(() => null)) as { error?: string } | null
+    throw new Error(details?.error ?? `POST /api${path} failed with ${response.status}`)
+  }
+  return (await response.json()) as T
+}
+
+export async function createAuditReview(input: {
+  reviewStart: string
+  reviewEnd: string
+  contextBufferKm: number
+}): Promise<AuditScope> {
+  return apiPost<AuditScope>(
+    '/audits',
+    JSON.stringify({
+      review_start: input.reviewStart,
+      review_end: input.reviewEnd,
+      context_buffer_km: input.contextBufferKm,
+    }),
+    { 'Content-Type': 'application/json' },
+  )
+}
+
+export async function uploadAuditScope(auditId: string, file: File): Promise<AuditScope> {
+  const form = new FormData()
+  form.append('file', file)
+  return apiPost<AuditScope>(`/audits/${encodeURIComponent(auditId)}/scope/upload`, form)
+}
+
+export async function buildFireHistory(auditId: string): Promise<{ audit_id: string; scope_id: string; status: 'HISTORY_BUILD_READY' }> {
+  return apiPost(`/audits/${encodeURIComponent(auditId)}/history/build`, null)
 }
 
 export async function fetchEvents(opts?: { bbox?: BBox; since?: string; status?: EventStatus }): Promise<FireEvent[]> {

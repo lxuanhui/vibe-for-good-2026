@@ -32,8 +32,15 @@ DesignSpecs/    The specs the product is built against; Environmental_Assurance_
 The Vite dev server proxies `/api/*` to the Flask backend, so the frontend can
 call `fetch('/api/hello')` with no CORS setup in development.
 
+The console opens with the audit-scope-first review flow: review dates, a
+private GeoJSON management-unit boundary, and a configurable context buffer
+are validated and previewed before the history-build handoff. The handoff
+only carries the anonymised audit/session scope in this issue; historical
+reconstruction is a later pipeline step.
+
 `GET /api/events` and `GET /api/events/{id}` are served by Flask; the rest of
-the console still renders from fixtures in `frontend/src/api/client.ts`, which
+the legacy event investigation console still renders from fixtures in
+`frontend/src/api/client.ts`, which
 mirror the endpoint contract in `Environmental_Assurance_Spec.md` §24 so each
 one can be swapped for a real call without touching any caller.
 
