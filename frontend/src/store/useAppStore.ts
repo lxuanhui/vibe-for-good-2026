@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import type { OverlayLayerId, RasterLayerId } from '../api/types'
 import { TIMELINE_DATES } from '../api/fixtures/dates'
 
-export type ViewMode = 'map' | 'table'
+export type ViewMode = 'map' | 'table' | 'report'
 
 type LayerId = OverlayLayerId | RasterLayerId
 
@@ -24,6 +24,12 @@ interface AppState {
   reportEventId: string | null
   openReport: (id: string) => void
   closeReport: () => void
+
+  auditId: string | null
+  registerSelection: string[]
+  setAuditSession: (auditId: string, selection?: string[]) => void
+  toggleRegisterSelection: (id: string) => void
+  clearRegisterSelection: () => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -53,4 +59,11 @@ export const useAppStore = create<AppState>((set) => ({
   reportEventId: null,
   openReport: (id) => set({ reportEventId: id }),
   closeReport: () => set({ reportEventId: null }),
+
+  auditId: null,
+  registerSelection: [],
+  setAuditSession: (auditId, selection = []) => set({ auditId, registerSelection: selection, viewMode: 'table' }),
+  toggleRegisterSelection: (id) =>
+    set((s) => ({ registerSelection: s.registerSelection.includes(id) ? s.registerSelection.filter((value) => value !== id) : [...s.registerSelection, id] })),
+  clearRegisterSelection: () => set({ registerSelection: [] }),
 }))

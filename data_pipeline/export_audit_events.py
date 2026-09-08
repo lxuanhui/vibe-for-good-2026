@@ -6,7 +6,7 @@ Usage:
 
 Reads frontend/public/pipeline/firms-2019-09.json (the 2019-09-01..05
 Sumatra/Kalimantan haze window, the only real observation data committed to
-this repo) and writes backend/app/data/audit_events.json.
+this repo) and writes compressed artifacts under backend/app/data/.
 
 This runs offline, on purpose. Clustering needs pandas, numpy and scipy, which
 together are most of a Lambda deployment package; the API stays thin by
@@ -25,7 +25,11 @@ from typing import Any
 import pandas as pd
 
 from data_pipeline.clustering.firms_clustering import FireEvent, cluster_events
-from data_pipeline.triage.stage1 import Stage1TriageResult, summarize_triage, triage_events
+from data_pipeline.triage.stage1 import (
+    Stage1TriageResult,
+    summarize_triage,
+    triage_events,
+)
 
 REPO_ROOT = Path(__file__).parent.parent
 SOURCE_JSON = REPO_ROOT / "frontend" / "public" / "pipeline" / "firms-2019-09.json"
@@ -86,6 +90,13 @@ def load_observations() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def load_raw_observation_count() -> int:
+    """Count every source feature before the deterministic low-confidence gate."""
+    with SOURCE_JSON.open(encoding="utf-8") as handle:
+        by_date: dict[str, dict[str, Any]] = json.load(handle)
+    return sum(len(collection["features"]) for collection in by_date.values())
+
+
 def event_summary(event: FireEvent, triage: Stage1TriageResult) -> dict[str, Any]:
     """List-view shape: what the Historical Fire Register table needs (§11).
 
@@ -128,6 +139,7 @@ def event_summary(event: FireEvent, triage: Stage1TriageResult) -> dict[str, Any
 
 
 def main() -> None:
+    raw_observations = load_raw_observation_count()
     observations = load_observations()
     print(f"==> {len(observations):,} usable detections from {SOURCE_JSON.name}")
 
@@ -152,6 +164,8 @@ def main() -> None:
             "region": "Sumatra / Kalimantan",
             "file": str(SOURCE_JSON.relative_to(REPO_ROOT)),
             "observationsUsed": len(observations),
+            "rawObservations": raw_observations,
+            "qualifiedObservations": len(observations),
             "excluded": "low-confidence detections",
             "note": "Real observations. Clustering and Stage-1 triage are derived, not observed.",
         },
@@ -162,6 +176,8 @@ def main() -> None:
                     "eventCount": len(events),
                     "reviewQueueCount": summary.review_queue_count,
                     "compression": summary.events_to_review_queue_compression,
+                    "rawObservations": raw_observations,
+                    "qualifiedObservations": len(observations),
                 },
                 "events": [event_summary(e, by_id[e.event_id]) for e in events],
             }

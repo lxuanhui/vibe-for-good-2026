@@ -92,6 +92,12 @@ def get_audit(audit_id: str) -> dict[str, Any] | None:
     return _public_session(session) if session else None
 
 
+def get_scope_geometry(audit_id: str) -> Any:
+    """Private geometry access for server-side spatial classification only."""
+    session = AUDIT_SESSIONS.get(audit_id)
+    return session.get("_geometry") if session else None
+
+
 def _polygon_groups(geojson: Any) -> tuple[list[list[list[list[float]]]], Any]:
     """Return polygon coordinate groups and the original JSON value."""
 

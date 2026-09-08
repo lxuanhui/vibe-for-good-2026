@@ -51,11 +51,18 @@ export interface FireEvent {
 }
 
 export interface EvidenceObject {
-  evidenceId: string
+  evidenceId?: string
   category: string
   type: string
   observation: string
   source: string
+  evidence_id?: string
+  time_window?: string
+  value?: unknown
+  quality?: number | null
+  limitations?: string[]
+  algorithm_version?: string | null
+  raw_reference?: string | null
 }
 
 export interface TopTheory {
@@ -180,6 +187,94 @@ export interface AuditScope {
     coordinates: [number, number][][]
   } | null
   geometry?: unknown
+  historyBuild?: { duration_ms: number; dataset_mode: string }
+}
+
+export type ScopeRelation = 'INSIDE_SCOPE' | 'BOUNDARY_INTERSECTING' | 'EXTERNAL_CONTEXT'
+
+export interface AuditEventSummary {
+  eventId: string
+  auditId: string
+  firstDetection: string
+  lastDetection: string
+  durationHours: number
+  observationCount: number
+  centroid: { lat: number; lon: number }
+  bbox: [number, number, number, number]
+  spatialExtentKm: number
+  maxFrp: number | null
+  meanFrp: number | null
+  triage: { state: 'LIKELY_FIRE' | 'LIKELY_NON_FIRE' | 'AMBIGUOUS'; deeperInvestigationEligible: boolean }
+}
+
+export interface InvestigationMapNode extends AuditEventSummary {
+  scopeRelation: ScopeRelation
+  mapRole: 'SELECTED' | 'EXTERNAL_CONTEXT'
+}
+
+export interface InvestigationMap {
+  auditId: string
+  selectedEventIds: string[]
+  scope: Record<string, unknown>
+  nodes: InvestigationMapNode[]
+  edges: {
+    sourceEventId: string
+    targetEventId: string
+    state: string
+    distanceKm: number
+    modelVersion: string
+    supportingEvidenceIds?: string[]
+    contradictingEvidenceIds?: string[]
+    evidence?: EvidenceObject[]
+  }[]
+  layers: Record<string, boolean>
+}
+
+export interface EventEvidenceResponse {
+  auditId: string
+  event: AuditEventSummary & { triageDetail?: Record<string, unknown> }
+  scopeRelation: ScopeRelation
+  observedEvidence: EvidenceObject[]
+  derivedEvidence: EvidenceObject[]
+  availability: { kind: 'peat' | 'weather' | 'imagery'; status: 'unavailable' | 'no_suitable_pass' | 'available'; reason: string }[]
+  evidenceSufficiency: { value: 'SUFFICIENT' | 'PARTIAL' | 'INSUFFICIENT'; reason: string; algorithmVersion: string }
+  provenance: { source: Record<string, unknown>; algorithmVersions: string[] }
+}
+
+export interface AuditProgression {
+  rawObservations: number
+  qualifiedObservations: number
+  fireEvents: number
+  requiringHumanReview: number
+  selected: number
+  selectedEventIds: string[]
+  compression: number | null
+  observationsToEventsCompression: number | null
+  inScopeAndBuffer: number | null
+  scopeBoundaryAvailable: boolean
+  scopeCompression: number | null
+}
+
+export interface AuditPackReview { eventId: string; note: string; disposition: string; addedAt: string }
+
+export interface AuditReport {
+  auditId: string
+  auditScope: { reviewStart: string; reviewEnd: string; scope: Record<string, unknown> }
+  sourceMethodSummary: { observed: string; derived: string; ai: string; source: Record<string, unknown> }
+  compressionSummary: Record<string, unknown> & Partial<AuditProgression>
+  counts: { identified: number; screened: number; reviewed: number; selected: number; verify: number; insufficient: number }
+  selectedFireEvents: { event: AuditEventSummary; review: AuditPackReview; evidence: EventEvidenceResponse }[]
+  maps: { selectedEventIds: string[]; layers: Record<string, boolean> }
+  chronology: { eventId: string; firstDetection: string; lastDetection: string }[]
+  deterministicEvidence: { eventId: string; observed: EvidenceObject[]; derived: EvidenceObject[] }[]
+  graphRelationships: InvestigationMap['edges']
+  aiAnalysis: unknown[]
+  unresolvedQuestions: unknown[]
+  verificationRecommendations: unknown[]
+  limitations: string[]
+  provenance: { source: Record<string, unknown>; algorithmVersions: string[] }
+  humanNotes: AuditPackReview[]
+  disclaimer: string
 }
 
 export interface OverlayAvailability {

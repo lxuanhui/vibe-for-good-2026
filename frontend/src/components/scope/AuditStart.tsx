@@ -67,7 +67,7 @@ export function AuditStart({ onReady }: { onReady: (scope: AuditScope) => void }
       })
       const uploaded = await uploadAuditScope(created.audit_id, file)
       const handoff = await buildFireHistory(uploaded.audit_id)
-      onReady({ ...uploaded, status: handoff.status })
+      onReady({ ...uploaded, status: handoff.status, historyBuild: handoff })
     } catch (error) {
       setSubmitError(errorMessage(error))
     } finally {
@@ -147,7 +147,7 @@ export function AuditStart({ onReady }: { onReady: (scope: AuditScope) => void }
             {(fileError || submitError) && <p className="rounded border border-status-urgent/40 bg-status-urgent/10 px-3 py-2 text-xs leading-5 text-red-200" role="alert">{fileError || submitError}</p>}
 
             <Button type="submit" variant="primary" disabled={submitting} className="w-full py-3 uppercase tracking-[0.16em]">
-              {submitting ? 'Preparing audit review…' : 'BUILD FIRE HISTORY'}
+              {submitting ? 'Building cached fire history…' : 'BUILD FIRE HISTORY'}
             </Button>
           </form>
         </section>
@@ -163,6 +163,7 @@ export function AuditStart({ onReady }: { onReady: (scope: AuditScope) => void }
               <div><span className="mr-1 inline-block h-2 w-2 rounded-full bg-status-moderate" />Context buffer</div>
             </div>
           </div>
+          {submitting && <div role="status" className="border-t border-border px-5 py-3 text-xs text-text-muted">Scope uploaded. Checking the cached real historical dataset and preparing the register…</div>}
           <div className="relative min-h-[360px] flex-1 bg-bg">
             {preview ? (
               <ScopePreviewMap scope={preview} />

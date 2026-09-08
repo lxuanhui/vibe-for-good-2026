@@ -104,8 +104,15 @@ def test_history_handoff_requires_a_valid_scope_and_keeps_the_same_id(client):
     client.post(f"/api/audits/{review['audit_id']}/scope/upload", json=DEMO_SCOPE)
     handoff = client.post(f"/api/audits/{review['audit_id']}/history/build")
     assert handoff.status_code == 202
-    assert handoff.get_json() == {
-        "audit_id": review["audit_id"],
-        "scope_id": review["scope_id"],
-        "status": "HISTORY_BUILD_READY",
-    }
+    assert handoff.get_json()["audit_id"] == review["audit_id"]
+    assert handoff.get_json()["scope_id"] == review["scope_id"]
+    assert handoff.get_json()["status"] == "HISTORY_BUILD_READY"
+    assert handoff.get_json()["duration_ms"] >= 0
+    assert handoff.get_json()["dataset_mode"] == "cached_real_historical_dataset"
+
+    register = client.get(f"/api/audits/{review['audit_id']}/events?limit=1")
+    assert register.status_code == 200
+    event_id = register.get_json()["events"][0]["eventId"]
+    evidence = client.get(f"/api/audits/{review['audit_id']}/events/{event_id}/evidence")
+    assert evidence.status_code == 200
+    assert evidence.get_json()["event"]["triageDetail"]["rules"]

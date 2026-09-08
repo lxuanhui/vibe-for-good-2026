@@ -24,6 +24,19 @@ def test_lists_events_with_scope_and_provenance(client):
     assert body["total"] > 5
     assert body["scope"]["reviewStart"] == "2019-09-01"
     assert "FIRMS" in body["source"]["dataset"]
+    assert body["progression"] == {
+        "rawObservations": 21519,
+        "qualifiedObservations": 20471,
+        "fireEvents": 3610,
+        "requiringHumanReview": 3610,
+        "selected": 0,
+        "selectedEventIds": [],
+        "compression": None,
+        "observationsToEventsCompression": 5.67,
+        "inScopeAndBuffer": None,
+        "scopeBoundaryAvailable": False,
+        "scopeCompression": None,
+    }
 
 
 def test_event_shape_is_camel_case_and_carries_triage(client):
@@ -97,6 +110,43 @@ def test_single_event_adds_the_inspectable_triage_detail(client):
     assert event["triageDetail"]["rules"]
 
 
+def test_event_evidence_separates_real_observed_derived_and_missing_context(client):
+    event_id = client.get(f"{BASE}?limit=1").get_json()["events"][0]["eventId"]
+
+    response = client.get(f"{BASE}/{event_id}/evidence")
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["event"]["eventId"] == event_id
+    assert body["observedEvidence"]
+    assert body["derivedEvidence"]
+    assert any(item["source"] == "NASA FIRMS" for item in body["observedEvidence"])
+    assert any(item["algorithm_version"] == "stage1-rules-v1" for item in body["derivedEvidence"])
+    assert body["evidenceSufficiency"]["value"] == "PARTIAL"
+    assert {item["kind"] for item in body["availability"]} == {"peat", "weather", "imagery"}
+    assert all(item["status"] == "unavailable" for item in body["availability"])
+
+
+def test_unknown_event_evidence_is_explicitly_not_found(client):
+    response = client.get(f"{BASE}/FE-does-not-exist/evidence")
+
+    assert response.status_code == 404
+
+
+def test_graph_handoff_returns_selected_events_and_context_neighbours(client):
+    selected = client.get(f"{BASE}?limit=1").get_json()["events"][0]["eventId"]
+    response = client.get(f"/api/audits/{AUDIT}/graph?event_ids={selected}")
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["selectedEventIds"] == [selected]
+    assert any(node["mapRole"] == "SELECTED" for node in body["nodes"])
+    assert body["layers"]["graph"] is True
+    assert all(edge["modelVersion"] == "fire-event-graph-v1" for edge in body["edges"])
+    assert all(edge["supportingEvidenceIds"] for edge in body["edges"])
+    assert all(edge["evidence"][0]["algorithm_version"] == "fire-event-graph-v1" for edge in body["edges"])
+
+
 def test_unknown_event_in_a_known_audit_is_404(client):
     response = client.get(f"{BASE}/FE-does-not-exist")
 
@@ -120,3 +170,29 @@ def test_created_audit_reports_history_pending_not_missing(client):
 
     assert response.status_code == 404
     assert response.get_json()["status"] == "PENDING_RECONSTRUCTION"
+
+
+def test_auditor_can_add_update_remove_and_report_selected_event(client):
+    event_id = client.get(f"{BASE}?limit=1").get_json()["events"][0]["eventId"]
+    added = client.post(f"/api/audits/{AUDIT}/events/{event_id}/add-to-pack", json={"note": "Check field record", "disposition": "VERIFY"})
+    assert added.status_code == 200
+    assert added.get_json()["disposition"] == "VERIFY"
+
+    progression = client.get(f"{BASE}?limit=1").get_json()["progression"]
+    assert progression["selected"] == 1
+    assert progression["selectedEventIds"] == [event_id]
+
+    report = client.get(f"/api/audits/{AUDIT}/report")
+    body = report.get_json()
+    assert body["counts"]["identified"] == body["counts"]["screened"]
+    assert body["counts"]["selected"] == 1
+    assert body["counts"]["verify"] == 1
+    assert body["selectedFireEvents"][0]["event"]["eventId"] == event_id
+    assert body["selectedFireEvents"][0]["evidence"]["observedEvidence"]
+    assert body["deterministicEvidence"][0]["derived"]
+    assert body["disclaimer"].startswith("This report is an investigative-support product.")
+
+    updated = client.post(f"/api/audits/{AUDIT}/events/{event_id}/add-to-pack", json={"note": "Updated"})
+    assert updated.get_json()["note"] == "Updated"
+    assert client.delete(f"/api/audits/{AUDIT}/events/{event_id}/add-to-pack").status_code == 200
+    assert client.get(f"/api/audits/{AUDIT}/report").get_json()["counts"]["selected"] == 0

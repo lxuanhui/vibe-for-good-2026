@@ -1,4 +1,5 @@
 import json
+from time import perf_counter
 
 from flask import Blueprint, jsonify, request
 
@@ -47,13 +48,19 @@ def upload_audit_scope(audit_id: str):
 
 @api.post("/audits/<audit_id>/history/build")
 def build_audit_history(audit_id: str):
+    started = perf_counter()
     try:
         result = build_history(audit_id)
         if result is None:
             return jsonify(error=f"No audit with id {audit_id}"), 404
     except AuditValidationError as exc:
         return jsonify(error=str(exc)), 409
-    # #57 owns reconstruction; this records a validated handoff only.
+    # The committed demo is a cached real reconstruction. Loading it here
+    # makes the timing cover the same artifact readiness check as the demo.
+    if not audit_events.cached_reconstruction_ready(audit_id):
+        return jsonify(error=f"No cached reconstruction for audit {audit_id}"), 503
+    result["duration_ms"] = round((perf_counter() - started) * 1000, 2)
+    result["dataset_mode"] = "cached_real_historical_dataset"
     return jsonify(result), 202
 
 
@@ -116,6 +123,7 @@ def list_audit_events(audit_id: str):
         auditId=audit_id,
         scope=audit["scope"],
         source=audit_events.source_provenance(),
+        progression=audit_events.progression(audit_id),
         total=len(matched),
         limit=limit,
         offset=offset,
@@ -132,3 +140,51 @@ def get_audit_event(audit_id: str, event_id: str):
             return jsonify(error=f"No reconstructed history for audit {audit_id}", status=status), 404
         return jsonify(error=f"No event with id {event_id} in audit {audit_id}"), 404
     return jsonify(event)
+
+
+@api.get("/audits/<audit_id>/events/<event_id>/evidence")
+def get_audit_event_evidence(audit_id: str, event_id: str):
+    evidence = audit_events.evidence_for_event(audit_id, event_id)
+    if evidence is None:
+        status = audit_events.history_status(audit_id)
+        return jsonify(error=f"No evidence for event {event_id} in audit {audit_id}", status=status), 404
+    return jsonify(evidence)
+
+
+@api.get("/audits/<audit_id>/graph")
+def get_audit_graph(audit_id: str):
+    raw_ids = request.args.get("event_ids", "")
+    event_ids = [event_id for event_id in raw_ids.split(",") if event_id]
+    if not event_ids:
+        return jsonify(error="event_ids must contain at least one FireEvent ID"), 400
+    result = audit_events.investigation_map(audit_id, event_ids)
+    if result is None:
+        return jsonify(error=f"No reconstructed history or event selection for audit {audit_id}"), 404
+    return jsonify(result)
+
+
+@api.post("/audits/<audit_id>/events/<event_id>/add-to-pack")
+def add_audit_pack_event(audit_id: str, event_id: str):
+    payload = request.get_json(silent=True) or {}
+    result = audit_events.add_to_pack(
+        audit_id, event_id, str(payload.get("note", "")), str(payload.get("disposition", ""))
+    )
+    if result is None:
+        return jsonify(error=f"No event with id {event_id} in audit {audit_id}"), 404
+    return jsonify(result)
+
+
+@api.delete("/audits/<audit_id>/events/<event_id>/add-to-pack")
+def remove_audit_pack_event(audit_id: str, event_id: str):
+    result = audit_events.remove_from_pack(audit_id, event_id)
+    if result is None:
+        return jsonify(error=f"No audit with id {audit_id}"), 404
+    return jsonify(removed=event_id)
+
+
+@api.route("/audits/<audit_id>/report", methods=["GET", "POST"])
+def audit_report_view(audit_id: str):
+    report = audit_events.audit_report(audit_id)
+    if report is None:
+        return jsonify(error=f"No reconstructed history for audit {audit_id}"), 404
+    return jsonify(report)
