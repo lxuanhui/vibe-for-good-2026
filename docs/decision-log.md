@@ -6,6 +6,29 @@ more valuable half.
 
 ---
 
+## 2026-09-08 - Surface growth remains a first-order compatibility screen
+
+**Status:** implemented on issue #11 branch
+
+**Decision.** `propagation/surface_fire.py` projects a wind-oriented ellipse
+from a source FireEvent using explicit head/back/flank spread rates. It
+compares later FireEvent centroids individually and records clusters outside
+the expected envelope. Historical wind is used for orientation; missing wind
+produces `NOT_EVALUATED`, never negative evidence. FireEventGraph edges use
+the envelope result when wind is available and retain the existing speed-bound
+fallback otherwise.
+
+**Why.** The issue needs a transparent plausibility comparison for observed
+progression, not a fire-behaviour forecast. Keeping the model pure and
+parameterized makes its assumptions, limitations, and version inspectable in
+the data layer before any AI interpretation.
+
+**Rejected.** Peat-mediated or underground travel was deliberately excluded
+from the envelope. Persistent peat evidence remains a separate contextual
+hypothesis and cannot be represented as a surface ellipse path.
+
+---
+
 ## 2026-09-08 — FireEventGraph stays a deterministic pipeline boundary
 
 **Status:** implemented on issue #10 branch

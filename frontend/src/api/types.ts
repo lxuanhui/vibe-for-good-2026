@@ -97,11 +97,30 @@ export interface SarBackscatterPoint {
   vhDb: number
 }
 
+export type SurfaceFireCompatibility = 'COMPATIBLE' | 'PARTIAL' | 'INCOMPATIBLE' | 'NOT_EVALUATED'
+
+export interface SurfaceFireObservedCluster {
+  clusterId: string
+  elapsedHours: number
+  eastKm: number
+  northKm: number
+  distanceKm: number
+  insideExpectedEnvelope: boolean | null
+}
+
 export interface FireGrowthProjection {
   centroid: [number, number]
   majorAxisKm: number
   minorAxisKm: number
   orientationDeg: number
+  headSpreadKmh?: number
+  backSpreadKmh?: number
+  flankSpreadKmh?: number
+  modelVersion?: string
+  modelLabel?: string
+  compatibility?: SurfaceFireCompatibility
+  observedProgression?: SurfaceFireObservedCluster[]
+  observationsOutsideExpectedEnvelope?: string[]
   note: string
 }
 

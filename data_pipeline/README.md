@@ -218,6 +218,20 @@ overlapping pair is explicitly non-directional. These are investigative
 relationships only: geographic or environmental association is not a finding
 about cause, intent, responsibility, or legality.
 
+## Surface-fire compatibility model
+
+`propagation/surface_fire.py` provides `surface-fire-ellipse-v1`, a pure
+first-order compatibility screen for later FireEvent clusters. It uses a
+caller-supplied head/back/flank spread rate, orients the ellipse downwind from
+historical meteorological wind, and records every later cluster as inside,
+outside, or not evaluated when wind is missing. `compare_event_progression()`
+returns the overall compatibility plus `observations_outside_expected_envelope`
+for inspection in a report or map. The model is explicitly labelled as an
+estimate, assumes homogeneous fuel and simplified terrain, does not include
+spotting, and does not model underground peat propagation. An outside cluster
+is a compatibility observation, not a conclusion about ignition cause or
+responsibility.
+
 ## Golden historical regression cases
 
 `golden/` freezes real 2019 haze-window data end to end so the pipeline's

@@ -31,6 +31,10 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 from data_pipeline.clustering.firms_clustering import FireEvent
+from data_pipeline.propagation.surface_fire import (
+    SurfaceFireSpreadParameters,
+    compare_event_progression,
+)
 
 EARTH_RADIUS_KM = 6371.0088
 ALGORITHM_VERSION = "fire-event-graph-v1"
@@ -91,6 +95,8 @@ class FireEventEdgeFeatures:
     shared_environmental_episode: bool | None
     historical_recurrence: bool | None
     propagation_compatibility: PropagationCompatibility
+    surface_envelope_contains_target: bool | None = None
+    surface_envelope_orientation_deg: float | None = None
 
     @property
     def distance_km(self) -> float:
@@ -457,6 +463,7 @@ def _build_edge(
     event_buffer_km: float,
     max_surface_spread_kmh: float,
     weak_surface_spread_kmh: float,
+    surface_fire_parameters: SurfaceFireSpreadParameters,
 ) -> FireEventEdge:
     ordering, elapsed = _event_gap_hours(first, second)
     if ordering == TemporalOrdering.B_BEFORE_A:
@@ -497,6 +504,23 @@ def _build_edge(
         max_surface_spread_kmh,
         weak_surface_spread_kmh,
     )
+    surface_envelope_contains_target = None
+    surface_envelope_orientation_deg = None
+    if source_wind is not None and ordering != TemporalOrdering.OVERLAPPING:
+        surface_result = compare_event_progression(
+            source,
+            [target],
+            wind_direction_from_deg=source_wind,
+            parameters=surface_fire_parameters,
+        )
+        target_result = surface_result.observations[0] if surface_result.observations else None
+        if target_result is not None:
+            surface_envelope_contains_target = target_result.inside_expected_envelope
+            surface_envelope_orientation_deg = surface_result.downwind_orientation_deg
+            if surface_envelope_contains_target is True:
+                compatibility = PropagationCompatibility.COMPATIBLE
+            elif surface_envelope_contains_target is False:
+                compatibility = PropagationCompatibility.INCOMPATIBLE
     features = FireEventEdgeFeatures(
         geographic_distance_km=round(distance, 3),
         elapsed_time_hours=round(elapsed, 3),
@@ -508,6 +532,8 @@ def _build_edge(
         shared_environmental_episode=episode_shared,
         historical_recurrence=recurrence,
         propagation_compatibility=compatibility,
+        surface_envelope_contains_target=surface_envelope_contains_target,
+        surface_envelope_orientation_deg=surface_envelope_orientation_deg,
     )
     state, explanation = _state_for_features(features)
 
@@ -565,6 +591,7 @@ def build_fire_event_graph(
     event_buffer_km: float = DEFAULT_EVENT_BUFFER_KM,
     max_surface_spread_kmh: float = DEFAULT_MAX_SURFACE_SPREAD_KMH,
     weak_surface_spread_kmh: float = DEFAULT_WEAK_SURFACE_SPREAD_KMH,
+    surface_fire_parameters: SurfaceFireSpreadParameters | None = None,
 ) -> FireEventGraph:
     """Build candidate edges without raw-point or LLM reasoning.
 
@@ -586,6 +613,12 @@ def build_fire_event_graph(
         raise ValueError("max_surface_spread_kmh must be positive and finite")
     if not math.isfinite(weak_surface_spread_kmh) or weak_surface_spread_kmh < max_surface_spread_kmh:
         raise ValueError("weak_surface_spread_kmh must be at least max_surface_spread_kmh")
+    if surface_fire_parameters is None:
+        surface_fire_parameters = SurfaceFireSpreadParameters(
+            head_spread_kmh=max_surface_spread_kmh,
+            back_spread_kmh=max_surface_spread_kmh * 0.2,
+            flank_spread_kmh=max_surface_spread_kmh * 0.5,
+        )
 
     nodes = list(events)
     ids = [event.event_id for event in nodes]
@@ -631,6 +664,7 @@ def build_fire_event_graph(
                 event_buffer_km=event_buffer_km,
                 max_surface_spread_kmh=max_surface_spread_kmh,
                 weak_surface_spread_kmh=weak_surface_spread_kmh,
+                surface_fire_parameters=surface_fire_parameters,
             )
         )
 

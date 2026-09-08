@@ -105,6 +105,30 @@ def test_edge_features_include_wind_direction_and_optional_context_without_raw_p
     json.dumps(graph.to_dict())
 
 
+def test_wind_oriented_surface_envelope_records_an_outside_target():
+    events = [
+        _event("A", 0.0, 0.0, "2026-01-01T00:00:00Z"),
+        _event("B", 0.2, 0.0, "2026-01-01T06:00:00Z"),
+    ]
+    weather = {
+        "A": {
+            "windows": [
+                {
+                    "window_name": "event_duration",
+                    "dominant_wind_direction_deg": 270.0,
+                    "mean_wind_speed_ms": 4.0,
+                }
+            ]
+        }
+    }
+
+    edge = build_fire_event_graph(events, weather_by_event=weather).edges[0]
+
+    assert edge.features.surface_envelope_contains_target is False
+    assert edge.features.surface_envelope_orientation_deg == pytest.approx(90.0)
+    assert edge.features.propagation_compatibility.value == "INCOMPATIBLE"
+
+
 def test_peat_corridor_fraction_is_derived_from_supplied_raster():
     raster = PeatRaster(
         array=np.full((20, 20), PEAT_DOMINATED, dtype="uint8"),
