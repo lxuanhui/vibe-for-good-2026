@@ -165,6 +165,23 @@ export interface BBox {
   maxLat: number
 }
 
+export interface AuditScope {
+  audit_id: string
+  scope_id: string
+  review_start: string
+  review_end: string
+  context_buffer_km: number
+  status: 'AWAITING_SCOPE' | 'SCOPE_READY' | 'HISTORY_BUILD_READY'
+  bbox: BBox | null
+  centroid: [number, number] | null
+  buffer_bbox: BBox | null
+  buffer_geometry: {
+    type: 'Polygon'
+    coordinates: [number, number][][]
+  } | null
+  geometry?: unknown
+}
+
 export interface OverlayAvailability {
   date: string
   layers: Partial<Record<OverlayLayerId | RasterLayerId, boolean>>

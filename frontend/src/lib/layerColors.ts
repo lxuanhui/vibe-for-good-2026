@@ -35,3 +35,6 @@ export const INDONESIA_FILL_COLOR = '#364527'
 // soft rim-light sheen -- same glow-halo technique as the pulsing event
 // marker (EventMarkers.tsx), just muted and static for a landmass-sized shape.
 export const INDONESIA_GLOW_COLOR = '#8fbf5c'
+
+export const AUDIT_SCOPE_BOUNDARY_COLOR = '#22d3ee'
+export const AUDIT_SCOPE_BUFFER_COLOR = '#eab308'
