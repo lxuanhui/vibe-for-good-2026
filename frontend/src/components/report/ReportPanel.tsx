@@ -8,7 +8,7 @@ import { Button } from '../ui/Button'
 import { DataVisualizations } from './DataVisualizations'
 import { ExecutiveSummary } from './ExecutiveSummary'
 import { Limitations } from './Limitations'
-import { ReasoningLog } from './ReasoningLog'
+import { ReasoningLog, UnresolvedQuestions } from './ReasoningLog'
 import { Stage1Gate } from './Stage1Gate'
 import { TopTheories } from './TopTheories'
 
@@ -52,8 +52,12 @@ export function ReportPanel() {
   }
 
   const handleEvidenceClick = (evidenceId: string) => {
-    const round = report.reasoningLog.find(
-      (r) => r.investigator.text.includes(evidenceId) || r.skeptic.text.includes(evidenceId),
+    const round = report.analysisRounds.find(
+      (r) =>
+        r.investigator.evidenceIds.includes(evidenceId) ||
+        r.investigator.counterEvidenceIds.includes(evidenceId) ||
+        r.skeptic.evidenceIds.includes(evidenceId) ||
+        r.skeptic.counterEvidenceIds.includes(evidenceId),
     )
     if (!round) return
     setLogExpanded(true)
@@ -106,7 +110,7 @@ export function ReportPanel() {
             <>
               {report.status === 'running' && (
                 <div className="rounded-lg border border-status-info/40 bg-status-info/10 px-3 py-2 text-xs text-status-info">
-                  Investigator and Skeptic agents are running fixed adversarial rounds…
+                  Investigator and Skeptic agents are running three fixed structured rounds…
                 </div>
               )}
               {report.executiveSummary && <ExecutiveSummary text={report.executiveSummary} />}
@@ -123,7 +127,9 @@ export function ReportPanel() {
                 fireGrowth={report.dataVisualizations.fireGrowthProjection}
               />
               <ReasoningLog
-                rounds={report.reasoningLog}
+                rounds={report.analysisRounds}
+                evidence={report.evidence}
+                onEvidenceClick={handleEvidenceClick}
                 expanded={logExpanded}
                 onToggle={() => setLogExpanded((v) => !v)}
                 highlightRound={highlightRound}
@@ -131,6 +137,11 @@ export function ReportPanel() {
                   if (el) roundRefs.current.set(round, el)
                   else roundRefs.current.delete(round)
                 }}
+              />
+              <UnresolvedQuestions
+                questions={report.unresolvedQuestions}
+                evidence={report.evidence}
+                onEvidenceClick={handleEvidenceClick}
               />
               <Limitations items={report.limitations} />
             </>

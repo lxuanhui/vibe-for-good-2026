@@ -9,8 +9,9 @@ narrowly on purpose:
   lookup, NOT the `FireEventGraph` relationship model (issue #10). It only
   answers "how many other events are close enough in space and time that a
   manual analyst would have to notice them," with no relationship typing.
-- Imagery metadata search reuses `sources/copernicus_cds.search()` directly
-  rather than adding a scene-selection module (issue #13's job).
+- Imagery metadata search reuses `sources/copernicus_cds.search()` and passes
+  the frozen STAC features through the deterministic scene selector (issue
+  #13).
 
 Every stage is timed independently with `time.perf_counter()` so
 `AutomatedBenchmarkResult.stage_timings` shows where automated time actually
@@ -258,8 +259,13 @@ def run_automated_benchmark(
     west, south, east, north = target.bbox
     pad_deg = 0.2  # a small cluster's own bbox is far smaller than one Sentinel tile footprint
     imagery_bbox = (west - pad_deg, south - pad_deg, east + pad_deg, north + pad_deg)
-    imagery_start = pd.Timestamp(target.first_detection).strftime("%Y-%m-%d")
-    imagery_end = (pd.Timestamp(target.last_detection) + pd.Timedelta(days=1)).strftime(
+    # A scene selector needs catalogue coverage on both sides of the event;
+    # searching only during the FIRMS detections cannot produce a pre-event
+    # scene and makes a missing post-event pass look like a source failure.
+    imagery_start = (pd.Timestamp(target.first_detection) - pd.Timedelta(days=30)).strftime(
+        "%Y-%m-%d"
+    )
+    imagery_end = (pd.Timestamp(target.last_detection) + pd.Timedelta(days=30)).strftime(
         "%Y-%m-%d"
     )
 
@@ -273,6 +279,14 @@ def run_automated_benchmark(
         return s1.get("features", []), s2.get("features", [])
 
     s1_features, s2_features = _stage("find_imagery_metadata", _search_imagery)
+    scene_selection = _stage(
+        "select_imagery_scenes",
+        copernicus_cds.select_scenes,
+        s1_features,
+        s2_features,
+        target.first_detection,
+        target.last_detection,
+    )
 
     def _assemble_summary():
         return {
@@ -281,20 +295,7 @@ def run_automated_benchmark(
             "weather_evidence": weather_objects,
             "peat_evidence": peat_objects,
             "neighbouring_events": [asdict(n) for n in neighbours],
-            "imagery_candidates": {
-                "sentinel1_grd": [
-                    {"id": f["id"], "datetime": f["properties"].get("datetime")}
-                    for f in s1_features[:10]
-                ],
-                "sentinel2_l2a": [
-                    {
-                        "id": f["id"],
-                        "datetime": f["properties"].get("datetime"),
-                        "cloud_cover_pct": f["properties"].get("eo:cloud_cover"),
-                    }
-                    for f in s2_features[:10]
-                ],
-            },
+            "imagery_candidates": scene_selection.to_dict(),
             "generated_at": datetime.now(timezone.utc).isoformat(),
         }
 

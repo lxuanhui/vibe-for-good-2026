@@ -12,18 +12,24 @@ Docs: https://documentation.dataspace.copernicus.eu/APIs/STAC.html
 """
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
+from typing import Any
+
 from data_pipeline.common.http import SESSION
 from data_pipeline.common.result import Provenance, SourceResult, SourceStatus
 from data_pipeline.config import CDSE_PASSWORD, CDSE_USERNAME, SUMATRA_KALIMANTAN_BBOX
+from data_pipeline.imagery.scene_selection import CopernicusSceneSelection
+from data_pipeline.imagery.scene_selection import select_scenes as select_scene_metadata
 
 STAC_URL = "https://stac.dataspace.copernicus.eu/v1/search"
-# S105 matches the variable name, not the value: this is the public OAuth2
-# endpoint, not a credential.
-TOKEN_URL = "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"  # noqa: S105
+# This is the public OAuth2 endpoint, not a credential.
+OAUTH_ENDPOINT = "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
 
 LIMITATIONS: list[str] = [
-    "Catalogue search needs no authentication; bulk product download needs "
-    "a free CDSE account and an OAuth2 token.",
+    (
+        "Catalogue search needs no authentication; bulk product download needs "
+        "a free CDSE account and an OAuth2 token."
+    ),
 ]
 
 
@@ -39,11 +45,36 @@ def search(collection: str, bbox: tuple[float, float, float, float], start: str,
     return resp.json()
 
 
+def select_scenes(
+    sentinel1_features: Sequence[Mapping[str, Any]] | Mapping[str, Any],
+    sentinel2_features: Sequence[Mapping[str, Any]] | Mapping[str, Any],
+    event_start: Any,
+    event_end: Any = None,
+    *,
+    max_cloud_cover_pct: float = 50.0,
+    cloud_cover_threshold_pct: float | None = None,
+) -> CopernicusSceneSelection:
+    """Select closest usable pre/post scenes from already-fetched STAC items.
+
+    The STAC request remains separate from this pure mapping step so callers
+    can freeze the catalogue response and reproduce the later selection.
+    """
+
+    return select_scene_metadata(
+        sentinel1_features,
+        sentinel2_features,
+        event_start,
+        event_end,
+        max_cloud_cover_pct=max_cloud_cover_pct,
+        cloud_cover_threshold_pct=cloud_cover_threshold_pct,
+    )
+
+
 def get_access_token() -> str | None:
     if not (CDSE_USERNAME and CDSE_PASSWORD):
         return None
     resp = SESSION.post(
-        TOKEN_URL,
+        OAUTH_ENDPOINT,
         data={
             "client_id": "cdse-public",
             "username": CDSE_USERNAME,

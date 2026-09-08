@@ -20,6 +20,11 @@ export const KHG_CLASSIFICATION_COLORS = {
 
 export const KHG_FALLBACK_COLOR = '#3f4a5c'
 
+export const SURFACE_FIRE_ENVELOPE_COLOR = '#ef4444'
+export const SURFACE_FIRE_INSIDE_COLOR = '#22c55e'
+export const SURFACE_FIRE_OUTSIDE_COLOR = '#f97316'
+export const SURFACE_FIRE_UNEVALUATED_COLOR = '#8b96a8'
+
 export const BOUNDARY_LINE_COLOR = '#2e3a4a'
 
 // Deep green landmass fill for Indonesia's boundary -- the previous

@@ -6,6 +6,152 @@ more valuable half.
 
 ---
 
+## 2026-09-08 - Investigator/Skeptic analysis is a bounded structured boundary
+
+**Status:** implemented on issue #15 branch
+
+**Decision.** `data_pipeline/analysis/investigator_skeptic.py` owns the
+provider-neutral Investigator/Skeptic contract after deterministic
+reconstruction. It supplies structured EvidenceObjects and evidence IDs,
+executes independent, rebuttal, and final rounds, validates every finding and
+question against the evidence pack, and persists only concise summaries,
+support/counter references, and unresolved questions.
+
+**Why.** A fixed three-round boundary makes the adversarial workflow bounded
+and testable without coupling reconstruction to an LLM vendor. Keeping the
+opponent input as a prior structured assessment preserves rebuttal while
+avoiding a conversation transcript or private chain-of-thought. Disagreement
+is retained as a human verification question rather than forced into a single
+explanation.
+
+**Rejected.** Free-form agent conversation and unreferenced factual summaries
+were rejected because they cannot be audited against EvidenceObjects. The
+runner does not infer responsibility, intent, or cause; it validates the
+interpretation layer only.
+
+---
+
+## 2026-09-08 - Investigation Priority is an evidence-backed routing score
+
+**Status:** implemented on issue #14 branch
+
+**Decision.** `priority/investigation_priority.py` computes a bounded 0--100
+score and `LOW|MEDIUM|HIGH|URGENT` label from nine environmental/event factors.
+Each result returns all nine components, fixed visible weights, evidence IDs,
+quality, limitations, coverage, and the source EvidenceObjects. Existing
+Stage-1, Fire Complexity, FireEventGraph, peat, and surface-compatibility
+outputs can feed the relevant factors without flattening their provenance.
+
+**Why.** Investigative attention needs a reproducible queueing aid while the
+canonical product boundary forbids a guilt or responsibility score. Fixed
+weights make the current policy inspectable until a labelled calibration set
+exists; missing context remains `NOT_EVALUATED` and is reported in coverage.
+Evidence sufficiency increases routing attention when it is partial or
+insufficient, but does not imply a cause or adverse finding.
+
+**Rejected.** Company identity, reputation, previous misconduct, intent,
+culpability, responsibility, and legal fields are rejected as inputs rather
+than merely ignored. A learned model and an opaque aggregate complexity
+number were rejected because the repository has no calibration set and issue
+#12 deliberately preserves complexity as named evidence.
+
+## 2026-09-08 - Copernicus scenes are selected deterministically from STAC metadata
+
+**Status:** implemented on issue #13 branch
+
+**Decision.** `imagery/scene_selection.py` selects one closest usable
+Sentinel-2 and Sentinel-1 scene on each side of a FireEvent. Optical scenes
+must have catalogue cloud cover at or below a caller-visible threshold;
+missing optical cloud metadata is not treated as cloud-free. SAR scenes are
+not cloud-filtered. Every selected scene keeps its product ID, acquisition
+time, sensor, orbit fields, temporal distance, STAC item reference and
+product/download reference, plus the selector version.
+
+**Why.** The STAC adapter already proved catalogue search and the golden
+fixtures already preserve raw responses, but the pipeline previously only
+listed the first returned features. A pure selection step makes the choice
+reproducible before any large product download and keeps catalogue retrieval,
+scene choice and evidence processing inspectable as separate stages.
+
+**Rejected.** Sorting by cloud percentage alone was rejected: the closest
+usable pass is the temporal priority, with cloud cover acting as an S2
+eligibility gate and deterministic tie-breaker. Pixel-level cloud masking,
+footprint coverage scoring and imagery download remain later evidence-
+processing concerns; scene metadata alone does not establish environmental
+change, cause, or responsibility.
+
+## 2026-09-08 - Fire Complexity stays a named evidence bundle, not a score
+
+**Status:** implemented on issue #12 branch
+
+**Decision.** `complexity/fire_complexity.py` derives the 13 candidate Fire
+Complexity features from a reconstructed `FireEvent` and preserves each one
+as a separate, versioned EvidenceObject. It computes observation-derived
+movement, direction, FRP, and thermal-lobe metrics from the event's linked raw
+observations; nearby-event and recurrence metrics from the supplied event
+collection; and uses peat/surface results only when those already-derived
+contexts are supplied. Missing optional context is `NOT_EVALUATED`.
+
+**Why.** The canonical spec defines complexity as how poorly one event is
+explained by one straightforward surface episode, but the issue's acceptance
+criterion requires the evidence fields themselves to be exposed. An
+aggregate score would hide which input drove routing and would make missing
+sources look like low complexity.
+
+**Rejected.** A learned or hand-weighted magic score was rejected: the repo
+has no labelled calibration set, and complexity evidence must remain
+separate from AI interpretation and human disposition. Outside-envelope
+observations remain a first-order compatibility mismatch, not a cause or
+responsibility finding.
+
+## 2026-09-08 - Surface growth remains a first-order compatibility screen
+
+**Status:** implemented on issue #11 branch
+
+**Decision.** `propagation/surface_fire.py` projects a wind-oriented ellipse
+from a source FireEvent using explicit head/back/flank spread rates. It
+compares later FireEvent centroids individually and records clusters outside
+the expected envelope. Historical wind is used for orientation; missing wind
+produces `NOT_EVALUATED`, never negative evidence. FireEventGraph edges use
+the envelope result when wind is available and retain the existing speed-bound
+fallback otherwise.
+
+**Why.** The issue needs a transparent plausibility comparison for observed
+progression, not a fire-behaviour forecast. Keeping the model pure and
+parameterized makes its assumptions, limitations, and version inspectable in
+the data layer before any AI interpretation.
+
+**Rejected.** Peat-mediated or underground travel was deliberately excluded
+from the envelope. Persistent peat evidence remains a separate contextual
+hypothesis and cannot be represented as a surface ellipse path.
+
+---
+
+## 2026-09-08 — FireEventGraph stays a deterministic pipeline boundary
+
+**Status:** implemented on issue #10 branch
+
+**Decision.** Build `FireEventGraph` from clustered `FireEvent` summaries, not
+raw FIRMS rows. Candidate edges are spatially indexed and time-gated, carry
+the requested deterministic relationship features, preserve optional missing
+context as `None`, and record supporting/contradicting evidence IDs plus
+`fire-event-graph-v1`. Earlier non-overlapping events are the source of a
+directed edge; overlapping windows are explicitly non-directional.
+
+**Why.** Relationship screening must remain inspectable and bounded before any
+AI interpretation. The first-order surface-speed check is a compatibility
+screen, not a fire forecast or a conclusion about cause, intent, responsibility,
+or legality. Weather, peat-corridor, shared-episode, and recurrence values are
+accepted only as already-derived context; acquisition remains outside this
+pure model.
+
+**Rejected.** An all-pairs graph was rejected because historical FireEvent
+collections can be large; a cKDTree candidate gate is used instead. Inferring
+missing environmental context as negative evidence was also rejected because
+it would turn source gaps into unsupported independence claims.
+
+---
+
 ## 2026-09-08 — Stage-1 triage stays deterministic, provenance-bound, and conservative
 
 **Status:** implemented on issue #9 branch

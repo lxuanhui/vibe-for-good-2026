@@ -94,10 +94,10 @@ export const CASE_B: FireEvent = {
   },
 }
 
-// Case C — the flagship fire-complex resurfacing case. A surface fire is
-// lost by FIRMS on day 3, SAR shows a persistent burn signature under the
-// same peat dome through day 9, and a new detection 2km away on day 10
-// (today) sits inside the projected fire-growth ellipse. See
+// Case C — the flagship fire-complex resurfacing hypothesis. FIRMS has an
+// observation gap after day 3, Sentinel-1 records a VH change, and a later
+// detection 2km away lies in the same mapped peat unit and inside the
+// first-order surface-fire compatibility envelope. See
 // `Environmental_Assurance_Spec.md` §12 (FireEventGraph), §14 (surface
 // fire-growth compatibility), and §15 (peat-aware reasoning).
 export const CASE_C: FireEvent = {
@@ -107,9 +107,9 @@ export const CASE_C: FireEvent = {
   lon: 114.083,
   location: 'Pulang Pisau, Central Kalimantan',
   firstDetected: '2026-08-29T05:40:00Z',
-  status: 'CONVERGED',
+  status: 'UNRESOLVED',
   qualifiesForInvestigation: true,
-  topHypothesis: 'Resurfaced fire complex (underground peat persistence)',
+  topHypothesis: 'Resurfaced fire complex (peat-mediated persistence)',
   supportScore: 78,
   peatClassification: 'protected_dome',
   daysSinceLastSurfaceDetection: 6,

@@ -151,8 +151,8 @@ involves, with the reasoning recorded per task rather than left as a bare
 number. `automated_run.py` chains the real modules above plus two pieces
 built only for this benchmark: `find_neighbouring_events` (a lightweight
 centroid-distance/time-window proximity check, explicitly **not** the
-`FireEventGraph` relationship model of issue #10) and an imagery-metadata
-search reusing `sources/copernicus_cds.search()` directly. `report.py`
+`FireEventGraph` relationship model of issue #10) and a Copernicus STAC
+search followed by the deterministic scene selector. `report.py`
 combines both sides into the comparison and writes
 `data_pipeline/output/workload_reduction_report.json`. Run
 `python -m data_pipeline.benchmark.report` for the live comparison: last
@@ -197,6 +197,99 @@ the state counts and exactly which optional rules were unavailable, rather
 than presenting missing context as benign. Run the benchmark again before
 citing a numeric queue-compression result; it depends on the current cached
 FIRMS sample.
+
+## Deterministic Copernicus scene selection
+
+`imagery/scene_selection.py` turns the Copernicus STAC response into four
+inspectable selection slots: closest usable Sentinel-2 pre/post scenes and
+closest Sentinel-1 pre/post scenes. Sentinel-2 uses the configured scene-level
+cloud-cover threshold (default 50%); Sentinel-1 is not cloud-filtered. The
+selection stores product ID, acquisition time, sensor, orbit metadata, cloud
+cover where available, temporal distance from the event boundary, catalogue
+reference, and product/download reference. Missing optical cloud metadata is
+excluded conservatively when the cloud threshold is active.
+
+The selector is pure and versioned (`copernicus-scene-selector-v1`), so the
+same frozen STAC response and event timestamps reproduce the same result.
+`sources/copernicus_cds.py` keeps the network search separate and exposes the
+selector for callers that already fetched the features. Scene metadata is
+provenance for later evidence processing, not a finding about cause or
+responsibility.
+
+## FireEventGraph relationship model
+
+`graph/fire_event_graph.py` builds a deterministic, versioned candidate graph
+over the coherent `FireEvent` nodes produced by clustering. It does not accept
+raw FIRMS rows and does not ask an LLM to infer relationships. Candidate edges
+carry geographic distance, elapsed time and temporal ordering, event-buffer
+overlap, first-order surface-spread compatibility, and optional wind alignment,
+directional compatibility, peat-corridor fraction, shared environmental
+episode, and historical recurrence. Optional context is supplied as already
+derived weather/peat/history values; unavailable context remains `None`.
+
+Edges are routed to `RELATED_POSSIBLE`, `PROPAGATION_COMPATIBLE`,
+`PROPAGATION_WEAK`, `INDEPENDENT_PLAUSIBLE`, or `UNRESOLVED`. Each edge keeps
+supporting/contradicting derived-evidence IDs and `fire-event-graph-v1`, so a
+map or later analysis can inspect why a relationship was proposed. A directed
+edge points from the earlier non-overlapping event to the later one; an
+overlapping pair is explicitly non-directional. These are investigative
+relationships only: geographic or environmental association is not a finding
+about cause, intent, responsibility, or legality.
+
+## Surface-fire compatibility model
+
+`propagation/surface_fire.py` provides `surface-fire-ellipse-v1`, a pure
+first-order compatibility screen for later FireEvent clusters. It uses a
+caller-supplied head/back/flank spread rate, orients the ellipse downwind from
+historical meteorological wind, and records every later cluster as inside,
+outside, or not evaluated when wind is missing. `compare_event_progression()`
+returns the overall compatibility plus `observations_outside_expected_envelope`
+for inspection in a report or map. The model is explicitly labelled as an
+estimate, assumes homogeneous fuel and simplified terrain, does not include
+spotting, and does not model underground peat propagation. An outside cluster
+is a compatibility observation, not a conclusion about ignition cause or
+responsibility.
+
+## Explainable Fire Complexity evidence
+
+`complexity/fire_complexity.py` derives the canonical Fire Complexity
+features for one reconstructed `FireEvent` as 13 individually named,
+versioned EvidenceObjects: duration, observation count, spatial extent,
+centroid movement, directional consistency, wind alignment, FRP variability,
+distinct thermal lobes, peat overlap, nearby event count, historical
+recurrence, unexplained detections, and surface-propagation mismatch. The
+result has no aggregate magic score. Each field carries its value, status,
+time window, source, quality, limitations, algorithm version, and raw event
+reference so a reviewer can inspect why it was or was not evaluated.
+
+The function is pure and accepts already-derived peat, recurrence, and
+surface-propagation context. Missing optional context stays `NOT_EVALUATED`,
+and outside-envelope observations are compatibility mismatches only; they do
+not establish a separate fire, underground propagation, cause, intent, or
+responsibility.
+
+## Explainable Investigation Priority routing
+
+`priority/investigation_priority.py` turns environmental evidence into a
+bounded 0--100 Investigation Priority Score and one of `LOW`, `MEDIUM`,
+`HIGH`, or `URGENT`. It combines nine explicit, weighted routing factors:
+event validity, environmental significance, event complexity, evidence
+inconsistency, unresolved event relationships, evidence sufficiency, peat
+involvement, land-change indicators, and propagation uncertainty. Every
+factor is returned as a component with its normalized value, weight,
+contribution, evidence IDs, source, quality, and limitations.
+The score is the sum of `weight * normalized_signal * evidence_quality` for
+evaluated factors; the weights sum to 100. This makes lower-quality evidence
+visible in the contribution instead of turning it into a false certainty.
+
+The scorer can consume existing Stage-1, Fire Complexity, FireEventGraph,
+peat, and surface-compatibility results. Missing context is
+`NOT_EVALUATED`, never silently treated as reassuring evidence. The weights
+are a transparent routing policy rather than calibrated probabilities, and
+the scorer rejects company identity/reputation, previous misconduct, guilt,
+intent, culpability, responsibility, and legal fields entirely. A priority
+result is therefore a queueing aid for human investigation, not a finding
+about who caused an event or who is responsible for it.
 
 ## Golden historical regression cases
 

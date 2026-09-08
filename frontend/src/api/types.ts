@@ -1,12 +1,13 @@
 // Stage-1 outcomes (AMBIGUOUS, LIKELY_NON_FIRE) match the triage states in
-// `Environmental_Assurance_Spec.md` §10; STAGE2_RUNNING/CONVERGED are this
-// repo's own naming for Stage-2 adversarial-analysis progress (matches
-// InvestigationReport.status below) since the canonical spec doesn't
+// `Environmental_Assurance_Spec.md` §10; the remaining values are this
+// repo's own naming for Stage-2 adversarial-analysis progress and outcome
+// (matches InvestigationReport.status below) since the canonical spec doesn't
 // enumerate an AnalysisRun status.
 export type EventStatus =
   | 'AMBIGUOUS'
   | 'LIKELY_NON_FIRE'
   | 'STAGE2_RUNNING'
+  | 'UNRESOLVED'
   | 'CONVERGED'
 
 export type PeatClassification = 'protected_dome' | 'production_zone' | 'not_applicable'
@@ -66,11 +67,27 @@ export interface TopTheory {
   counterEvidenceIds: string[]
 }
 
-export interface ReasoningRound {
+export interface AnalysisQuestion {
+  question: string
+  evidenceIds: string[]
+  reason?: string
+}
+
+export interface AnalysisFinding {
+  hypothesis: string
+  support: number
+  contra: number
+  summary: string
+  evidenceIds: string[]
+  counterEvidenceIds: string[]
+}
+
+export interface AnalysisRound {
   round: number
-  converged: boolean
-  investigator: { hypothesis: string; support: number; contra: number; text: string }
-  skeptic: { hypothesis: string; support: number; contra: number; text: string }
+  phase: 'independent_assessment' | 'rebuttal' | 'final_assessment'
+  investigator: AnalysisFinding
+  skeptic: AnalysisFinding
+  unresolvedQuestions: AnalysisQuestion[]
 }
 
 export interface Stage1Check {
@@ -97,17 +114,36 @@ export interface SarBackscatterPoint {
   vhDb: number
 }
 
+export type SurfaceFireCompatibility = 'COMPATIBLE' | 'PARTIAL' | 'INCOMPATIBLE' | 'NOT_EVALUATED'
+
+export interface SurfaceFireObservedCluster {
+  clusterId: string
+  elapsedHours: number
+  eastKm: number
+  northKm: number
+  distanceKm: number
+  insideExpectedEnvelope: boolean | null
+}
+
 export interface FireGrowthProjection {
   centroid: [number, number]
   majorAxisKm: number
   minorAxisKm: number
   orientationDeg: number
+  headSpreadKmh?: number
+  backSpreadKmh?: number
+  flankSpreadKmh?: number
+  modelVersion?: string
+  modelLabel?: string
+  compatibility?: SurfaceFireCompatibility
+  observedProgression?: SurfaceFireObservedCluster[]
+  observationsOutsideExpectedEnvelope?: string[]
   note: string
 }
 
 export interface InvestigationReport {
   eventId: string
-  status: 'running' | 'converged'
+  status: 'running' | 'converged' | 'unresolved'
   stage1Gate: Stage1GateResult
   executiveSummary: string
   topTheories: TopTheory[]
@@ -117,7 +153,8 @@ export interface InvestigationReport {
     fireGrowthProjection: FireGrowthProjection | null
   }
   limitations: string[]
-  reasoningLog: ReasoningRound[]
+  analysisRounds: AnalysisRound[]
+  unresolvedQuestions: AnalysisQuestion[]
   evidence: Record<string, EvidenceObject>
 }
 
