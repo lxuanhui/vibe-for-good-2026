@@ -19,8 +19,13 @@ output "lambda_log_group" {
 }
 
 output "console_url" {
-  description = "Live console. Set var.cors_origins to this (or the custom domain) to narrow the API's CORS from `*` once the final origin is fixed."
-  value       = "https://${aws_amplify_branch.main.branch_name}.${aws_amplify_app.console.default_domain}"
+  description = "Live console, once the repository is connected by hand and `main` has built. Set var.cors_origins to this (or the custom domain) to narrow the API's CORS from `*` once the final origin is fixed."
+
+  # The branch name is a literal because Terraform does not manage the branch
+  # -- see the note in console.tf. Amplify's domain is always
+  # <branch>.<app-id>.amplifyapp.com, so this URL is right the moment the
+  # console wizard creates `main`, and returns 404 until then.
+  value = "https://main.${aws_amplify_app.console.default_domain}"
 }
 
 output "console_app_id" {

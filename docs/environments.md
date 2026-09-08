@@ -16,7 +16,7 @@ nobody has to go digging. Nothing on this page is a credential.
 | Logs | `/aws/lambda/vibe-for-good-2026-dev-api`, `/aws/apigateway/vibe-for-good-2026-dev-api` (14-day retention) |
 | Terraform state | `s3://vibe-for-good-2026-tfstate-apse1/infra/terraform.tfstate`, native `use_lockfile` |
 | CI role | `vibe-for-good-2026-github-actions` (assumed over OIDC) |
-| Console | Amplify app `vibe-for-good-2026-dev-console`, branch `main`. URL is the `console_url` output; fill it in here after the first apply. |
+| Console | Amplify app `vibe-for-good-2026-dev-console`. Terraform creates the app; the repository, the `main` branch and previews are connected by hand (see below). URL is the `console_url` output; fill it in here once `main` has built. |
 
 The `environment` Terraform variable defaults to `dev` and feeds every
 resource name, so a second environment is `-var environment=staging` plus a
@@ -43,14 +43,27 @@ the `AWS_ROLE_ARN` repository variable. Cheap early, expensive later.
 ## Connecting the console to GitHub
 
 Amplify builds nothing until the repository is connected, and that connection
-is deliberately not in Terraform: a personal access token there would be a real
-credential in state, which is the one thing this stack has avoided everywhere
-else. After the first apply, open the Amplify app in the console and complete
-the GitHub App authorization once. `console_app_id` is the output that gets you
-there.
+is deliberately not in Terraform. `CreateApp` rejects a repository with no
+credential — "You should at least provide one valid token" — and the only way
+to satisfy it is a personal access token, which would then sit in the state
+file in S3. This stack has no long-lived credential anywhere; CI assumes a role
+over OIDC so that none is needed. The connection is a manual step instead.
 
-The Terraform ignores changes to `repository` and the token attributes for the
-same reason, so the console-side connection is not stripped on the next plan.
+Once per account, after the first apply:
+
+1. Amplify console → the app named by the `console_app_id` output.
+2. **Connect a repository** → GitHub → authorize the AWS Amplify GitHub App.
+   The authorization is between GitHub and Amplify; no token reaches this repo
+   or Terraform.
+3. Pick `lxuanhui/vibe-for-good-2026`, branch `main`.
+4. Leave the build settings alone — the build spec comes from Terraform, and
+   editing it in the console makes the two disagree.
+5. Enable **auto-build** on `main` and **pull-request previews**. These are not
+   in Terraform: the wizard creates the branch, so a branch resource in HCL
+   would collide with it.
+
+Terraform ignores later changes to `repository` and the token attributes, so
+the next plan does not strip any of this.
 
 ## GitHub configuration
 
@@ -72,6 +85,7 @@ wrong. See the root `.env.example` for the full credential index.
   §7–8 (data sources, persistence architecture) is unbuilt — EventBridge plus
   its own Lambda plus storage, none of it decided. `data_pipeline/` is still a
   feasibility spike that writes to no database.
-- **Real API endpoints.** The Flask app serves `/api/health` and `/api/hello`
-  only. Everything in `Environmental_Assurance_Spec.md` §24 (API) is still
-  mocked in the frontend.
+- **Most API endpoints.** Live: `/api/health`, `/api/hello`, the flat
+  `/api/events` pair, and `GET /api/audits/{id}/events`, which serves a
+  committed artifact. The rest of `Environmental_Assurance_Spec.md` §24 (API)
+  — overlays, reports, the agent loop — is still mocked in the frontend.
