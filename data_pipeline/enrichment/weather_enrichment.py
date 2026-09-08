@@ -362,7 +362,9 @@ def to_evidence_objects(bundle: WeatherEvidenceBundle) -> list[dict]:
     """Convert a bundle into `EvidenceObject`s (`Environmental_Assurance_Spec.md`
     §16) -- one per (window, metric) that actually has a value, each with
     its own evidence_id so an AI interpretation layer cites a specific
-    number rather than "the weather bundle" as a whole."""
+    number rather than "the weather bundle" as a whole. Observation text
+    rounds to two decimal places for readability; the structured value
+    retains the computed precision for downstream calculations."""
     objects: list[dict] = []
     for window in bundle.windows:
         for attr, metric_type, unit, template in _EVIDENCE_METRICS:
@@ -385,7 +387,7 @@ def to_evidence_objects(bundle: WeatherEvidenceBundle) -> list[dict]:
                     "evidence_id": f"ENV_WEATHER_{bundle.event_id}_{window.window_name}_{metric_type}",
                     "category": "weather",
                     "type": metric_type,
-                    "observation": template.format(value=value, window=window.window_name),
+                    "observation": template.format(value=round(value, 2), window=window.window_name),
                     "source": "Open-Meteo/ERA5",
                     "time_window": f"{window.start} to {window.end}",
                     "value": value,

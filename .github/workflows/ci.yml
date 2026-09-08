@@ -36,3 +36,15 @@ jobs:
       - run: ruff check .
       - run: pytest -q
 
+  data-pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: data_pipeline/requirements.txt
+      - run: python -m pip install -r data_pipeline/requirements.txt pytest
+      - run: python -m pytest data_pipeline/tests -q
+

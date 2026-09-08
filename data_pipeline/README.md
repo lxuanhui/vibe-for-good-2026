@@ -207,6 +207,11 @@ frozen inputs genuinely need to change (a new case, or a source's response
 shape changing); it overwrites every fixture from live sources, so review
 the diff it produces rather than trusting it blindly.
 
+Weather observation text rounds to two decimal places for readability;
+the structured `value` retains the computed precision. Formatting-only
+changes should update only expected observation strings, leaving frozen
+source inputs and numeric expectations intact.
+
 One dtype trap worth knowing before touching this: Open-Meteo's response
 decodes to `float32` (`sources/open_meteo.py`'s `_hourly_to_df`), but
 `pd.read_csv` on the frozen CSV infers `float64` from the written decimal

@@ -3,6 +3,7 @@ import pandas as pd
 from data_pipeline.clustering.firms_clustering import FireEvent
 from data_pipeline.enrichment.weather_enrichment import (
     WeatherEvidenceBundle,
+    WeatherWindowMetrics,
     compute_weather_windows,
     to_evidence_objects,
     window_bounds,
@@ -169,3 +170,26 @@ def test_evidence_objects_skip_none_metrics_and_include_disagreement_as_limitati
     assert any("NASA POWER disagrees" in limitation for limitation in rainfall_objs[0]["limitations"])
     # every evidence object traces to this event via its evidence_id
     assert all(event.event_id in obj["evidence_id"] for obj in objects)
+
+
+def test_observation_rounding_preserves_structured_precision_and_day_counts():
+    window = WeatherWindowMetrics(
+        window_name="T-24h",
+        start="2019-09-04T00:00:00+00:00",
+        end="2019-09-05T00:00:00+00:00",
+        rainfall_mm=12.3456789,
+        rainfall_free_days=1,
+        max_temp_c=None,
+        mean_relative_humidity_pct=None,
+        mean_wind_speed_ms=None,
+        dominant_wind_direction_deg=None,
+        mean_soil_moisture_m3m3=0.003456,
+        rainfall_anomaly_pct=None,
+    )
+    bundle = WeatherEvidenceBundle(event_id="FE-TEST", centroid=(-2.5, 114.0), windows=[window])
+    objects = {obj["type"]: obj for obj in to_evidence_objects(bundle)}
+
+    assert objects["rainfall"]["observation"] == "12.35 mm rainfall during T-24h"
+    assert objects["rainfall"]["value"] == 12.3456789
+    assert objects["rainfall_free_days"]["observation"] == "1 rainfall-free days during T-24h"
+    assert objects["soil_moisture"]["value"] == 0.003456

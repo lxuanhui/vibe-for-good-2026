@@ -116,7 +116,7 @@ Wait for CI before merging. Which workflow runs depends on the paths touched:
 
 | Workflow | Runs on | Does |
 |---|---|---|
-| `CI` | every PR | frontend lint + build, backend ruff + pytest |
+| `CI` | every PR | frontend lint + build, backend ruff + pytest, data pipeline pytest |
 | `Security` | every PR, plus weekly | gitleaks over the full history; `npm audit` and `pip-audit` |
 | `Infra` | `infra/**`, `backend/**`, or its own file | posts the Terraform plan as a PR comment, applies on merge to `main` |
 
