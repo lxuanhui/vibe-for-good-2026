@@ -108,13 +108,15 @@ artifact, because scipy/pandas would take the Lambda bundle to the edge of its
 250 MB limit and the derivation is identical for every caller. Nothing
 persists yet: no module touches a database, an S3 bucket, or any store.
 
-**No frontend calls those endpoints** — `FireEvent` in
-`frontend/src/api/types.ts` requires `location`, `peatClassification` and
-`currentConditions`, none of which FIRMS-only data can honestly supply.
-Filling them with placeholders is exactly the blurring the product boundary
-forbids, so the register needs its own view. That gap between the engine and
-the console, not any single endpoint, is the largest thing between here and
-the demo in §31.
+The console consumes them. `components/audit/HistoricalInvestigation.tsx`
+is the register, the investigation map, the evidence drawer and the pack view,
+gated behind the scope-entry flow in `components/scope/AuditStart.tsx`. Events
+are typed `AuditEventSummary`, deliberately **not** `FireEvent` — that type
+requires `location`, `peatClassification` and `currentConditions`, none of
+which FIRMS-only data can honestly supply, and widening it with optionals
+would make a real event and a fixture indistinguishable to the compiler. Keep
+the two apart. The legacy `MapView`/`EventTable`/`ReportPanel` console is not
+mounted anywhere and still reads fixtures.
 
 Stage-1 triage does not compress this dataset and is not meant to. On
 FIRMS-only input `LIKELY_NON_FIRE` is unreachable (max non-fire score 2,
@@ -196,6 +198,22 @@ Never commit a real `.env`, `*.tfvars`, Terraform state, `.terraform/`, or
 `infra/build/`. [`.env.example`](.env.example) is the index of every
 credential the project uses and where each one lives. There are no AWS access
 keys anywhere in this repo by design — GitHub authenticates to AWS over OIDC.
+
+**Close issues by merging, not by hand.** Put `Closes #n` in the PR so the
+merge closes it and the trail survives; `Refs #n` when the work only advances
+it. Never close an issue whose work is still on an unmerged branch — the
+backlog is what the other person reads to know what exists. If you finish only
+part, leave it open and comment on what is left. And when you find a real
+problem that is not your task, open a linked issue for it rather than fixing
+it quietly or leaving it in a PR comment.
+
+**Keep "State of things" true in the PR that changes it.** That section is
+the first thing a fresh session reads to learn what is real and what is a
+fixture, and a stale line there is worse than no line: an agent told the
+console is fixture-driven will build a second fixture path instead of
+extending the real one. If your change makes a sentence there wrong, fix that
+sentence in the same PR — usually one line, the same habit as adding a
+decision-log entry.
 
 Dependencies are Renovate's job, not yours. Do not hand-bump a version to fix
 an unrelated problem; if a bump is genuinely required, say so in the PR.
