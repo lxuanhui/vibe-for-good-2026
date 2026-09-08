@@ -17,10 +17,16 @@ import io
 import pandas as pd
 
 from data_pipeline.common.http import SESSION
+from data_pipeline.common.result import Provenance, SourceResult, SourceStatus
 from data_pipeline.config import NASA_FIRMS_MAP_KEY, OUTPUT_DIR, SUMATRA_KALIMANTAN_BBOX
 
 FIRMS_ROOT = "https://firms.modaps.eosdis.nasa.gov"
 MAX_DAY_RANGE = 5  # enforced by the area API itself
+
+LIMITATIONS = [
+    "Area API day_range is capped at 5 days per call (not 10) -- a "
+    "multi-day historical backfill needs paging by shifting start_date.",
+]
 
 
 def check_map_key_status() -> dict:
@@ -36,37 +42,78 @@ def data_availability(sensor: str = "ALL") -> pd.DataFrame:
     return pd.read_csv(io.StringIO(resp.text))
 
 
-def fetch_area(source: str, bbox: tuple[float, float, float, float], day_range: int, start_date: str | None = None) -> pd.DataFrame:
+def fetch_area(
+    source: str,
+    bbox: tuple[float, float, float, float],
+    day_range: int,
+    start_date: str | None = None,
+    expire_after: int | None = None,
+) -> pd.DataFrame:
+    """`expire_after` overrides the shared session's default 1-hour cache --
+    used by the backfill in `nasa_firms_backfill.py` to cache windows that
+    are old enough FIRMS will never revise them (`requests_cache.NEVER_EXPIRE`)
+    instead of re-fetching stable history every hour."""
     day_range = min(day_range, MAX_DAY_RANGE)
     bbox_str = ",".join(str(v) for v in bbox)
     url = f"{FIRMS_ROOT}/api/area/csv/{NASA_FIRMS_MAP_KEY}/{source}/{bbox_str}/{day_range}"
     if start_date:
         url += f"/{start_date}"
-    resp = SESSION.get(url)
+    kwargs = {} if expire_after is None else {"expire_after": expire_after}
+    resp = SESSION.get(url, **kwargs)
     resp.raise_for_status()
     return pd.read_csv(io.StringIO(resp.text))
 
 
-def fetch_historical_sample() -> None:
+def fetch_historical_sample() -> SourceResult:
     print("== NASA FIRMS ==")
-    status = check_map_key_status()
-    print(f"MAP_KEY status: {status}")
+    provenance = Provenance(endpoint=f"{FIRMS_ROOT}/api/area/csv/", auth="api_key")
 
-    avail = data_availability("VIIRS_SNPP_SP")
-    print("VIIRS_SNPP_SP availability:")
-    print(avail.to_string(index=False))
+    if not NASA_FIRMS_MAP_KEY:
+        print("NASA_FIRMS_MAP_KEY not set -- skipping.\n")
+        return SourceResult(
+            source_name="NASA FIRMS",
+            status=SourceStatus.SKIPPED,
+            provenance=provenance,
+            limitations=LIMITATIONS,
+            summary="NASA_FIRMS_MAP_KEY not set",
+        )
 
-    start = "2019-09-01"
-    print(f"Area API day_range is capped at {MAX_DAY_RANGE} -- a 10-day historical "
-          "backfill needs two calls with shifted start dates, not one.")
-    df = fetch_area("VIIRS_SNPP_SP", SUMATRA_KALIMANTAN_BBOX, day_range=MAX_DAY_RANGE, start_date=start)
-    print(f"Hotspots {start} + {MAX_DAY_RANGE}d over Sumatra/Kalimantan bbox: {len(df)} rows")
-    if not df.empty:
-        print(df[["latitude", "longitude", "acq_date", "confidence"]].head().to_string(index=False))
-        out = OUTPUT_DIR / "firms_2019_haze_sample.csv"
-        df.to_csv(out, index=False)
-        print(f"Saved sample to {out}")
-    print("Per-row lat/lon confirms individual hotspot geolocation, not a country aggregate.\n")
+    try:
+        status = check_map_key_status()
+        print(f"MAP_KEY status: {status}")
+
+        avail = data_availability("VIIRS_SNPP_SP")
+        print("VIIRS_SNPP_SP availability:")
+        print(avail.to_string(index=False))
+
+        start = "2019-09-01"
+        print(f"Area API day_range is capped at {MAX_DAY_RANGE} -- a 10-day historical "
+              "backfill needs two calls with shifted start dates, not one.")
+        df = fetch_area("VIIRS_SNPP_SP", SUMATRA_KALIMANTAN_BBOX, day_range=MAX_DAY_RANGE, start_date=start)
+        print(f"Hotspots {start} + {MAX_DAY_RANGE}d over Sumatra/Kalimantan bbox: {len(df)} rows")
+        if not df.empty:
+            print(df[["latitude", "longitude", "acq_date", "confidence"]].head().to_string(index=False))
+            out = OUTPUT_DIR / "firms_2019_haze_sample.csv"
+            df.to_csv(out, index=False)
+            print(f"Saved sample to {out}")
+        print("Per-row lat/lon confirms individual hotspot geolocation, not a country aggregate.\n")
+    except Exception as exc:  # noqa: BLE001 -- normalized into SourceResult, not swallowed
+        return SourceResult(
+            source_name="NASA FIRMS",
+            status=SourceStatus.FAILED,
+            provenance=provenance,
+            limitations=LIMITATIONS,
+            error=str(exc),
+        )
+
+    return SourceResult(
+        source_name="NASA FIRMS",
+        status=SourceStatus.OK,
+        provenance=provenance,
+        limitations=LIMITATIONS,
+        summary=f"MAP_KEY {status.get('status', 'unknown')}; {len(df)} hotspots for {start}+{MAX_DAY_RANGE}d",
+        data=df,
+    )
 
 
 if __name__ == "__main__":

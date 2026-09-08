@@ -13,12 +13,18 @@ Docs: https://documentation.dataspace.copernicus.eu/APIs/STAC.html
 from __future__ import annotations
 
 from data_pipeline.common.http import SESSION
+from data_pipeline.common.result import Provenance, SourceResult, SourceStatus
 from data_pipeline.config import CDSE_PASSWORD, CDSE_USERNAME, SUMATRA_KALIMANTAN_BBOX
 
 STAC_URL = "https://stac.dataspace.copernicus.eu/v1/search"
 # S105 matches the variable name, not the value: this is the public OAuth2
 # endpoint, not a credential.
 TOKEN_URL = "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"  # noqa: S105
+
+LIMITATIONS: list[str] = [
+    "Catalogue search needs no authentication; bulk product download needs "
+    "a free CDSE account and an OAuth2 token.",
+]
 
 
 def search(collection: str, bbox: tuple[float, float, float, float], start: str, end: str, limit: int = 20) -> dict:
@@ -49,27 +55,49 @@ def get_access_token() -> str | None:
     return resp.json()["access_token"]
 
 
-def fetch_historical_sample() -> None:
+def fetch_historical_sample() -> SourceResult:
     print("== Copernicus Data Space Ecosystem (STAC) ==")
-    start, end = "2019-09-01", "2019-09-10"
+    provenance = Provenance(endpoint=STAC_URL, auth="none")
 
-    s1 = search("sentinel-1-grd", SUMATRA_KALIMANTAN_BBOX, start, end)
-    s1_features = s1.get("features", [])
-    print(f"Sentinel-1 GRD scenes over Sumatra/Kalimantan, {start}..{end}: {len(s1_features)}")
-    for f in s1_features[:3]:
-        print(" -", f["id"], f["properties"].get("datetime"))
+    try:
+        start, end = "2019-09-01", "2019-09-10"
 
-    s2 = search("sentinel-2-l2a", SUMATRA_KALIMANTAN_BBOX, start, end)
-    print(f"Sentinel-2 L2A scenes same window: {len(s2.get('features', []))} "
-          "-- search worked with zero authentication.")
+        s1 = search("sentinel-1-grd", SUMATRA_KALIMANTAN_BBOX, start, end)
+        s1_features = s1.get("features", [])
+        print(f"Sentinel-1 GRD scenes over Sumatra/Kalimantan, {start}..{end}: {len(s1_features)}")
+        for f in s1_features[:3]:
+            print(" -", f["id"], f["properties"].get("datetime"))
 
-    token = get_access_token()
-    if token:
-        print("CDSE_USERNAME/PASSWORD set -- OAuth2 token exchange succeeded, "
-              "product download is unlocked.\n")
-    else:
-        print("No CDSE credentials in .env yet -- catalogue search works "
-              "without them; only bulk product download needs the free account.\n")
+        s2 = search("sentinel-2-l2a", SUMATRA_KALIMANTAN_BBOX, start, end)
+        s2_features = s2.get("features", [])
+        print(f"Sentinel-2 L2A scenes same window: {len(s2_features)} "
+              "-- search worked with zero authentication.")
+
+        token = get_access_token()
+        if token:
+            provenance = Provenance(endpoint=STAC_URL, auth="oauth2")
+            print("CDSE_USERNAME/PASSWORD set -- OAuth2 token exchange succeeded, "
+                  "product download is unlocked.\n")
+        else:
+            print("No CDSE credentials in .env yet -- catalogue search works "
+                  "without them; only bulk product download needs the free account.\n")
+    except Exception as exc:  # noqa: BLE001 -- normalized into SourceResult, not swallowed
+        return SourceResult(
+            source_name="Copernicus Data Space Ecosystem",
+            status=SourceStatus.FAILED,
+            provenance=provenance,
+            limitations=LIMITATIONS,
+            error=str(exc),
+        )
+
+    return SourceResult(
+        source_name="Copernicus Data Space Ecosystem",
+        status=SourceStatus.OK,
+        provenance=provenance,
+        limitations=LIMITATIONS,
+        summary=f"{len(s1_features)} Sentinel-1 + {len(s2_features)} Sentinel-2 scenes, "
+                f"token={'obtained' if token else 'not requested (no credentials)'}",
+    )
 
 
 if __name__ == "__main__":
