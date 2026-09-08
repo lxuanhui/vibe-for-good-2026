@@ -16,6 +16,7 @@ nobody has to go digging. Nothing on this page is a credential.
 | Logs | `/aws/lambda/vibe-for-good-2026-dev-api`, `/aws/apigateway/vibe-for-good-2026-dev-api` (14-day retention) |
 | Terraform state | `s3://vibe-for-good-2026-tfstate-apse1/infra/terraform.tfstate`, native `use_lockfile` |
 | CI role | `vibe-for-good-2026-github-actions` (assumed over OIDC) |
+| Console | Amplify app `vibe-for-good-2026-dev-console`, branch `main`. URL is the `console_url` output; fill it in here after the first apply. |
 
 The `environment` Terraform variable defaults to `dev` and feeds every
 resource name, so a second environment is `-var environment=staging` plus a
@@ -39,6 +40,18 @@ Moving the project to a different AWS account means: `terraform destroy` on
 `infra/` then `infra/bootstrap/`, re-apply under the new profile, and update
 the `AWS_ROLE_ARN` repository variable. Cheap early, expensive later.
 
+## Connecting the console to GitHub
+
+Amplify builds nothing until the repository is connected, and that connection
+is deliberately not in Terraform: a personal access token there would be a real
+credential in state, which is the one thing this stack has avoided everywhere
+else. After the first apply, open the Amplify app in the console and complete
+the GitHub App authorization once. `console_app_id` is the output that gets you
+there.
+
+The Terraform ignores changes to `repository` and the token attributes for the
+same reason, so the console-side connection is not stripped on the next plan.
+
 ## GitHub configuration
 
 Settings → Secrets and variables → Actions:
@@ -55,8 +68,6 @@ wrong. See the root `.env.example` for the full credential index.
 
 ## Not deployed
 
-- **The frontend.** No hosting exists yet; the console runs locally on `:5173`.
-  S3 + CloudFront is the natural fit and is additive.
 - **Ingestion.** The cron FIRMS poller implied by `Environmental_Assurance_Spec.md`
   §7–8 (data sources, persistence architecture) is unbuilt — EventBridge plus
   its own Lambda plus storage, none of it decided. `data_pipeline/` is still a

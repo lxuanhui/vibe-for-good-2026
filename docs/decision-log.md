@@ -6,6 +6,60 @@ more valuable half.
 
 ---
 
+## 2026-09-09 — The console is hosted on Amplify, not S3 + CloudFront
+
+**Status:** done · issue #91
+
+**Decision.** The React console deploys to AWS Amplify Hosting, app
+`<project>-<env>-console`, branch `main`, with pull-request previews on. The
+API stays where it is: Lambda behind API Gateway.
+
+**Why not S3 + CloudFront**, which `docs/environments.md` had named as the
+natural fit. Both serve from CloudFront, so what reaches a browser is the same.
+The difference is what has to be written and operated: Amplify carries the SPA
+rewrite, the managed certificate and the build in about 40 lines, against ~100
+for a bucket, an origin access control, a distribution, custom error responses
+and an invalidation step in CI. For a custom domain, CloudFront also needs its
+ACM certificate in `us-east-1` while the rest of this stack is
+`ap-southeast-1`, which is a well-known way to lose an evening.
+
+**The deciding factor was pull-request previews.** `branch-and-pr` records that
+every check in CI is static -- `npm run build` proves the console compiles,
+nothing proves it runs -- and that this already cost the team once, when a
+maplibre-gl major passed every check and then rendered nothing because Vite's
+pre-bundler emitted a broken worker chunk. Two people driving separate agents
+at the same frontend files (#75/#79 and #78 collided on four of them) need to
+open each other's branch, not trust a green tick. Amplify gives a URL per PR;
+S3 + CloudFront does not.
+
+**Accepted cost: a second build system.** `npm run build` now runs in Amplify's
+build container as well as in GitHub Actions. That is duplicated work and a
+second place a build can fail differently. Taken deliberately -- the preview
+URLs are the point, and the GitHub Actions build stays the one that gates a
+merge.
+
+**Rejected: putting a GitHub token in Terraform.** `aws_amplify_app` accepts
+`oauth_token` or `access_token`, which would let Terraform connect the
+repository unattended. It would also put a real credential in Terraform state,
+in a repo whose whole authentication story is OIDC precisely so no long-lived
+secret exists. The repository is connected once by hand through the Amplify
+GitHub App instead, and `lifecycle.ignore_changes` keeps later plans from
+stripping what the console sets.
+
+**Deferred: narrowing CORS.** `cors_origins` stays `*`. The deliverable in #91
+said narrow it, and the reason not to is that the final origin is not settled
+-- a custom domain is still open -- and a wrong value fails silently in the
+browser at exactly the wrong moment. The `console_url` output makes it a
+one-line change once the domain is fixed.
+
+**Note for whoever applies this.** The CI role had no Amplify permissions, so
+`infra/bootstrap/` gains an `amplify:*` statement scoped to this account. That
+config has its own state and is **not** applied by the pipeline: it must be
+applied by hand, before the console PR merges, or the apply fails with
+AccessDenied.
+
+---
+
 ## 2026-09-09 - Review compression is scope-based, not Stage-1-based
 
 **Status:** done · issue #80
