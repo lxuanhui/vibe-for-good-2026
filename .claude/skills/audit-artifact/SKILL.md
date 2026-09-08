@@ -18,6 +18,13 @@ So any change to clustering, triage, complexity or priority reaches the
 product only when someone re-runs the export and commits the result. This
 skill is that procedure, plus the checks that stop a bad artifact landing.
 
+**This may stop being the only path.** PR #78 adds a Flask history adapter
+that runs the same pipeline in-request, and #89 decides whether that ships
+(zip, Lambda container image, or EC2). If it does, the artifact becomes the
+demo fallback rather than the source of truth — but the sanity numbers and
+the structural limits below still hold, because they are properties of the
+data and the rules, not of where the code runs.
+
 ## Running the export
 
 The pipeline is not part of the backend venv. It needs its own:
