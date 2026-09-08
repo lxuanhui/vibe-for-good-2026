@@ -19,6 +19,7 @@ of this repo's own pipeline code.
 
 from __future__ import annotations
 
+import argparse
 import json
 from dataclasses import dataclass
 
@@ -57,6 +58,10 @@ class WorkloadReductionReport:
             "observations_to_events_compression": self.automated.observations_to_events_compression,
             "events_to_human_review_queue_compression": self.automated.events_to_review_queue_compression,
             "events_to_human_review_queue_note": self.automated.events_to_review_queue_note,
+            "events_to_scope_compression": self.automated.events_to_scope_compression,
+            "scope_compression": self.automated.scope_compression,
+            "scope_event_count": self.automated.scope_event_count,
+            "scope_compression_note": self.automated.scope_compression_note,
             "evidence_field_completeness": self.automated.evidence_completeness,
             "manual_interactions_in_automated_run": self.automated.manual_interactions,
             "manual_benchmark": self.manual.to_dict(),
@@ -64,9 +69,13 @@ class WorkloadReductionReport:
         }
 
 
-def build_report(buffer_km: float = 5.0) -> WorkloadReductionReport:
+def build_report(
+    buffer_km: float = 5.0, boundary=None, live: bool = False
+) -> WorkloadReductionReport:
     manual = manual_benchmark_total()
-    automated = run_automated_benchmark(buffer_km=buffer_km)
+    automated = run_automated_benchmark(
+        buffer_km=buffer_km, boundary=boundary, live=live
+    )
 
     manual_seconds = manual.total_minutes * 60.0
     automated_seconds = automated.total_seconds
@@ -86,11 +95,18 @@ def build_report(buffer_km: float = 5.0) -> WorkloadReductionReport:
 
 
 def _demo() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--live-firms",
+        action="store_true",
+        help="explicitly fetch FIRMS and rebuild events instead of reading committed artifacts",
+    )
+    args = parser.parse_args()
     print("== Auditor workload-reduction benchmark (issue #7) ==")
     print(SCOPE_NOTE)
     print()
 
-    report = build_report()
+    report = build_report(live=args.live_firms)
 
     print(
         f"Manual estimate:    {report.manual.total_minutes:.1f} min ({report.manual_seconds:.0f}s)"
@@ -110,6 +126,18 @@ def _demo() -> None:
         f"({report.automated.events_to_review_queue_compression}x) "
         f"-- {report.automated.events_to_review_queue_note}"
     )
+    if report.automated.scope_event_count is None:
+        print(
+            "FireEvents -> scope + buffer: not measurable "
+            f"-- {report.automated.scope_compression_note}"
+        )
+    else:
+        print(
+            f"FireEvents -> scope + buffer: {report.automated.event_count} -> "
+            f"{report.automated.scope_event_count} "
+            f"({report.automated.events_to_scope_compression}x) "
+            f"-- {report.automated.scope_compression_note}"
+        )
     print(f"Evidence-field completeness: {report.automated.evidence_completeness}")
     print(
         f"Manual interactions in the automated run: {report.automated.manual_interactions}"

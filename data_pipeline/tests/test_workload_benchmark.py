@@ -1,12 +1,19 @@
+from data_pipeline.benchmark import automated_run
 from data_pipeline.benchmark.automated_run import (
+    AUDIT_ID,
+    DEST_EVENTS,
     PEAT_EVIDENCE_FIELDS_POSSIBLE,
     NeighbouringEvent,
+    count_events_in_scope,
     evidence_field_completeness,
     find_neighbouring_events,
 )
 from data_pipeline.benchmark.manual_estimate import MANUAL_TASKS, manual_benchmark_total
 from data_pipeline.clustering.firms_clustering import FireEvent
-from data_pipeline.enrichment.weather_enrichment import EVIDENCE_METRICS_PER_WINDOW, WINDOW_NAMES
+from data_pipeline.enrichment.weather_enrichment import (
+    EVIDENCE_METRICS_PER_WINDOW,
+    WINDOW_NAMES,
+)
 
 
 def _event(
@@ -111,3 +118,35 @@ def test_completeness_reflects_partial_data():
     assert 0 < result["completeness_fraction"] < 1.0
     assert result["weather_fields_present"] == max_weather // 2
     assert result["peat_fields_present"] == 0
+
+
+# --- scope compression ------------------------------------------------------
+
+
+def test_scope_count_is_not_measurable_without_a_boundary():
+    event = _event("FE-TARGET", (-2.5, 114.0), "2019-09-01T00:00:00+00:00")
+    assert count_events_in_scope([event]) is None
+
+
+def test_scope_count_includes_event_bbox_intersection_and_buffer():
+    event = _event("FE-TARGET", (-2.5, 114.0), "2019-09-01T00:00:00+00:00")
+    outside = _event("FE-OUTSIDE", (-2.8, 114.4), "2019-09-01T00:00:00+00:00")
+    boundary = (113.99, -2.51, 114.01, -2.49)
+    assert count_events_in_scope([event, outside], boundary) == 1
+    assert count_events_in_scope([event, outside], boundary, buffer_km=50) == 2
+
+
+# --- committed benchmark inputs --------------------------------------------
+
+
+def test_committed_artifacts_reconcile_with_source_export():
+    artifact = automated_run._read_artifact(DEST_EVENTS)
+    scope = artifact["audits"][AUDIT_ID]["scope"]
+
+    assert (
+        len(automated_run.load_observations())
+        == artifact["source"]["observationsUsed"]
+    )
+    assert scope["eventCount"] == len(
+        artifact["audits"][AUDIT_ID]["events"]
+    )

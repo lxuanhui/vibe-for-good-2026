@@ -139,7 +139,7 @@ result for a fire complex this large.
 ## Auditor workload-reduction benchmark
 
 `benchmark/` compares a documented manual-evidence-reconstruction estimate
-against a real, timed run of this repo's own pipeline for one representative
+against a timed run of this repo's own pipeline for one representative
 FireEvent case -- the same largest event (`FE-20190901-ce19162367`) the
 weather and peat modules above demo against, so all three sections describe
 the same case. `manual_estimate.py` is a **reasoned estimate**, not a timed
@@ -148,20 +148,21 @@ reconstruct event chronology, retrieve historical weather, inspect peat
 context, identify neighbouring events, find imagery metadata, assemble an
 evidence summary) is costed from what actually operating the real public tool
 involves, with the reasoning recorded per task rather than left as a bare
-number. `automated_run.py` chains the real modules above plus two pieces
+number. By default `automated_run.py` reads observations from the committed
+`SOURCE_JSON` export and FireEvents/triage from the committed gzipped audit
+artifacts, so the benchmark does not require a FIRMS key. Pass
+`--live-firms` to `python -m data_pipeline.benchmark.report` only when an
+explicit live rebuild is wanted. It chains the real modules above plus two pieces
 built only for this benchmark: `find_neighbouring_events` (a lightweight
 centroid-distance/time-window proximity check, explicitly **not** the
 `FireEventGraph` relationship model of issue #10) and a Copernicus STAC
 search followed by the deterministic scene selector. `report.py`
 combines both sides into the comparison and writes
 `data_pipeline/output/workload_reduction_report.json`. Run
-`python -m data_pipeline.benchmark.report` for the live comparison: last
-verified run costed the manual estimate at 140.0 minutes, the automated run
-completed the same evidence-reconstruction case in ~26-31s (dominated by the
-FIRMS clustering step re-run on 21,519 observations and the Copernicus STAC
-search; both are network/CPU calls, not fixed costs), a 99%+ reduction,
-21,519 observations compressed to 3,683 FireEvents (5.84x), and full
-(49/49 weather + 4/4 peat) evidence-field completeness for this case.
+`python -m data_pipeline.benchmark.report` for the artifact-backed comparison.
+The report also measures FireEvents inside a supplied private boundary plus
+buffer versus the full history; without a boundary this stage is explicitly
+reported as not measurable.
 
 **Read the scope note before citing any of these numbers.** This benchmarks
 one task -- reconstructing the evidence for one FireEvent -- not the audit

@@ -23,16 +23,26 @@ entry point (besides its `_demo()`).
 
 from __future__ import annotations
 
+import gzip
 import json
+import math
 import time
+from collections import Counter
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 import pandas as pd
 
 from data_pipeline.clustering.firms_clustering import FireEvent, cluster_events
 from data_pipeline.config import OUTPUT_DIR, SUMATRA_KALIMANTAN_BBOX
 from data_pipeline.enrichment import peat_context, weather_enrichment
+from data_pipeline.export_audit_events import (
+    AUDIT_ID,
+    DEST_EVENTS,
+    DEST_TRIAGE,
+    load_observations,
+)
 from data_pipeline.sources import copernicus_cds
 from data_pipeline.triage.stage1 import summarize_triage, triage_events
 
@@ -51,11 +61,12 @@ PEAT_EVIDENCE_FIELDS_POSSIBLE = (
 MANUAL_INTERACTIONS = 1
 
 EVENTS_TO_REVIEW_QUEUE_NOTE = (
-    "Stage-1 queue compression in this benchmark uses FIRMS confidence, FRP, and repeat "
-    "observations plus spatially and temporally nearby FIRMS detections for every event. Optional "
-    "land-cover, settlement, persistent heat-source, volcano/geothermal, and recent-rainfall "
-    "context is not supplied for the full event collection; rules without evidence remain "
-    "NOT_EVALUATED, and LIKELY_FIRE plus AMBIGUOUS events remain in the review queue."
+    "Stage-1 removed no events (none expected on haze-season data): LIKELY_FIRE "
+    "and AMBIGUOUS remain in the review queue because optional context rules are "
+    "NOT_EVALUATED."
+)
+SCOPE_COMPRESSION_NOTE = (
+    "Not measurable without an auditor-supplied boundary and context buffer."
 )
 
 
@@ -161,6 +172,10 @@ class AutomatedBenchmarkResult:
     review_queue_count: int
     triage_state_counts: dict[str, int]
     events_to_review_queue_note: str
+    scope_event_count: int | None
+    events_to_scope_compression: float | None
+    scope_compression: float | None
+    scope_compression_note: str
     evidence_completeness: dict
     neighbouring_event_count: int
     imagery_scene_count: dict
@@ -196,8 +211,96 @@ def _event_row(e: FireEvent) -> dict:
     }
 
 
+def _read_artifact(path) -> dict:
+    with gzip.open(path, "rt", encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def _event_from_artifact(row: dict) -> FireEvent:
+    centroid = row["centroid"]
+    return FireEvent(
+        event_id=row["eventId"],
+        observation_indices=[],
+        first_detection=row["firstDetection"],
+        last_detection=row["lastDetection"],
+        duration_hours=row["durationHours"],
+        observation_count=row["observationCount"],
+        centroid=(centroid["lat"], centroid["lon"]),
+        bbox=tuple(row["bbox"]),
+        spatial_extent_km=row["spatialExtentKm"],
+        max_frp=row["maxFrp"],
+        mean_frp=row["meanFrp"],
+        sensor_mix=row.get("sensorMix", []),
+    )
+
+
+def _bbox_from_boundary(boundary) -> tuple[float, float, float, float] | None:
+    if boundary is None:
+        return None
+    if isinstance(boundary, dict):
+        if boundary.get("type") == "Feature":
+            boundary = boundary.get("geometry")
+        if boundary and boundary.get("type") == "FeatureCollection":
+            boxes = [
+                _bbox_from_boundary(feature)
+                for feature in boundary.get("features", [])
+            ]
+            boxes = [box for box in boxes if box]
+            return (
+                min(box[0] for box in boxes), min(box[1] for box in boxes),
+                max(box[2] for box in boxes), max(box[3] for box in boxes),
+            ) if boxes else None
+        if boundary and boundary.get("type") in {"Polygon", "MultiPolygon"}:
+            points = []
+            def collect(value):
+                if value and isinstance(value[0], (int, float)):
+                    points.append(value)
+                else:
+                    for child in value:
+                        collect(child)
+            collect(boundary.get("coordinates", []))
+            return (
+                min(point[0] for point in points), min(point[1] for point in points),
+                max(point[0] for point in points), max(point[1] for point in points),
+            ) if points else None
+    if len(boundary) != 4:
+        raise ValueError("boundary must be a GeoJSON geometry or (min_lon, min_lat, max_lon, max_lat)")
+    return tuple(float(value) for value in boundary)
+
+
+def count_events_in_scope(
+    events: list[FireEvent], boundary=None, buffer_km: float = 0.0
+) -> int | None:
+    """Count event centroids in the supplied private boundary plus buffer."""
+    bbox = _bbox_from_boundary(boundary)
+    if bbox is None:
+        return None
+    min_lon, min_lat, max_lon, max_lat = bbox
+    lat_buffer = buffer_km / 111.32
+    lon_buffer = buffer_km / (
+        111.32 * max(0.1, math.cos(math.radians((min_lat + max_lat) / 2)))
+    )
+    expanded = (
+        min_lon - lon_buffer,
+        min_lat - lat_buffer,
+        max_lon + lon_buffer,
+        max_lat + lat_buffer,
+    )
+    return sum(
+        not (
+            event.bbox[2] < expanded[0]
+            or event.bbox[0] > expanded[2]
+            or event.bbox[3] < expanded[1]
+            or event.bbox[1] > expanded[3]
+        )
+        for event in events
+    )
+
+
 def run_automated_benchmark(
     buffer_km: float = DEFAULT_PEAT_BUFFER_KM,
+    boundary=None,
+    live: bool = False,
 ) -> AutomatedBenchmarkResult:
     timings: list[StageTiming] = []
     t_start = time.perf_counter()
@@ -208,10 +311,7 @@ def run_automated_benchmark(
         timings.append(StageTiming(name, time.perf_counter() - t0))
         return result
 
-    sample_path = OUTPUT_DIR / "firms_2019_haze_sample.csv"
-    if sample_path.exists():
-        observations = _stage("retrieve_firms_observations", pd.read_csv, sample_path)
-    else:
+    if live:
         from data_pipeline.sources.nasa_firms import fetch_area
 
         observations = _stage(
@@ -222,17 +322,54 @@ def run_automated_benchmark(
             day_range=5,
             start_date="2019-09-01",
         )
-
-    events, _annotated = _stage(
-        "reconstruct_event_chronology", cluster_events, observations
-    )
-    triage_results = _stage(
-        "deterministic_stage1_triage", triage_events, events, observations
-    )
-    triage_summary = summarize_triage(triage_results)
+        events, _annotated = _stage(
+            "reconstruct_event_chronology", cluster_events, observations
+        )
+        triage_results = _stage(
+            "deterministic_stage1_triage", triage_events, events, observations
+        )
+        triage_summary = summarize_triage(triage_results)
+        triage_by_id = {result.event_id: result.to_dict() for result in triage_results}
+        source = {"observationsUsed": len(observations)}
+    else:
+        observations = _stage("read_committed_observations", load_observations)
+        artifact = _stage("read_committed_event_artifact", _read_artifact, DEST_EVENTS)
+        triage_artifact = _stage(
+            "read_committed_triage_artifact", _read_artifact, DEST_TRIAGE
+        )
+        source = artifact["source"]
+        scope_artifact = artifact["audits"][AUDIT_ID]["scope"]
+        events = [
+            _event_from_artifact(row)
+            for row in artifact["audits"][AUDIT_ID]["events"]
+        ]
+        triage_by_id = triage_artifact[AUDIT_ID]
+        states = Counter(
+            row["triage"]["state"]
+            for row in artifact["audits"][AUDIT_ID]["events"]
+        )
+        review_queue_count = scope_artifact["reviewQueueCount"]
+        triage_summary = SimpleNamespace(
+            review_queue_count=review_queue_count,
+            state_counts=dict(states),
+            events_to_review_queue_compression=(
+                round(len(events) / review_queue_count, 4)
+                if review_queue_count
+                else None
+            ),
+        )
+        if len(observations) != source["observationsUsed"]:
+            raise ValueError("committed observation source does not match event artifact")
+        if len(events) != scope_artifact["eventCount"]:
+            raise ValueError("committed event artifact count does not match its scope")
     target = max(events, key=lambda e: e.observation_count)
-    target_triage = next(
-        result for result in triage_results if result.event_id == target.event_id
+    target_triage = triage_by_id[target.event_id]
+
+    scope_event_count = _stage(
+        "scope_compression", count_events_in_scope, events, boundary, buffer_km
+    )
+    events_to_scope_compression = (
+        round(len(events) / scope_event_count, 2) if scope_event_count else None
     )
 
     weather_bundle = _stage(
@@ -291,7 +428,7 @@ def run_automated_benchmark(
     def _assemble_summary():
         return {
             "event": _event_row(target),
-            "stage1_triage": target_triage.to_dict(),
+            "stage1_triage": target_triage,
             "weather_evidence": weather_objects,
             "peat_evidence": peat_objects,
             "neighbouring_events": [asdict(n) for n in neighbours],
@@ -308,7 +445,7 @@ def run_automated_benchmark(
 
     return AutomatedBenchmarkResult(
         event_id=target.event_id,
-        observation_count=len(observations),
+        observation_count=source["observationsUsed"],
         event_count=len(events),
         stage_timings=timings,
         total_seconds=total_seconds,
@@ -319,6 +456,14 @@ def run_automated_benchmark(
         review_queue_count=triage_summary.review_queue_count,
         triage_state_counts=triage_summary.state_counts,
         events_to_review_queue_note=EVENTS_TO_REVIEW_QUEUE_NOTE,
+        scope_event_count=scope_event_count,
+        events_to_scope_compression=events_to_scope_compression,
+        scope_compression=events_to_scope_compression,
+        scope_compression_note=(
+            SCOPE_COMPRESSION_NOTE
+            if scope_event_count is None
+            else "Events within boundary plus buffer versus full history."
+        ),
         evidence_completeness=evidence_field_completeness(
             weather_objects, peat_objects
         ),
