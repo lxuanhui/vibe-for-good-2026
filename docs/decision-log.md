@@ -8,7 +8,7 @@ more valuable half.
 
 ## 2026-09-08 - Clustering runs offline; the API serves a committed artifact
 
-**Status:** done · PR #<pr>
+**Status:** done · PR #74
 
 `GET /api/audits/{id}/events` returns FireEvents derived from real FIRMS
 observations: 20,471 detections in the 2019 haze window, clustered into 3,610
