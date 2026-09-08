@@ -1,6 +1,6 @@
 ---
 name: branch-and-pr
-description: How work lands in this repo — typed branches, pull requests, and what must be true before merging. Load BEFORE the first edit of any task that changes a tracked file, and again before merging. Covers branch naming, when CI blocks a merge, what belongs in a commit message, and the checks that are advisory versus binding.
+description: How work starts and lands in this repo — issue first, then a typed branch, then a pull request. Load BEFORE starting any task that changes a tracked file, and again before merging. Covers finding the issue that already exists, branch naming, what belongs in a commit message, when CI blocks a merge, and which checks are advisory versus binding.
 ---
 
 # Landing work in this repo
@@ -16,7 +16,58 @@ offer it for a private repo, so the API returns 403 on every ruleset call.
 Nothing will stop you pushing to `main`. That makes this convention the only
 guard there is.
 
-## Before the first edit
+## Before anything: find the issue
+
+There is a real backlog. Search it before you write a line, and before you
+open an issue of your own:
+
+```bash
+gh issue list --state open --limit 30
+gh issue view <n>          # read the whole thing, not the title
+```
+
+Most work already has an issue. Read it and work to it — the deliverables and
+acceptance criteria in these issues are specific, and quietly doing something
+adjacent instead means the checklist stays open while the work is done.
+
+**If nothing covers it, open one before starting.** Not for ceremony: this
+repo is two people driving two agents, and an issue is the only place the
+other pair can see what you are about to do while it is still cheap to
+redirect. Match the house format — Purpose, Why this issue exists now,
+Dependencies, Required deliverables, Explicitly out of scope, Acceptance
+criteria, Required validation.
+
+**If the new work contradicts an existing issue, say so in the issue, in the
+open.** Do not quietly build the opposite of what a numbered issue specifies.
+State which issue, quote the line you are contradicting, explain what changes
+and what does not, and name whose call it is. A contradiction that surfaces in
+an issue costs a comment; the same contradiction surfacing in a PR costs
+whichever branch loses.
+
+The queue is procedural and ascending — `#56 → #57 → #58 → #59 → #60 → #61 →
+#62 → #64`. A new issue joins the order; it does not jump it. Priority labels
+describe urgency, not sequence.
+
+Link the work both ways: put the issue number in the PR body (`Closes #57`, or
+`Refs #57` when it only advances part of a checklist), and comment on the
+issue when you complete part of it but not all of it, saying which boxes are
+now ticked and which are still open. A stale checklist gets re-implemented.
+
+### What does not need an issue
+
+A rule with no exceptions gets ignored wholesale, so these are the exceptions:
+
+- A typo, a broken link, a comment that is wrong
+- Fixing something you broke in a PR that is still open
+- A Renovate bump, unless it turns out to need real work
+- Anything the user asked for directly in conversation — **the ask is the
+  mandate; the issue is still worth opening when someone else's work touches
+  the same surface**, which is most of the time here
+
+When in doubt, open it. It costs a minute and it is the cheapest place to be
+told you are about to do the wrong thing.
+
+## Then the branch, before the first edit
 
 Branch first, not after. `git status` on a dirty `main` at the end of a task
 is the failure this prevents.
@@ -53,9 +104,11 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 
 ## Opening the PR
 
-The description carries the reasoning a reviewer needs before they can agree
-or disagree: what changed, why this approach, what you rejected, what you
-verified, and what you deliberately did not do. Anything you could not finish
+Reference the issue in the body — `Closes #<n>` when the PR finishes it,
+`Refs #<n>` when it advances part of one. The description carries the
+reasoning a reviewer needs before they can agree or disagree: what changed,
+why this approach, what you rejected, what you verified, and what you
+deliberately did not do. Anything you could not finish
 or chose to leave belongs in it explicitly — a PR that hides an unfinished
 edge is worse than one that names it.
 

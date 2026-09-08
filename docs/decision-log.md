@@ -6,6 +6,44 @@ more valuable half.
 
 ---
 
+## 2026-09-08 — Issue-first is part of `branch-and-pr`, not a second skill
+
+**Status:** done · PR #77 · issue #76
+
+**Decision.** "Open an issue before starting" is enforced in the existing
+`branch-and-pr` skill, whose description now triggers loading before work
+starts rather than only before merging.
+
+**Why not a separate `issue-first` skill.** Issue → branch → PR → merge is one
+workflow, and splitting it across two skills means one of them gets loaded and
+the other does not — reliably the one that runs first, because a session
+usually reaches for the skill when it is about to commit. A second skill would
+also duplicate the branch-prefix table and the "two agents, one trunk"
+rationale, which is how two documents start disagreeing.
+
+**Why the rule exists.** Three failures in one session that it would have
+caught: PR #74 implemented the backend half of #57 without referencing it,
+leaving a stale checklist; issue #75 (map-first landing) contradicts the
+register-before-map ordering in #57 and #58, which surfaced only by luck of
+reading order; and `backend/app/audits.py` was clobbered because two
+workstreams reached for the same filename with nothing signalling it was
+taken.
+
+**The rule names its own exceptions** — typos, fixing your own open PR,
+Renovate bumps, and work the user asked for directly. A rule with no
+exceptions gets ignored wholesale, and an issue-per-typo policy would be
+ignored within a day. The exception for direct user requests is deliberately
+narrow: the ask is the mandate, but an issue is still expected when the work
+touches a surface the other person is building on.
+
+**Rejected: GitHub issue templates.** They enforce shape, not the reading step
+that actually matters, and the house format is already legible from the
+existing issues. Rejected again: required-status or branch-protection rules to
+enforce the link — unavailable on this plan for a private repo, returning 403
+on every ruleset call.
+
+---
+
 ## 2026-09-08 - Clustering runs offline; the API serves a committed artifact
 
 **Status:** done · PR #74

@@ -136,9 +136,18 @@ which data is real and which is a fixture.
 
 ## Working in this repo
 
+**Start from an issue.** `gh issue list --state open` before writing anything
+— the backlog is real and specific, and most work already has an issue with
+deliverables and acceptance criteria written down. Work to it rather than
+beside it. If nothing covers the work, open one first; if the work
+*contradicts* an existing issue, say so in the issue before building the
+opposite of what it specifies. The queue runs `#56 → #57 → #58 → #59 → #60 →
+#61 → #62 → #64`; a new issue joins that order rather than jumping it.
+Exceptions and the full rule are in the `branch-and-pr` skill.
+
 **Never commit to `main`.** Every change goes on a branch and lands through a
 pull request, so the two of us can see what the other's Claude did before it
-is in the trunk. Name the branch `<type>/<short-kebab-description>`, using the
+is in the trunk. Reference the issue in the PR body. Name the branch `<type>/<short-kebab-description>`, using the
 same type you would put on the commit:
 
 | Prefix | For |
