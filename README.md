@@ -32,10 +32,13 @@ DesignSpecs/    The specs the product is built against; Environmental_Assurance_
 The Vite dev server proxies `/api/*` to the Flask backend, so the frontend can
 call `fetch('/api/hello')` with no CORS setup in development.
 
-`GET /api/events` and `GET /api/events/{id}` are served by Flask; the rest of
-the console still renders from fixtures in `frontend/src/api/client.ts`, which
-mirror the endpoint contract in `Environmental_Assurance_Spec.md` §24 so each
-one can be swapped for a real call without touching any caller.
+`GET /api/events` and `GET /api/events/{id}` remain the legacy fixture-case
+endpoints. The audit workflow now uses `POST /api/audits`,
+`POST /api/audits/{audit_id}/history/build`, and
+`GET /api/audits/{audit_id}/events`: those endpoints run the existing
+deterministic `data_pipeline` and return scope-aware FireEvents. The default
+demo source is the clearly labelled frozen real 2019 NASA FIRMS export; set
+`HISTORY_SOURCE=live` to use the existing paged FIRMS backfill instead.
 
 ## Getting started
 

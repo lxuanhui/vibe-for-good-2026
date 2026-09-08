@@ -1,5 +1,13 @@
 import type { FeatureCollection } from './geojson'
-import type { BBox, EventStatus, FireEvent, InvestigationReport, OverlayLayerId } from './types'
+import type {
+  AuditScope,
+  BBox,
+  EventStatus,
+  FireEvent,
+  HistoryBuildResult,
+  InvestigationReport,
+  OverlayLayerId,
+} from './types'
 import { getOverlay, isLayerAvailable } from './fixtures/overlays'
 import { REPORTS } from './fixtures/reports'
 
@@ -26,6 +34,37 @@ async function apiGet<T>(path: string): Promise<T> {
     throw new Error(`GET /api${path} failed with ${response.status}`)
   }
   return (await response.json()) as T
+}
+
+async function apiPost<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(`${API_BASE}/api${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!response.ok) {
+    const detail = (await response.json().catch(() => null)) as { error?: string } | null
+    throw new Error(detail?.error ?? `POST /api${path} failed with ${response.status}`)
+  }
+  return (await response.json()) as T
+}
+
+export async function createAudit(body: {
+  reviewStart: string
+  reviewEnd: string
+  boundary: Record<string, unknown>
+  contextBufferKm: number
+}): Promise<AuditScope> {
+  const response = await apiPost<{ audit: AuditScope } & AuditScope>('/audits', body)
+  return response.audit ?? response
+}
+
+export async function buildFireHistory(auditId: string): Promise<HistoryBuildResult> {
+  return apiPost<HistoryBuildResult>(`/audits/${encodeURIComponent(auditId)}/history/build`, {})
+}
+
+export async function fetchAuditEvents(auditId: string): Promise<HistoryBuildResult> {
+  return apiGet<HistoryBuildResult>(`/audits/${encodeURIComponent(auditId)}/events`)
 }
 
 export async function fetchEvents(opts?: { bbox?: BBox; since?: string; status?: EventStatus }): Promise<FireEvent[]> {

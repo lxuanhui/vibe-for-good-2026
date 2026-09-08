@@ -403,7 +403,7 @@ def _complexity_signal(result: FireComplexityEvidence) -> tuple[float | None, li
                 quality=field.quality,
                 limitations=field.limitations,
                 time_window=field.time_window,
-                retrieved_at=field.retrieved_at,
+                retrieved_at=getattr(field, "retrieved_at", None),
                 algorithm_version=field.algorithm_version,
                 raw_reference=field.raw_reference,
             )

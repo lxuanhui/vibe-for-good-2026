@@ -16,7 +16,14 @@ ROOT = Path(__file__).resolve().parent
 load_dotenv(ROOT / ".env")
 
 OUTPUT_DIR = ROOT / "output"
-OUTPUT_DIR.mkdir(exist_ok=True)
+try:
+    OUTPUT_DIR.mkdir(exist_ok=True)
+except OSError:
+    # Lambda's deployed source tree is read-only.  The adapter only needs
+    # writable output for optional live-source caches, so keep those in /tmp
+    # while frozen inputs remain alongside the deployed package.
+    OUTPUT_DIR = Path(os.environ.get("PIPELINE_OUTPUT_DIR", "/tmp/vibe-for-good-2026"))
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # --- Credentials -------------------------------------------------------
 NASA_FIRMS_MAP_KEY = os.environ.get("NASA_FIRMS_MAP_KEY", "")

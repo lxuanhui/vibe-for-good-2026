@@ -6,6 +6,30 @@ more valuable half.
 
 ---
 
+## 2026-09-08 - Audit history is an adapter over the deterministic pipeline
+
+**Status:** implemented on issue #57
+
+**Decision.** The audit history endpoints keep an in-memory audit/build store
+for the current Lambda/MVP architecture and delegate clustering, Stage-1
+triage, weather/peat enrichment, Fire Complexity, Investigation Priority,
+surface compatibility, and FireEventGraph construction to `data_pipeline`.
+The default demo uses the repository's frozen real 2019 FIRMS observations;
+the same adapter can use the existing paged live backfill when
+`HISTORY_SOURCE=live`.
+
+**Why.** This wires the proven science into the product without copying
+algorithms into Flask or React. A context buffer expands acquisition only;
+events outside the supplied boundary remain `EXTERNAL_CONTEXT`, while a
+cluster footprint that reaches the boundary is `BOUNDARY_INTERSECTING`.
+Observation IDs, evidence IDs, graph references, and compression counts are
+serialized with each generated build so the register is inspectable.
+
+**Rejected.** The legacy `backend/app/data/events.json` cases are not used by
+the audit path. A full production job queue or persistent store is deferred
+because it is explicitly outside this integration issue and the current
+repository architecture uses one Flask Lambda.
+
 ## 2026-09-08 - Investigator/Skeptic analysis is a bounded structured boundary
 
 **Status:** implemented on issue #15 branch

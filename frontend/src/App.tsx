@@ -11,10 +11,10 @@ export default function App() {
         <ViewModeToggle />
       </header>
       <div className="relative flex flex-1 overflow-hidden">
+        <TableSidebar />
         <div className="relative flex-1">
           <MapView />
         </div>
-        <TableSidebar />
       </div>
       <ReportPanel />
     </div>

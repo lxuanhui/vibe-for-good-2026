@@ -3,9 +3,11 @@ import type { FeatureCollection } from './geojson'
 import type { FireEvent, InvestigationReport, OverlayLayerId } from './types'
 import * as client from './client'
 import { fetchPipelineFirms } from './fixtures/pipelineFirms'
+import { useAppStore } from '../store/useAppStore'
 
 export function useEvents(): FireEvent[] {
   const [events, setEvents] = useState<FireEvent[]>([])
+  const historyEvents = useAppStore((state) => state.historyEvents)
   useEffect(() => {
     let active = true
     client.fetchEvents().then((e) => {
@@ -15,7 +17,7 @@ export function useEvents(): FireEvent[] {
       active = false
     }
   }, [])
-  return events
+  return historyEvents.length ? historyEvents : events
 }
 
 export function useOverlay(

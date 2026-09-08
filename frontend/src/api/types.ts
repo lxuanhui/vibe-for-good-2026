@@ -10,6 +10,11 @@ export type EventStatus =
   | 'UNRESOLVED'
   | 'CONVERGED'
 
+export type ScopeRelation = 'INSIDE_SCOPE' | 'BOUNDARY_INTERSECTING' | 'EXTERNAL_CONTEXT'
+export type EvidenceSufficiency = 'SUFFICIENT' | 'PARTIAL' | 'INSUFFICIENT'
+export type InvestigationPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'
+export type ReviewState = 'UNREVIEWED' | 'IN_REVIEW' | 'REVIEWED'
+
 export type PeatClassification = 'protected_dome' | 'production_zone' | 'not_applicable'
 
 export type OverlayLayerId = 'firms' | 'sar-backscatter' | 'khg' | 'concessions' | 'fire-complex-links'
@@ -48,6 +53,67 @@ export interface FireEvent {
   daysSinceLastSurfaceDetection?: number
   detections: ThermalDetection[]
   currentConditions: CurrentConditions
+  lastDetected?: string
+  durationHours?: number
+  observationCount?: number
+  centroid?: [number, number]
+  bbox?: [number, number, number, number]
+  scopeId?: string
+  scopeRelation?: ScopeRelation
+  distanceToBoundaryKm?: number
+  peakFrp?: number | null
+  meanFrp?: number | null
+  frpSummary?: { peak: number | null; mean: number | null; unit: string }
+  peatFraction?: number | null
+  complexity?: {
+    evaluatedFieldCount: number
+    fieldCount: number
+    evidenceIds: string[]
+    algorithmVersion: string | null
+  }
+  evidenceSufficiency?: EvidenceSufficiency
+  investigationPriority?: InvestigationPriority
+  investigationPriorityScore?: number | null
+  reviewState?: ReviewState
+  stage1State?: string
+  constituentObservationIds?: string[]
+  evidenceIds?: string[]
+  evidence?: Record<string, unknown>[]
+  graphReferences?: {
+    reference: string
+    sourceEventId: string
+    targetEventId: string
+    state: string
+    modelVersion: string
+    evidenceIds: string[]
+  }[]
+  source?: string
+}
+
+export interface AuditScope {
+  auditId: string
+  reviewStart: string
+  reviewEnd: string
+  boundary: Record<string, unknown>
+  bbox: [number, number, number, number]
+  contextBufferKm: number
+}
+
+export interface HistoryCompression {
+  rawObservations: number
+  qualifiedObservations: number
+  fireEvents: number
+  stage1ReviewQueue: number
+  stage1StateCounts: Record<string, number>
+}
+
+export interface HistoryBuildResult {
+  auditId: string
+  status: 'complete'
+  events: FireEvent[]
+  compression: HistoryCompression
+  sourceRun: Record<string, unknown>
+  graph: Record<string, unknown>
 }
 
 export interface EvidenceObject {

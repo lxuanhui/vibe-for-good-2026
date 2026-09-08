@@ -67,6 +67,16 @@ echo "==> Vendoring dependencies for python$PYTHON_VERSION/$PLATFORM"
 
 echo "==> Adding application source"
 cp -R "$BACKEND_DIR/app" "$BUILD_DIR/app"
+# History builds deliberately reuse the deterministic pipeline modules and
+# the labelled frozen real FIRMS dataset. Copy only runtime packages and
+# frozen inputs; tests, source caches, and generated output never enter the
+# deployment artifact.
+mkdir -p "$BUILD_DIR/data_pipeline"
+cp "$REPO_ROOT/data_pipeline/__init__.py" "$REPO_ROOT/data_pipeline/config.py" "$BUILD_DIR/data_pipeline/"
+for package in clustering common complexity enrichment graph priority propagation sources triage; do
+    cp -R "$REPO_ROOT/data_pipeline/$package" "$BUILD_DIR/data_pipeline/$package"
+done
+cp -R "$REPO_ROOT/data_pipeline/golden" "$BUILD_DIR/data_pipeline/golden"
 # wsgi.py is the local dev server and has no place in the bundle.
 cp "$BACKEND_DIR/lambda_handler.py" "$BUILD_DIR/lambda_handler.py"
 

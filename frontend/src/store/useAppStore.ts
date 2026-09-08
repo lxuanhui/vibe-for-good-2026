@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { OverlayLayerId, RasterLayerId } from '../api/types'
+import type { FireEvent, OverlayLayerId, RasterLayerId } from '../api/types'
 import { TIMELINE_DATES } from '../api/fixtures/dates'
 
 export type ViewMode = 'map' | 'table'
@@ -12,6 +12,12 @@ interface AppState {
 
   selectedEventId: string | null
   selectEvent: (id: string | null) => void
+  historyEvents: FireEvent[]
+  setHistoryEvents: (events: FireEvent[]) => void
+  selectedEventIds: string[]
+  toggleEventSelection: (id: string) => void
+  clearEventSelection: () => void
+  investigateSelected: () => void
 
   activeDate: string
   setActiveDate: (date: string) => void
@@ -27,11 +33,28 @@ interface AppState {
 }
 
 export const useAppStore = create<AppState>((set) => ({
-  viewMode: 'map',
+  viewMode: 'table',
   setViewMode: (mode) => set({ viewMode: mode }),
 
   selectedEventId: null,
   selectEvent: (id) => set({ selectedEventId: id }),
+  historyEvents: [],
+  setHistoryEvents: (events) => set({ historyEvents: events, selectedEventId: null, selectedEventIds: [] }),
+  selectedEventIds: [],
+  toggleEventSelection: (id) =>
+    set((state) => ({
+      selectedEventIds: state.selectedEventIds.includes(id)
+        ? state.selectedEventIds.filter((selected) => selected !== id)
+        : [...state.selectedEventIds, id],
+    })),
+  clearEventSelection: () => set({ selectedEventIds: [] }),
+  // Keep the first selected row as the map's active event while preserving
+  // the full stable selection for the investigation workspace.
+  investigateSelected: () =>
+    set((state) => ({
+      viewMode: 'map',
+      selectedEventId: state.selectedEventIds[0] ?? state.selectedEventId,
+    })),
 
   activeDate: TIMELINE_DATES[TIMELINE_DATES.length - 1],
   setActiveDate: (date) => set({ activeDate: date }),
