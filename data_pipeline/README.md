@@ -177,6 +177,44 @@ reviewer undiminished -- an honest measurement of the pipeline's current
 state, to be re-measured once #9 lands, not a placeholder target invented to
 fill the metric.
 
+## Golden historical regression cases
+
+`golden/` freezes real 2019 haze-window data end to end so the pipeline's
+output for known input never silently drifts as the code around it changes.
+`golden/cases.py` defines three cases, each a real FIRMS-detected FireEvent
+picked from the cached Sumatra/Kalimantan sample: `simple`
+(`FE-20190904-4904392c16`, 3 detections, 0.16km extent -- the smallest
+non-degenerate shape), `complex_multilobe` (`FE-20190901-ce19162367`, the
+1,135-detection/107h/20.6km event already used as the worked example
+elsewhere in this README), and `peat_related` (`FE-20190901-15f6721402`, East
+Kalimantan, 71.4% footprint peat fraction -- picked because it is *partial*,
+exercising the peat-fraction metric's actual range rather than the complex
+case's saturated 100%). All three happen to sit on mapped peat, since the
+sampled bbox is peat-dominated lowland; `peat_related` is the one chosen to
+make that metric interesting, not the only one that has it.
+
+Each case directory holds real, frozen inputs -- FIRMS observations, an
+Open-Meteo/NASA POWER weather window, a small crop of the actual Global
+Peatland Map 2.0 raster (padded so the default buffer/search radii never run
+off its edge), and a Copernicus STAC search response -- plus `expected/`,
+the output of `cluster_events`, `compute_weather_windows`,
+`compute_peat_context`, and this module's own imagery-candidate mapping
+against those frozen inputs. `tests/test_golden_regression.py` recomputes
+each from the frozen inputs and asserts it still matches `expected/` --
+**no network access**, so it runs in CI like any other test. Run
+`python -m data_pipeline.golden.build_golden_cases` only when a case's
+frozen inputs genuinely need to change (a new case, or a source's response
+shape changing); it overwrites every fixture from live sources, so review
+the diff it produces rather than trusting it blindly.
+
+One dtype trap worth knowing before touching this: Open-Meteo's response
+decodes to `float32` (`sources/open_meteo.py`'s `_hourly_to_df`), but
+`pd.read_csv` on the frozen CSV infers `float64` from the written decimal
+text -- summing the extra precision gives a value that differs from the
+frozen one in the last couple of decimal places. The test casts the relevant
+columns back to `float32` after loading for exactly this reason; don't
+remove that cast to "simplify" the loader.
+
 ## Provider interface
 
 `nasa_firms.py`, `open_meteo.py`, `nasa_power.py`, `copernicus_cds.py`, and

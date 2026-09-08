@@ -1,0 +1,70 @@
+[
+  {
+    "evidence_id": "ENV_PEAT_FE-20190901-ce19162367_direct_intersection",
+    "category": "peat",
+    "type": "peat_intersection",
+    "observation": "event footprint intersects mapped peat",
+    "source": "Greifswald Mire Centre -- Global Peatland Map 2.0 (GPM 2022)",
+    "time_window": null,
+    "value": true,
+    "unit": "bool",
+    "quality": 0.7,
+    "limitations": [
+      "peat overlap is geometric context only -- it does not indicate underground combustion, smouldering, or fire persistence on its own",
+      "event spatial extent (20.553794786436153km) exceeds the 5.0km buffer radius; footprint corners, not the buffer, are the more representative intersection check for this event"
+    ],
+    "algorithm_version": null,
+    "raw_reference": null
+  },
+  {
+    "evidence_id": "ENV_PEAT_FE-20190901-ce19162367_footprint_fraction",
+    "category": "peat",
+    "type": "peat_fraction",
+    "observation": "100.0% of event footprint sample points are mapped peat",
+    "source": "Greifswald Mire Centre -- Global Peatland Map 2.0 (GPM 2022)",
+    "time_window": null,
+    "value": 1.0,
+    "unit": "fraction",
+    "quality": 0.6,
+    "limitations": [
+      "peat overlap is geometric context only -- it does not indicate underground combustion, smouldering, or fire persistence on its own",
+      "event spatial extent (20.553794786436153km) exceeds the 5.0km buffer radius; footprint corners, not the buffer, are the more representative intersection check for this event"
+    ],
+    "algorithm_version": null,
+    "raw_reference": null
+  },
+  {
+    "evidence_id": "ENV_PEAT_FE-20190901-ce19162367_buffer_fraction",
+    "category": "peat",
+    "type": "peat_fraction",
+    "observation": "100.0% of area within 5.0km is mapped peat",
+    "source": "Greifswald Mire Centre -- Global Peatland Map 2.0 (GPM 2022)",
+    "time_window": null,
+    "value": 1.0,
+    "unit": "fraction",
+    "quality": 0.7,
+    "limitations": [
+      "peat overlap is geometric context only -- it does not indicate underground combustion, smouldering, or fire persistence on its own",
+      "event spatial extent (20.553794786436153km) exceeds the 5.0km buffer radius; footprint corners, not the buffer, are the more representative intersection check for this event"
+    ],
+    "algorithm_version": null,
+    "raw_reference": null
+  },
+  {
+    "evidence_id": "ENV_PEAT_FE-20190901-ce19162367_distance_to_peat",
+    "category": "peat",
+    "type": "distance_to_peat",
+    "observation": "nearest mapped peat is 0.0km from event centroid",
+    "source": "Greifswald Mire Centre -- Global Peatland Map 2.0 (GPM 2022)",
+    "time_window": null,
+    "value": 0.0,
+    "unit": "km",
+    "quality": 0.7,
+    "limitations": [
+      "peat overlap is geometric context only -- it does not indicate underground combustion, smouldering, or fire persistence on its own",
+      "event spatial extent (20.553794786436153km) exceeds the 5.0km buffer radius; footprint corners, not the buffer, are the more representative intersection check for this event"
+    ],
+    "algorithm_version": null,
+    "raw_reference": null
+  }
+]
