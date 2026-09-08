@@ -96,6 +96,21 @@ def _relation(event: dict[str, Any], scope: dict[str, Any] | None) -> str:
     return "EXTERNAL_CONTEXT"
 
 
+def _in_scope_or_buffer(event: dict[str, Any], scope: dict[str, Any] | None) -> bool:
+    """Count an event in the private audit footprint, never as attribution."""
+    if not scope or not scope.get("geometry"):
+        return False
+    if _relation(event, scope) in {"INSIDE_SCOPE", "BOUNDARY_INTERSECTING"}:
+        return True
+    bbox = scope.get("buffer_bbox")
+    if isinstance(bbox, list) and len(bbox) == 4:
+        bbox = {"minLon": bbox[0], "minLat": bbox[1], "maxLon": bbox[2], "maxLat": bbox[3]}
+    if not bbox:
+        return False
+    centroid = event["centroid"]
+    return bbox["minLon"] <= centroid["lon"] <= bbox["maxLon"] and bbox["minLat"] <= centroid["lat"] <= bbox["maxLat"]
+
+
 def _distance_km(first: dict[str, Any], second: dict[str, Any]) -> float:
     import math
 
@@ -257,21 +272,36 @@ def source_provenance() -> dict[str, Any]:
 
 
 def progression(audit_id: str) -> dict[str, Any] | None:
-    """Return current real-dataset compression and engagement review counts."""
+    """Return artifact-derived clustering and boundary-aware review counts."""
     audit = get_audit(audit_id)
     if audit is None:
         return None
     source = source_provenance()
     scope = audit["scope"]
+    session = get_audit_session(audit_id)
+    scope_context = {**scope, **(session or {})}
+    private_geometry = get_scope_geometry(audit_id)
+    if private_geometry is not None:
+        scope_context["geometry"] = private_geometry
+    boundary_available = private_geometry is not None
+    in_scope = sum(_in_scope_or_buffer(event, scope_context) for event in audit["events"]) if boundary_available else None
+    qualified = source.get("qualifiedObservations", source.get("observationsUsed"))
+    fire_events = len(audit["events"])
+    observations_to_events = round(qualified / fire_events, 2) if fire_events else None
+    scope_compression = round(fire_events / in_scope, 2) if in_scope else None
     pack = AUDIT_PACKS.get(audit_id, {})
     return {
         "rawObservations": source.get("rawObservations", source.get("observationsUsed")),
-        "qualifiedObservations": source.get("qualifiedObservations", source.get("observationsUsed")),
-        "fireEvents": len(audit["events"]),
+        "qualifiedObservations": qualified,
+        "fireEvents": fire_events,
         "requiringHumanReview": scope.get("reviewQueueCount", 0),
         "selected": len(pack),
         "selectedEventIds": sorted(pack),
-        "compression": scope.get("compression"),
+        "compression": scope_compression,
+        "observationsToEventsCompression": observations_to_events,
+        "inScopeAndBuffer": in_scope,
+        "scopeBoundaryAvailable": boundary_available,
+        "scopeCompression": scope_compression,
     }
 
 

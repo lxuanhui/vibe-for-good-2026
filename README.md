@@ -37,8 +37,8 @@ private GeoJSON management-unit boundary, and a configurable context buffer
 are validated and previewed before the history build. The known demo case
 uses the committed real 2019 FIRMS dataset as a clearly labelled cached
 reconstruction and returns its measured build-handoff time. The register then
-shows raw observations, qualified observations, clustered FireEvents, events
-requiring human review, and events selected for the engagement pack.
+shows FIRMS observations, clustered FireEvents, the boundary-and-buffer
+subset, the review queue, and events selected for the engagement pack.
 
 The real demo path uses the audit-scoped Flask endpoints:
 `POST /api/audits`, `POST /api/audits/{id}/scope/upload`,

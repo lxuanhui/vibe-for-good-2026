@@ -6,6 +6,26 @@ more valuable half.
 
 ---
 
+## 2026-09-09 - Review compression is scope-based, not Stage-1-based
+
+**Status:** done · issue #80
+
+The console now treats Stage-1 as a classifier of fire support, not a promise
+to remove FIRMS-only events from the review queue. The API derives the useful
+progression from the committed artifact: FIRMS observations -> FireEvents,
+then, only when a private audit boundary exists, FireEvents in scope plus the
+context buffer -> review queue. Without a boundary the scope count and ratio
+are `null`, rather than a misleading 1.0×.
+
+**Rejected: adding context to Stage-1 to manufacture compression.** The 2019
+haze artifact has 396 `LIKELY_FIRE`, 3,214 `AMBIGUOUS`, and zero
+`LIKELY_NON_FIRE`; this is structural for FIRMS-only input. Context would
+classify more events as fire-support and would not shrink the queue. Scope is
+the actual product compression boundary, and priority ranking remains a
+separate concern.
+
+---
+
 ## 2026-09-08 - Clustering runs offline; the API serves a committed artifact
 
 **Status:** done · PR #74

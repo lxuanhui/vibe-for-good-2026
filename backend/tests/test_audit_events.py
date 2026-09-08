@@ -31,7 +31,11 @@ def test_lists_events_with_scope_and_provenance(client):
         "requiringHumanReview": 3610,
         "selected": 0,
         "selectedEventIds": [],
-        "compression": 1.0,
+        "compression": None,
+        "observationsToEventsCompression": 5.67,
+        "inScopeAndBuffer": None,
+        "scopeBoundaryAvailable": False,
+        "scopeCompression": None,
     }
 
 

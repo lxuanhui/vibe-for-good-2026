@@ -249,6 +249,10 @@ export interface AuditProgression {
   selected: number
   selectedEventIds: string[]
   compression: number | null
+  observationsToEventsCompression: number | null
+  inScopeAndBuffer: number | null
+  scopeBoundaryAvailable: boolean
+  scopeCompression: number | null
 }
 
 export interface AuditPackReview { eventId: string; note: string; disposition: string; addedAt: string }
