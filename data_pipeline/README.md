@@ -232,6 +232,24 @@ spotting, and does not model underground peat propagation. An outside cluster
 is a compatibility observation, not a conclusion about ignition cause or
 responsibility.
 
+## Explainable Fire Complexity evidence
+
+`complexity/fire_complexity.py` derives the canonical Fire Complexity
+features for one reconstructed `FireEvent` as 13 individually named,
+versioned EvidenceObjects: duration, observation count, spatial extent,
+centroid movement, directional consistency, wind alignment, FRP variability,
+distinct thermal lobes, peat overlap, nearby event count, historical
+recurrence, unexplained detections, and surface-propagation mismatch. The
+result has no aggregate magic score. Each field carries its value, status,
+time window, source, quality, limitations, algorithm version, and raw event
+reference so a reviewer can inspect why it was or was not evaluated.
+
+The function is pure and accepts already-derived peat, recurrence, and
+surface-propagation context. Missing optional context stays `NOT_EVALUATED`,
+and outside-envelope observations are compatibility mismatches only; they do
+not establish a separate fire, underground propagation, cause, intent, or
+responsibility.
+
 ## Golden historical regression cases
 
 `golden/` freezes real 2019 haze-window data end to end so the pipeline's

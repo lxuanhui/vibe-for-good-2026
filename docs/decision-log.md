@@ -6,6 +6,30 @@ more valuable half.
 
 ---
 
+## 2026-09-08 - Fire Complexity stays a named evidence bundle, not a score
+
+**Status:** implemented on issue #12 branch
+
+**Decision.** `complexity/fire_complexity.py` derives the 13 candidate Fire
+Complexity features from a reconstructed `FireEvent` and preserves each one
+as a separate, versioned EvidenceObject. It computes observation-derived
+movement, direction, FRP, and thermal-lobe metrics from the event's linked raw
+observations; nearby-event and recurrence metrics from the supplied event
+collection; and uses peat/surface results only when those already-derived
+contexts are supplied. Missing optional context is `NOT_EVALUATED`.
+
+**Why.** The canonical spec defines complexity as how poorly one event is
+explained by one straightforward surface episode, but the issue's acceptance
+criterion requires the evidence fields themselves to be exposed. An
+aggregate score would hide which input drove routing and would make missing
+sources look like low complexity.
+
+**Rejected.** A learned or hand-weighted magic score was rejected: the repo
+has no labelled calibration set, and complexity evidence must remain
+separate from AI interpretation and human disposition. Outside-envelope
+observations remain a first-order compatibility mismatch, not a cause or
+responsibility finding.
+
 ## 2026-09-08 - Surface growth remains a first-order compatibility screen
 
 **Status:** implemented on issue #11 branch
