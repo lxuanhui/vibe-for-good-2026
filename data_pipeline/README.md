@@ -58,6 +58,26 @@ cannot precisely separate Indonesian from Malaysian/Bruneian hotspots
 inside the same rectangle near the Kalimantan border — see the module
 docstring.
 
+## FIRMS spatio-temporal clustering
+
+`clustering/firms_clustering.py` groups raw FIRMS hotspots into coherent
+`FireEvent`s -- a single VIIRS pixel flagged hot for one overpass is not an
+independently significant fire. `cluster_events(observations)` connects two
+detections when they're both within `spatial_threshold_km` (default 2km,
+cKDTree-indexed, not O(n^2)) and `temporal_threshold_hours` (default 72h)
+of each other; FireEvents are the connected components. Requiring both
+constraints on every edge is what makes temporally disconnected reburns at
+the same location split into separate events without a dedicated pass --
+it falls out of the graph construction. Returns `(events, annotated)`:
+`annotated` is the original observations DataFrame plus one `event_id`
+column, so raw points are never discarded, only linked. Run
+`python -m data_pipeline.clustering.firms_clustering` for a live demo
+against the acceptance-criteria sample: 21,519 FIRMS observations -> 3,683
+FireEvents (largest: 1,135 observations over 107 hours, 20.6km spatial
+extent), last verified run. See the module docstring for the documented
+single-linkage chaining limitation and how FireEvent fields here relate to
+the canonical `FireEvent` type (`Environmental_Assurance_Spec.md` S9).
+
 ## Provider interface
 
 `nasa_firms.py`, `open_meteo.py`, `nasa_power.py`, `copernicus_cds.py`, and

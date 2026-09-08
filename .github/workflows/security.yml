@@ -126,4 +126,4 @@ jobs:
       # pyproject.toml, and is where the HTTP and TLS handling actually lives.
       # Tests are excluded: S101 flags every assert, which is what a test is.
       - name: ruff — flake8-bandit rules
-        run: ruff check --select S --exclude backend/tests backend data_pipeline
+        run: ruff check --select S --exclude backend/tests --exclude data_pipeline/tests backend data_pipeline
