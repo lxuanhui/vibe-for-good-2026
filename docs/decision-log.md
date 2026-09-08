@@ -51,6 +51,46 @@ forbids. The register needs its own view instead of a coerced legacy shape.
 
 ---
 
+## 2026-09-08 — The spec drops Cloudflare, and names storage roles not products
+
+**Status:** done · PR #72
+
+**Decision.** `Environmental_Assurance_Spec.md` no longer says "Cloudflare
+Workers; D1 + R2 + KV". The stack line names what is deployed — Flask on AWS
+Lambda behind an API Gateway HTTP API, Terraform-managed — and §8 describes
+the three persistence roles by role: a durable queryable metadata store, a
+bulky immutable evidence store, and a disposable cache. `storage_policy` in
+§26 and `geometryObjectKey` in §25 use the same neutral names.
+
+**Why change the spec rather than record a deviation.** The spec declares
+itself the source of truth where documents conflict, so a deviation recorded
+only in this log loses to it by the spec's own rule. An agent reading the spec
+cold would have been told to provision D1 and R2 against an AWS account. The
+infrastructure has been AWS since 2026-09-07, it is deployed and working, and
+rebuilding on Cloudflare would spend the remaining budget to arrive at the
+same behaviour. The document was the thing that was wrong.
+
+**Rejected: naming DynamoDB and S3 in the spec.** This PR originally did
+exactly that, mapping D1→DynamoDB, R2→S3 and KV→a TTL-expiring DynamoDB
+table. Issue #56 landed the neutral wording first and it is the better answer:
+nothing implements persistence yet, so the service choice is not made, and
+writing it into the canonical spec would have made an unmade decision look
+settled to every agent that reads it. Removing the *wrong* stack does not
+require inventing the right one. When persistence is actually built, that is a
+separate decision and belongs in its own entry here.
+
+**Constraint that will shape that decision.** Serverless only, per the project
+owner: Lambda, S3, DynamoDB are fine; anything always-on, EC2 in particular,
+needs justification first. A container pushed to ECR is acceptable where one is
+genuinely needed — the trigger to watch for is the Lambda bundle outgrowing
+the 250 MB unzipped limit.
+
+**Left alone.** The three legacy specs still say Cloudflare. They are kept for
+history and are superseded by the canonical file; editing them would rewrite a
+record of what was true when they were written.
+
+---
+
 ## 2026-09-08 - Audit-scope sessions use a small adapter until persistence is chosen
 
 **Status:** implemented on issue #56
@@ -71,6 +111,8 @@ Cloudflare Workers/D1/R2/KV wording in the earlier spec.
 parsers are outside the audit-scope boundary. A process-local session is not a
 production retention model and must be replaced by the later persistence
 decision before multi-instance or multi-tenant use.
+
+---
 
 ## 2026-09-08 - Investigator/Skeptic analysis is a bounded structured boundary
 
@@ -346,11 +388,16 @@ not change here.
 is invented. Worth stating plainly because "served by the API" reads as "real"
 and it is not.
 
-**Spec discrepancy found.** UI spec §5 lists the status enum as
-`AMBIGUOUS|REJECTED|STAGE2_RUNNING|CONVERGED`; `frontend/src/api/types.ts`
-uses `AWAITING_REVIEW|STAGE1_REJECTED|STAGE2_RUNNING|CONVERGED`, and so does
-the fixture data and the UI. The backend follows the frontend names, since
-those are what actually exist on both sides. The spec is the stale one.
+**Spec discrepancy found — ~~the spec is the stale one~~. SUPERSEDED, see
+"`EventStatus` renamed to match the canonical spec's Stage-1 vocabulary"
+above.** At the time: UI spec §5 listed `AMBIGUOUS|REJECTED|...` while
+`types.ts`, the fixture data and the UI used
+`AWAITING_REVIEW|STAGE1_REJECTED|...`, so the backend followed the frontend
+names. That reasoning did not survive contact with
+`Environmental_Assurance_Spec.md`, which arrived hours later and made
+`AMBIGUOUS`/`LIKELY_NON_FIRE` canonical. The conclusion was wrong, not just
+the citation — flagged here because a reader who stops at this entry would
+act on it.
 
 **Known duplication.** `frontend/src/api/fixtures/events.ts` still holds the
 same three events, because `fixtures/overlays.ts` anchors its overlay geometry

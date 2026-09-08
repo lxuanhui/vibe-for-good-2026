@@ -23,8 +23,8 @@ frontend/       Environmental Assurance Console — Vite + React + TypeScript
 backend/        Flask API. Local dev server on :5001 mounted at /api;
                 the same app runs on AWS Lambda via lambda_handler.py.
 infra/          Terraform — Lambda + API Gateway HTTP API. See infra/README.md.
-data_pipeline/  Python feasibility spike for the environmental data sources.
-                See data_pipeline/README.md.
+data_pipeline/  Clustering, triage, graph, priority and analysis modules, plus
+                the original source feasibility spike. See data_pipeline/README.md.
 docs/           Decision log and environment facts. See docs/README.md.
 DesignSpecs/    The specs the product is built against; Environmental_Assurance_Spec.md is canonical.
 ```
