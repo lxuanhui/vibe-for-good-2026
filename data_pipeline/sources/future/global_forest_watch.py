@@ -4,10 +4,11 @@ Being registered for separately. Once GFW_API_KEY is set in .env, wire it
 up here against:
   https://data-api.globalforestwatch.org/
 
-Planned use (per DesignSpecs/environmental_assurance_spec_v2.md Section 9.1):
-concession attribute lookup by point (spatialRel=esriSpatialRelIntersects) --
-attribute-only, never store polygon geometry (Indonesian shapefile
-publication restriction, see spec Section 2).
+Deprioritized post-MVP (DesignSpecs/Environmental_Assurance_Spec.md §30). If
+built, planned use is concession attribute lookup by point
+(spatialRel=esriSpatialRelIntersects) -- attribute-only; never store or
+render the third-party concession polygon itself (§4: no public
+named-concession directory).
 """
 from __future__ import annotations
 

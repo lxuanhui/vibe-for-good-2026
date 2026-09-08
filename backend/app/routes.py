@@ -25,7 +25,7 @@ def hello():
 
 @api.get("/events")
 def list_events():
-    """UI spec Section 5: bbox / since / status filters, `{ events: [...] }`."""
+    """Environmental_Assurance_Spec.md Section 24: bbox / since / status filters, `{ events: [...] }`."""
     try:
         bbox = parse_bbox(request.args.get("bbox"))
         since = parse_since(request.args.get("since"))

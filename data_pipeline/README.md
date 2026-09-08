@@ -1,12 +1,13 @@
 # Data source feasibility spike
 
 Proof-of-concept scripts that check whether each environmental data source
-in [`DesignSpecs/environmental_assurance_spec_v2.md`](../DesignSpecs/environmental_assurance_spec_v2.md)
-(Section 11) can actually be pulled, and — critically — whether it can be
-pulled **historically**, not just for "today." Nothing here writes to a
-database. It's a precursor to the real Cron Trigger Worker described in the
-spec: once a source is confirmed workable here, its logic gets ported into
-that worker (or a scheduled job) with an actual write to storage.
+in [`DesignSpecs/Environmental_Assurance_Spec.md`](../DesignSpecs/Environmental_Assurance_Spec.md)
+(§7, Data sources) can actually be pulled, and — critically — whether it can
+be pulled **historically**, not just for "today." Nothing here writes to a
+database. It's a precursor to the real ingestion worker described in the
+spec (§8, Persistence architecture): once a source is confirmed workable
+here, its logic gets ported into that worker (or a scheduled job) with an
+actual write to storage.
 
 ## Setup
 
@@ -53,7 +54,7 @@ request logic and set the key in `.env`.
 
 | Module | Source | Notes |
 |---|---|---|
-| `sources/future/global_forest_watch.py` | Global Forest Watch Data API | Phase 2 use per spec Section 9.1: concession attribute lookup by point, attribute-only, never store geometry. |
+| `sources/future/global_forest_watch.py` | Global Forest Watch Data API | Deprioritized post-MVP (`Environmental_Assurance_Spec.md` §30); if built, concession attribute lookup by point stays attribute-only per §4 — never store or render third-party concession polygon geometry. |
 | `sources/future/bmkg.py` | BMKG (Indonesian met/climate/geophysics agency) | Some feeds are public without a key at `data.bmkg.go.id`; confirm what an account unlocks once you have one. |
 
 `run_all.py` runs both groups and prints a combined pass/fail summary; the
@@ -61,7 +62,7 @@ pending-account ones just report "skipped" until their key is set.
 
 ## Planned cron cadence (once ported to the real ingestion worker)
 
-Matches the spec's Layer A cadence table:
+Matches the cadence column of `Environmental_Assurance_Spec.md` §7 (Data sources):
 
 | Source | Cadence |
 |---|---|

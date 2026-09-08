@@ -57,8 +57,10 @@ wrong. See the root `.env.example` for the full credential index.
 
 - **The frontend.** No hosting exists yet; the console runs locally on `:5173`.
   S3 + CloudFront is the natural fit and is additive.
-- **Ingestion.** The cron FIRMS poller from spec v2 §4 is unbuilt —
-  EventBridge plus its own Lambda plus storage, none of it decided.
-  `data_pipeline/` is still a feasibility spike that writes to no database.
+- **Ingestion.** The cron FIRMS poller implied by `Environmental_Assurance_Spec.md`
+  §7–8 (data sources, persistence architecture) is unbuilt — EventBridge plus
+  its own Lambda plus storage, none of it decided. `data_pipeline/` is still a
+  feasibility spike that writes to no database.
 - **Real API endpoints.** The Flask app serves `/api/health` and `/api/hello`
-  only. Everything in UI spec §5 is still mocked in the frontend.
+  only. Everything in `Environmental_Assurance_Spec.md` §24 (API) is still
+  mocked in the frontend.

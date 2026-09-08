@@ -2,8 +2,9 @@ import type { OverlayLayerId } from '../api/types'
 
 // Single source of truth for overlay layer colors — used both for MapLibre
 // paint expressions (MapView) and the layer legend (LayerControlPanel), so
-// the two can never drift apart. See UI spec Section 6: one color scheme,
-// reused everywhere.
+// the two can never drift apart. One color scheme, reused everywhere -- this
+// repo's own convention; `Environmental_Assurance_Spec.md` doesn't specify
+// exact colors.
 export const LAYER_COLORS: Record<OverlayLayerId, string> = {
   firms: '#87091a',
   'sar-backscatter': '#22d3ee',

@@ -1,261 +1,245 @@
 # Environmental Assurance Console — Frontend/UI Specification
 
-**Stack:** Vite + React frontend, Cloudflare Workers backend.
-**Companion document:** `environmental_assurance_spec_v2.md` (data sources,
-ingestion architecture, evidence model, agent design). This document
-covers the UI layer only.
+**Status:** Updated 2026-09-08  
+**Stack:** Vite + React frontend, Cloudflare Workers backend  
+**Canonical companion:** `Environmental_Assurance_Spec.md`
 
 ---
 
-# 1. Two view modes, one shared state
+# 1. UX thesis
 
-The console has exactly two ways of looking at the same underlying event
-data, switched with a persistent toggle in the top-right of the screen:
-**Map** and **Table**.
+The console follows an assurance workflow rather than a territory-wide fire-monitoring workflow. The auditor first defines **where** and **when** the engagement applies, reconstructs the historical event register, screens it temporally, then investigates selected events spatially.
 
-- **Map** is for when spatial relationships carry the answer: is this fire
-  inside a peat dome, does it sit near a concession boundary, does a SAR
-  footprint overlap a projected fire-growth ellipse. Spatial resolution
-  matters more than chronological ordering.
-- **Table** is for when spatial position doesn't matter and time/priority
-  does: an auditor triaging a backlog wants to sort by status, by support
-  score, by which events are still awaiting review — not pan around a map
-  clicking markers one at a time.
-
-Both modes read from the same event/case state. Selecting a row in the
-table pans to and highlights the corresponding marker if the user
-switches to Map mode; selecting a marker in Map mode highlights the
-matching row if they switch to Table. Neither mode is a separate page —
-switching is instant and preserves the current selection.
-
----
-
-# 2. Map mode
-
-## 2.1 Base map
-
-Render on an actual Indonesia basemap using a real, open-source GeoJSON
-boundary source — do not hand-build a custom projection or bake
-coordinates into static paths. Recommended approach: MapLibre GL JS
-(free, open-source, renders GeoJSON and raster tiles natively, built-in
-pan/zoom/bbox querying).
-
-For the country/province outline, use a maintained open-source Indonesia
-GeoJSON dataset rather than generating one, for example:
-- `superpikar/indonesia-geojson` — lightweight province-level boundaries,
-  good default for a fast-loading base layer.
-- A GADM-derived dataset (e.g. `chmdznr/indonesia-geojson` or
-  `wabiwabo/geojson-political-indonesia`) if kabupaten/kota-level
-  granularity is needed for labeling which regency a given event falls in.
-
-This boundary layer is static reference geography — bundle it as a
-frontend asset. It is not fetched through the ingestion API, since it
-doesn't change.
-
-## 2.2 Overlay layers — one consistent pattern for every data source
-
-Every data layer that varies by location and/or date — fire detections,
-SAR backscatter, optical imagery, peat hydrological units, concessions,
-fire-complex links — is added to the map the same way, as either a
-GeoJSON source (points/polygons) or a raster tile source (imagery),
-queried by bounding box and date:
-
-```js
-// point/polygon layers
-map.addSource('firms', {
-  type: 'geojson',
-  data: '/api/overlays/firms?bbox={minLon,minLat,maxLon,maxLat}&date={date}'
-});
-map.addLayer({ id: 'firms-points', type: 'circle', source: 'firms', paint: {...} });
-
-// raster layers (satellite imagery tiles)
-map.addSource('s2-quicklook', {
-  type: 'raster',
-  tiles: ['/api/tiles/s2-quicklook/{z}/{x}/{y}?date={date}'],
-  tileSize: 256
-});
-map.addLayer({ id: 's2-layer', type: 'raster', source: 's2-quicklook' });
-```
-
-Adding a new overlay to the map should always mean "add a source + layer
-pointing at an endpoint," never a bespoke renderer per data type. Every
-overlay layer has a toggle in a layer-control panel (top-left) so the
-auditor can turn individual sensor layers on/off independently.
-
-## 2.3 Timeline scrubber
-
-A horizontal timeline control lets the user scrub backward from the most
-recent pass. Because different sensors have different revisit cadence
-(thermal detections are near-daily, SAR radar passes roughly every few
-days, cloud-free optical imagery is intermittent), the scrubber should
-visibly indicate which overlay layers actually have data available at the
-selected date — greying out or badge-marking a layer with "no pass at
-this date" rather than silently showing stale or missing data. Playback
-(auto-advance through the timeline) should be supported with a play/pause
-control.
-
-## 2.4 Event markers and selection
-
-Each qualified fire event renders as a marker. Two marker states:
-monitored/no active detection, and active detection on the current pass —
-visually distinct (e.g. a quiet outline reticle vs. a filled glow marker)
-so the auditor can tell at a glance which monitored locations are
-currently active. Clicking a marker opens a compact floating info card
-anchored to it, showing current-day conditions (temperature, humidity,
-wind, rainfall) and a button to open the full report (Section 4) if the
-event has qualified for investigation.
-
----
-
-# 3. Table mode
-
-Opens as a full-height sidebar from the right edge; the map stays visible
-and interactive at reduced width underneath rather than being replaced,
-so switching between browsing spatially and scanning the queue doesn't
-lose context.
-
-**Columns, sortable and filterable:**
-
-| Column | Description |
-|---|---|
-| Event / fire-complex ID | Unique identifier |
-| Location | Kabupaten/province, resolved against the admin boundary layer |
-| First detected | Timestamp of the earliest linked detection |
-| Status | Awaiting review / Stage 1 rejected / Stage 2 running / Converged |
-| Top hypothesis | Highest-support theory from the report (Section 4) |
-| Support score | Numeric score for the top hypothesis |
-| Peat classification | Protected dome / production zone / not applicable |
-| Days since last surface detection | For events linked into a multi-detection fire complex |
-
-This is a plain dense sortable table — the goal is scannability for
-triage, not additional charting. Row click selects that event across both
-view modes as described in Section 1.
-
----
-
-# 4. Investigation report
-
-The report for a qualified, investigated event is a synthesized document,
-not a raw transcript of agent-to-agent dialogue. Structure, top to bottom:
-
-## 4.1 Executive summary
-Two to three plain-language sentences summarizing what was found and the
-overall confidence level.
-
-## 4.2 Top 3 theories
-The three highest-support hypotheses, each rendered as a ranked card:
-
-- Hypothesis label
-- Support score, with consistent color coding across the app (e.g. green
-  for high-confidence/benign, red for high-confidence/concerning, grey for
-  inconclusive — pick one scheme and use it everywhere scores appear)
-- Supporting evidence IDs and contradicting evidence IDs, shown as small
-  clickable chips
-- Clicking an evidence chip scrolls to and highlights that evidence's
-  entry in the full reasoning log (Section 4.4)
-
-## 4.3 Data visualization panel
-Inline charts drawn from the event's evidence, for example:
-- Fire-weather index (FWI/KBDI/VPD) trend over the lead-up period
-- SAR backscatter trend showing the drop/persistence signature
-- The fire-growth ellipse projection, rendered as a small map inset
-  showing the modeled extent against the peat boundary
-
-This panel is a first-class part of the report, not an appendix — a
-reader should be able to see the evidence shape without opening the full
-transcript.
-
-## 4.4 Full reasoning log — collapsed by default
-The round-by-round exchange between the investigating agents, available
-behind a "Show full reasoning" disclosure. This preserves complete
-transparency (nothing is hidden, every claim is traceable to an evidence
-ID) without making the raw dialogue the first thing the reader has to
-parse. When expanded, each round shows both agents' position, their
-support/contradiction scores, and whether that round reached agreement.
-
-## 4.5 Limitations
-A short, always-visible list of caveats attached to this specific report
-(e.g. sensor cadence limits, proxy-data caveats) — sourced directly from
-the evidence layer's own limitation flags, not generated fresh by the
-report view.
-
-## 4.6 Stage 1 gate (pre-investigation)
-Before Section 4.1–4.5 render at all, show the Stage 1 validation
-checklist as a distinct step-by-step sequence with a clear pass/reject
-outcome. If the event fails Stage 1, show that outcome plainly and do not
-render Sections 4.1–4.5 — make it visually obvious that no investigation
-budget was spent on a rejected event.
-
----
-
-# 5. Ingestion endpoint contract
-
-All dynamic data — events, overlays, tiles, reports — is served from
-these endpoints. Every listing/overlay endpoint accepts bounding-box and
-date filters so the map viewport and timeline scrubber only ever request
-what's currently visible.
+**Table first = screening. Map second = investigation.** Both operate on the same `AuditScope`, `FireEvent`, `FireEventGraph`, and evidence state.
 
 ```text
-GET /api/events
-    ?bbox=minLon,minLat,maxLon,maxLat
-    &since=ISO8601
-    &status=AMBIGUOUS|REJECTED|STAGE2_RUNNING|CONVERGED
-    -> { events: [ { id, lat, lon, firstDetected, status, ... } ] }
-
-GET /api/events/{event_id}
-    -> full event / fire-complex object
-
-GET /api/overlays/{layer}
-    ?bbox=...&date=...
-    layer in: firms | sar-backscatter | khg | concessions | fire-complex-links
-    -> GeoJSON FeatureCollection
-
-GET /api/tiles/{layer}/{z}/{x}/{y}
-    ?date=...
-    layer in: s2-quicklook | sar-visualization
-    -> raster tile
-
-GET /api/events/{event_id}/report
-    -> report object per Section 4; while an investigation is in progress,
-       returns the same shape with status: "running" and partial fields,
-       so the UI can render an in-progress state without a separate endpoint
+Audit Scope -> Build Fire History -> Historical Fire Register
+           -> select events -> Spatial Investigation Workspace
+           -> Evidence Drawer -> Generate Investigation Analysis
+           -> Add to Audit Evidence Pack -> Human decision
 ```
 
-Report object shape:
+# 2. Create Audit Review
 
-```json
-{
-  "event_id": "IND-02671",
-  "status": "converged",
-  "executive_summary": "string",
-  "top_theories": [
-    { "rank": 1, "hypothesis": "string", "support_score": 78,
-      "evidence_ids": ["E4","E9","E14"], "counter_evidence_ids": ["E2"] }
-  ],
-  "data_visualizations": {
-    "fwi_kbdi_timeseries": [],
-    "sar_backscatter_trend": [],
-    "fire_growth_projection": {}
-  },
-  "limitations": ["string"],
-  "reasoning_log": [
-    { "round": 1, "converged": false,
-      "investigator": { "hypothesis": "string", "support": 0, "contra": 0, "text": "string" },
-      "skeptic":      { "hypothesis": "string", "support": 0, "contra": 0, "text": "string" } }
-  ]
-}
+The landing workflow is a scope form, not an Indonesia-wide map.
+
+Required fields:
+- review start date
+- review end date
+- area under review
+- contextual buffer distance
+
+Preferred area input:
+1. upload management-unit boundary: GeoJSON first for MVP; KML/KMZ/SHP as follow-on
+2. draw polygon on map
+3. lat/lon + radius fallback
+
+Do not provide a public concession-name search that resolves named Indonesian concession polygons. Uploaded geometry is private client/auditor scope data. Company name is optional and must not enter environmental scoring.
+
+After upload, validate geometry, display a preview, calculate bbox/centroid, assign `scope_id`, and clearly show the external context buffer.
+
+# 3. Build Fire History
+
+On `BUILD FIRE HISTORY`:
+1. query FIRMS for scope bbox + context buffer + date range;
+2. apply confidence/non-fire triage;
+3. cluster observations into FireEvents;
+4. classify each event `INSIDE_SCOPE`, `BOUNDARY_INTERSECTING`, or `EXTERNAL_CONTEXT`;
+5. enrich event summaries with cached/cheap weather, peat and recurrence metrics;
+6. index relevant Sentinel-1/Sentinel-2 scenes without blocking the table;
+7. construct candidate FireEventGraph edges.
+
+Show progressive compression prominently, using real computed numbers:
+`raw observations -> qualified observations -> FireEvents -> events requiring review`.
+
+# 4. Historical Fire Register — primary table workspace
+
+The first analysis screen is a dense, full-width table optimized for multi-year temporal review.
+
+Sortable/filterable columns:
+| Column | Purpose |
+|---|---|
+| FireEvent ID | stable event identifier |
+| First detected | temporal ordering |
+| Last detected / duration | persistence |
+| Observation count | cluster support |
+| Scope relation | inside / boundary / external |
+| Distance to boundary | spatial context |
+| Peak FRP | thermal intensity descriptor |
+| Peat overlap | environmental context |
+| Complexity | deterministic investigation feature |
+| Evidence sufficiency | sufficient / partial / insufficient |
+| Relationship | isolated / linked? / graph neighbours |
+| Investigation priority | low / medium / high / urgent |
+| Review state | unreviewed / screened / investigating / added to pack |
+
+Filters should include date range, scope relation, peat, persistence, complexity, evidence sufficiency, priority, and review state. Where data exists, allow land-management context such as replanting/expansion, but never infer intent from it.
+
+Support multi-select. Primary CTA: `INVESTIGATE ON MAP`.
+
+# 5. Spatial Investigation Workspace — Palantir-style map
+
+The map receives selected FireEvents plus graph-relevant contextual neighbours. Do not render the entire historical regional FIRMS archive by default.
+
+Layers:
+- uploaded audit boundary
+- context buffer
+- FireEvents
+- optional raw FIRMS observations for selected event(s)
+- FireEventGraph edges
+- peat
+- wind
+- Sentinel-2
+- Sentinel-1
+- land cover
+- first-order surface propagation envelope
+
+Timeline controls all temporal layers and shows sensor availability. Missing imagery must be shown as missing/no-pass, never silently replaced with stale imagery.
+
+External-context events are visually distinct and cannot be added to the audit subject list unless the user deliberately expands scope.
+
+# 6. Evidence Drawer
+
+Clicking a FireEvent opens a persistent side drawer. Cheap/cached evidence renders immediately; expensive imagery and derived products load progressively.
+
+Immediate summary:
+- event time range and duration
+- observation count / FRP
+- scope relation / distance to boundary
+- peat overlap
+- rainfall / wind / humidity windows
+- historical recurrence
+- surface-spread compatibility
+- nearby prior/subsequent events
+- complexity
+- evidence sufficiency
+
+Satellite section:
+- Sentinel-2 pre/post quicklooks/composites
+- Sentinel-1 pre/post/change evidence
+- acquisition dates, cloud/cadence limitations and provenance
+
+# 7. Inspectable metrics
+
+Metrics are not dead labels. Clicking a metric reveals the evidence behind it:
+- peat overlap -> highlight intersecting area
+- nearby events -> highlight nodes/edges
+- surface-spread compatibility -> observed detections vs first-order ellipse
+- rainfall/wind -> supporting time-series chart
+- Sentinel evidence -> imagery and acquisition metadata
+- complexity -> contributing deterministic features
+
+Every derived metric exposes evidence IDs, source, time window, quality, limitations, algorithm version, and inputs hash where available.
+
+# 8. Explicit AI action
+
+Do not auto-run adversarial AI when an event is clicked. CTA: `GENERATE INVESTIGATION ANALYSIS`.
+
+Before execution, show the evidence package being supplied. Investigator and Skeptic reason only over structured evidence IDs.
+
+Output sections:
+- competing event-history hypotheses
+- supporting and contradicting evidence
+- unresolved disagreement
+- evidence sufficiency
+- limitations
+- recommended field/document verification questions
+
+Do not show private chain-of-thought. Show concise structured arguments and evidence references.
+
+# 9. Hypothesis UI
+
+Default hypotheses:
+- H1 Independent local ignition
+- H2 Surface propagation from earlier neighbouring event
+- H3 Peat-mediated persistence/propagation
+- H4 Multiple related land-management ignitions
+- H5 Regional independent events under shared conducive conditions
+- H6 Other mechanism
+
+Evidence sufficiency is separate: `SUFFICIENT | PARTIAL | INSUFFICIENT`. Support scores are evidence-support scores, not probabilities.
+
+# 10. Audit Evidence Pack workflow
+
+After review, CTA: `ADD TO AUDIT EVIDENCE PACK`. The audit workspace summarizes:
+- FireEvents identified
+- events screened/deprioritized
+- events reviewed
+- events recommended for verification
+- insufficient-evidence events
+- selected evidence-pack events
+
+Final CTA: `GENERATE AUDIT FIRE REVIEW`. The output is engagement-level, not merely one-fire-at-a-time.
+
+Required sections: scope metadata; boundary/date definition; screening summary; selected events; maps/timelines; evidence; adversarial analyses; unresolved questions; fieldwork priorities; provenance; human notes; disclaimer.
+
+# 11. Safety and scope semantics
+
+- Score events, not companies.
+- Boundary membership is context, not responsibility.
+- First detection inside a boundary does not establish origin there.
+- External events may inform interpretation but are not automatically audit subjects.
+- Client identity must not alter physical/environmental scores.
+- No public worst-company leaderboard or searchable accusation interface.
+- Use neutral language: `requires verification`, `compatible with`, `not established`, `insufficient evidence`.
+
+# 12. Shared state
+
+Core client state:
+```ts
+type AuditScope = {
+  id: string;
+  label?: string;
+  reviewStart: string;
+  reviewEnd: string;
+  geometryRef: string;
+  bbox: [number, number, number, number];
+  contextBufferKm: number;
+};
+
+type ScopeRelation = 'INSIDE_SCOPE' | 'BOUNDARY_INTERSECTING' | 'EXTERNAL_CONTEXT';
 ```
 
----
+Persist selection across table/map. Switching from table to map preserves selected events, filters, date window and audit scope.
 
-# 6. Visual language guidelines
+# 13. API contract additions
 
-- Keep a single, consistent color scheme for confidence/status across the
-  entire app (map markers, table status column, report support scores) —
-  the same three or four colors should mean the same thing everywhere.
-- Distinguish "monitored, quiet" from "active detection" states clearly
-  in both map markers and table rows.
-- The Stage 1 gate (Section 4.6) should feel procedural and visibly
-  real — a step-by-step checklist with individual pass/fail states, not
-  a single spinner — since demonstrating that the gate does real
-  filtering work is part of the product's value proposition.
+```text
+POST /api/audits
+POST /api/audits/{audit_id}/scope/upload
+POST /api/audits/{audit_id}/history/build
+GET  /api/audits/{audit_id}/events
+     ?since=&until=&scope_relation=&priority=&complexity=&review_state=
+GET  /api/audits/{audit_id}/events/{event_id}
+GET  /api/audits/{audit_id}/events/{event_id}/evidence
+GET  /api/audits/{audit_id}/graph?event_ids=...
+POST /api/audits/{audit_id}/events/{event_id}/analyse
+POST /api/audits/{audit_id}/events/{event_id}/add-to-pack
+POST /api/audits/{audit_id}/report
+GET  /api/audits/{audit_id}/report
+```
+
+Overlay/tile endpoints must accept audit scope, bbox and time constraints.
+
+# 14. Progressive loading
+
+`Build Fire History` must not wait for every satellite product. Table rows appear once clustering and cheap enrichment complete. Sentinel scene metadata and imagery hydrate asynchronously. Evidence Drawer shows explicit loading/availability states per source.
+
+# 15. Visual language
+
+Maintain the dark operational visual language, but optimize for assurance rather than command-and-control. The table should feel like a review register; the map like an evidence investigation workspace. Distinguish observed evidence, derived metrics, AI interpretation and human decisions visually and structurally.
+
+# 16. MVP acceptance criteria
+
+- user can create an audit review with date range + GeoJSON boundary or lat/lon fallback
+- system applies configurable context buffer
+- historical FIRMS observations are clustered into FireEvents
+- table is the first populated analysis view
+- table supports scope/date/risk/review filtering and multi-select
+- selected events open on map with contextual neighbours
+- clicking event opens Evidence Drawer immediately
+- S1/S2 imagery loads asynchronously with provenance/limitations
+- important metrics are inspectable
+- AI runs only on explicit request and uses evidence IDs
+- user can add reviewed events to engagement-level evidence pack
+- final report preserves uncertainty and does not establish blame/intent/legal responsibility

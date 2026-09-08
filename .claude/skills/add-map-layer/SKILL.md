@@ -5,10 +5,13 @@ description: Add or change an overlay layer on the console map (FIRMS, SAR, KHG 
 
 # Adding a map overlay layer
 
-The UI spec (`DesignSpecs/assurance_console_ui_spec.md` §2.2) is explicit:
-adding an overlay means **"add a source + layer pointing at an endpoint"**,
-never a bespoke renderer per data type. If a change needs custom drawing code
-per data source, it is going the wrong way.
+The canonical spec (`DesignSpecs/Environmental_Assurance_Spec.md` §13,
+Spatial Investigation Workspace) lists the map's overlay layers. The
+implementation convention this repo follows — **"add a source + layer
+pointing at an endpoint," never a bespoke renderer per data type** — is an
+engineering convention, not spec text, but it still governs how you add one.
+If a change needs custom drawing code per data source, it is going the wrong
+way.
 
 ## The five files, in order
 
@@ -22,8 +25,8 @@ per data source, it is going the wrong way.
    `layerVisibility` initial record with a sensible default. Layers that are
    noisy or expensive default to `false`.
 4. **`frontend/src/lib/layerColors.ts`** — add the colour. Do not inline a hex
-   in a component; the UI spec requires one consistent scheme across map
-   markers, table status, and report scores.
+   in a component; this repo keeps one consistent scheme across map markers,
+   table status, and report scores.
 5. **`frontend/src/components/map/MapView.tsx`** — a `useOverlay(...)` call
    and a `<Source>` / `<Layer>` pair, guarded on the data being non-null.
    Then **`LayerControlPanel.tsx`** — an entry in `GEOJSON_LAYERS` or
@@ -35,21 +38,25 @@ per data source, it is going the wrong way.
 If the layer comes from a sensor with a real revisit cadence, add its
 available dates to `frontend/src/api/fixtures/dates.ts` and, if it should show
 in the scrubber's availability badges, to `DATE_GATED_LAYERS` in
-`TimelineScrubber.tsx`. The spec (§2.3) requires the UI to show "no pass at
-this date" rather than silently rendering stale or empty data. Sparse SAR
-coverage is the honest picture, not a gap to paper over.
+`TimelineScrubber.tsx`. The canonical spec (§13) requires the timeline to
+expose sensor availability and missing passes rather than silently rendering
+stale or empty data. Sparse SAR coverage is the honest picture, not a gap to
+paper over.
 
 ## Known seams to respect
 
 - `client.ts` is the swap point for a real backend — every fetch mirrors the
-  endpoint contract in UI spec §5. New layers fetch through `useOverlay`, not
-  through a direct `fetch` in a component. (`isLayerAvailable` is currently
-  imported straight from fixtures in `TimelineScrubber` — a hole in that seam,
-  don't widen it.)
+  endpoint contract in `Environmental_Assurance_Spec.md` §24 (API). New layers
+  fetch through `useOverlay`, not through a direct `fetch` in a component.
+  (`isLayerAvailable` is currently imported straight from fixtures in
+  `TimelineScrubber` — a hole in that seam, don't widen it.)
 - `fetchEvents`/`fetchOverlay` accept a bbox that nothing currently passes.
   If viewport-driven fetching gets wired up, it goes there, not into MapView.
 - A layer sourced from real pipeline output must state so in its caption, with
   its date range, the way the FIRMS pipeline toggle does — the demo must never
   blur which data is real and which is a fixture.
-- Never render or store raw concession/peatland boundary geometry (spec v2
-  §2). Attribute lookups only.
+- An auditor-uploaded audit-scope boundary may now be stored privately
+  (`Environmental_Assurance_Spec.md` §6.2–6.3) — that policy changed from the
+  legacy specs' blanket "never store boundary geometry." What is still a hard
+  non-goal (§4) is a *public* named-concession directory or rendering
+  third-party concession polygons beyond an attribute-only lookup.

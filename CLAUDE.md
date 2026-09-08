@@ -25,13 +25,18 @@ frontend/       Vite + React + TS console (MapLibre, Tailwind 4, zustand, rechar
 backend/        Flask API — runs locally via wsgi.py, on Lambda via lambda_handler.py
 infra/          Terraform: Lambda + API Gateway HTTP API, applied by CI
 data_pipeline/  Python feasibility spike for the environmental data sources
-DesignSpecs/    The specs. v2 supersedes v1's Stage 0/1; UI spec covers the console.
+DesignSpecs/    The specs. Environmental_Assurance_Spec.md is canonical; the
+                other three are superseded legacy documents kept for history.
 ```
 
-Read the specs in this order: `environmental_assurance_claude_code_spec.md`
-(overview) → `environmental_assurance_spec_v2.md` (peatland-aware
-architecture, supersedes v1 §0–1) → `assurance_console_ui_spec.md` (UI + API
-contract).
+Read `Environmental_Assurance_Spec.md` — it is the single source of truth,
+consolidating the original Claude Code build spec, the peatland-aware v2
+architecture, and the UI spec into one audit-scope-first document. Where the
+three legacy files (`environmental_assurance_claude_code_spec.md`,
+`environmental_assurance_spec_v2.md`, `assurance_console_ui_spec.md`)
+conflict with it, the canonical file wins. Each legacy file carries a
+"2026-09-08 Canonical Audit-Workflow Update" banner pointing back here; don't
+cite a legacy section number in new code or docs.
 
 Check [`docs/decision-log.md`](docs/decision-log.md) before changing anything
 architectural — it records what was already tried and rejected, and why.
@@ -62,8 +67,8 @@ python -m data_pipeline.run_all
 
 The console is **mostly** fixture-driven, and moving off fixtures happens one
 endpoint at a time through the seam in `frontend/src/api/client.ts`. Keep that
-seam intact: every function there mirrors UI spec §5, so a caller cannot tell
-which are real.
+seam intact: every function there mirrors `Environmental_Assurance_Spec.md`
+§24 (API), so a caller cannot tell which are real.
 
 Real: `GET /api/events` and `GET /api/events/{id}`, served by Flask from
 `backend/app/data/events.json`. Still fixtures in the browser:
@@ -144,8 +149,11 @@ an unrelated problem; if a bump is genuinely required, say so in the PR.
   gotchas rather than restating the line below — match that.
 - One colour scheme for confidence/status everywhere (`lib/layerColors.ts`,
   the Tailwind `--color-status-*` tokens). No inline hexes in components.
-- Never render or store raw concession/peatland boundary geometry — attribute
-  lookups only (spec v2 §2).
+- Never build a public named-concession directory or render third-party
+  concession geometry beyond an attribute-only lookup
+  (`Environmental_Assurance_Spec.md` §4). An auditor's own uploaded
+  management-unit boundary is different: it is legitimate private audit-scope
+  data and may be stored tenant-scoped/encrypted (§6.2–6.3).
 - Comments and commit messages are written for the other person on this team,
   who does not have your context. Say what was rejected and why, not only what
   was chosen.

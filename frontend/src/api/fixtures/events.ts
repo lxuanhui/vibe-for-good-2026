@@ -15,7 +15,7 @@ export const CASE_A: FireEvent = {
   lon: 101.447,
   location: 'Pekanbaru, Riau',
   firstDetected: '2026-09-05T06:12:00Z',
-  status: 'STAGE1_REJECTED',
+  status: 'LIKELY_NON_FIRE',
   qualifiesForInvestigation: false,
   peatClassification: 'not_applicable',
   detections: [
@@ -97,8 +97,9 @@ export const CASE_B: FireEvent = {
 // Case C — the flagship fire-complex resurfacing case. A surface fire is
 // lost by FIRMS on day 3, SAR shows a persistent burn signature under the
 // same peat dome through day 9, and a new detection 2km away on day 10
-// (today) sits inside the projected fire-growth ellipse. See v2 spec
-// Section 7/8/12.
+// (today) sits inside the projected fire-growth ellipse. See
+// `Environmental_Assurance_Spec.md` §12 (FireEventGraph), §14 (surface
+// fire-growth compatibility), and §15 (peat-aware reasoning).
 export const CASE_C: FireEvent = {
   id: 'IND-02671',
   fireComplexId: 'FC-2026-0091',
