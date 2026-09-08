@@ -108,10 +108,12 @@ artifact, because scipy/pandas would take the Lambda bundle to the edge of its
 250 MB limit and the derivation is identical for every caller. Nothing
 persists yet: no module touches a database, an S3 bucket, or any store.
 
-The console consumes them. `components/audit/HistoricalInvestigation.tsx`
-is the register, the investigation map, the evidence drawer and the pack view,
-gated behind the scope-entry flow in `components/scope/AuditStart.tsx`. Events
-are typed `AuditEventSummary`, deliberately **not** `FireEvent` — that type
+The console consumes them. `components/scope/ScopedMapLanding.tsx` is the
+map-first landing surface for the bounded demo scope, and
+`components/audit/HistoricalInvestigation.tsx` is the register, investigation
+map, evidence drawer and pack view. `components/scope/AuditStart.tsx` remains
+the scope-entry and history-build panel over the map. Events are typed
+`AuditEventSummary`, deliberately **not** `FireEvent` — that type
 requires `location`, `peatClassification` and `currentConditions`, none of
 which FIRMS-only data can honestly supply, and widening it with optionals
 would make a real event and a fixture indistinguishable to the compiler. Keep
@@ -132,9 +134,10 @@ The spike's negative results are still the valuable part of `sources/` (FIRMS
 `day_range` caps at 5 not 10; Overpass attic queries silently return empty;
 NASA FIRMS needs `truststore` for TLS).
 
-The only real data reaching the UI is a static FIRMS export from the 2019
-haze window, behind its own clearly-labelled toggle. The demo must never blur
-which data is real and which is a fixture.
+The real derived 2019 FIRMS artifact now reaches the map through
+`GET /api/audits/{id}/events`, framed to the demo audit scope and context
+buffer. The static FIRMS export remains behind its own clearly-labelled toggle.
+The demo must never blur which data is real and which is a fixture.
 
 ## Skills
 

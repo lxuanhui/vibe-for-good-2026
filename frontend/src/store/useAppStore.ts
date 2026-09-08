@@ -45,7 +45,7 @@ export const useAppStore = create<AppState>((set) => ({
   togglePlaying: () => set((s) => ({ isPlaying: !s.isPlaying })),
 
   layerVisibility: {
-    firms: true,
+    firms: false,
     'sar-backscatter': false,
     khg: true,
     concessions: false,
@@ -62,7 +62,7 @@ export const useAppStore = create<AppState>((set) => ({
 
   auditId: null,
   registerSelection: [],
-  setAuditSession: (auditId, selection = []) => set({ auditId, registerSelection: selection, viewMode: 'table' }),
+  setAuditSession: (auditId, selection = []) => set({ auditId, registerSelection: selection }),
   toggleRegisterSelection: (id) =>
     set((s) => ({ registerSelection: s.registerSelection.includes(id) ? s.registerSelection.filter((value) => value !== id) : [...s.registerSelection, id] })),
   clearRegisterSelection: () => set({ registerSelection: [] }),

@@ -30,7 +30,7 @@ function DualDot({ colorA, colorB }: { colorA: string; colorB: string }) {
 const GEOJSON_LAYERS: { id: OverlayLayerId; label: string; swatch: ReactNode; caption?: string }[] = [
   {
     id: 'firms',
-    label: 'FIRMS thermal hotspots',
+    label: 'FIRMS archive (static export)',
     swatch: <Dot color={LAYER_COLORS.firms} />,
     caption: `Mock cases + real NASA FIRMS pull (21,519 pts across ${PIPELINE_FIRMS_DATE_RANGE[0]} → ${PIPELINE_FIRMS_DATE_RANGE[1]}) — scrub the timeline to move between the two`,
   },
@@ -54,7 +54,7 @@ const RASTER_LAYERS: { id: RasterLayerId; label: string }[] = [
   { id: 'sar-visualization', label: 'SAR visualization' },
 ]
 
-export function LayerControlPanel() {
+export function LayerControlPanel({ scoped = false }: { scoped?: boolean }) {
   const layerVisibility = useAppStore((s) => s.layerVisibility)
   const toggleLayer = useAppStore((s) => s.toggleLayer)
 
@@ -62,7 +62,7 @@ export function LayerControlPanel() {
     <div className="pointer-events-auto w-64 rounded-lg border border-border-strong bg-panel/95 p-3 shadow-lg backdrop-blur">
       <div className="mb-2 text-[11px] font-semibold tracking-wide text-text-faint uppercase">Layers</div>
       <div className="space-y-1">
-        {GEOJSON_LAYERS.map((l) => (
+        {(scoped ? GEOJSON_LAYERS.filter((layer) => layer.id === 'firms') : GEOJSON_LAYERS).map((l) => (
           <Toggle
             key={l.id}
             label={l.label}
@@ -73,19 +73,12 @@ export function LayerControlPanel() {
           />
         ))}
       </div>
-      <div className="my-2 border-t border-border" />
-      <div className="space-y-0.5">
-        {RASTER_LAYERS.map((l) => (
-          <Toggle
-            key={l.id}
-            label={l.label}
-            checked={false}
-            disabled
-            disabledHint="No tile data in mock mode"
-            onChange={() => {}}
-          />
-        ))}
-      </div>
+      {!scoped && <><div className="my-2 border-t border-border" />
+        <div className="space-y-0.5">
+          {RASTER_LAYERS.map((l) => (
+            <Toggle key={l.id} label={l.label} checked={false} disabled disabledHint="No tile data in mock mode" onChange={() => {}} />
+          ))}
+        </div></>}
       <div className="my-2 border-t border-border" />
       <div className="text-[11px] font-semibold tracking-wide text-text-faint uppercase">Event markers</div>
       <div className="mt-1.5 space-y-1 text-xs text-text-muted">
