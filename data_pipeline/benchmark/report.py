@@ -16,13 +16,20 @@ estimate of what operating the real public tools requires, not a timed
 human trial; the automated side (`automated_run.py`) is a real, timed run
 of this repo's own pipeline code.
 """
+
 from __future__ import annotations
 
 import json
 from dataclasses import dataclass
 
-from data_pipeline.benchmark.automated_run import AutomatedBenchmarkResult, run_automated_benchmark
-from data_pipeline.benchmark.manual_estimate import ManualBenchmarkResult, manual_benchmark_total
+from data_pipeline.benchmark.automated_run import (
+    AutomatedBenchmarkResult,
+    run_automated_benchmark,
+)
+from data_pipeline.benchmark.manual_estimate import (
+    ManualBenchmarkResult,
+    manual_benchmark_total,
+)
 from data_pipeline.config import OUTPUT_DIR
 
 SCOPE_NOTE = (
@@ -64,7 +71,9 @@ def build_report(buffer_km: float = 5.0) -> WorkloadReductionReport:
     manual_seconds = manual.total_minutes * 60.0
     automated_seconds = automated.total_seconds
     percent_reduction = (
-        round((1 - automated_seconds / manual_seconds) * 100, 1) if manual_seconds else 0.0
+        round((1 - automated_seconds / manual_seconds) * 100, 1)
+        if manual_seconds
+        else 0.0
     )
 
     return WorkloadReductionReport(
@@ -83,8 +92,12 @@ def _demo() -> None:
 
     report = build_report()
 
-    print(f"Manual estimate:    {report.manual.total_minutes:.1f} min ({report.manual_seconds:.0f}s)")
-    print(f"Automated run:      {report.automated_seconds:.2f}s for event {report.automated.event_id}")
+    print(
+        f"Manual estimate:    {report.manual.total_minutes:.1f} min ({report.manual_seconds:.0f}s)"
+    )
+    print(
+        f"Automated run:      {report.automated_seconds:.2f}s for event {report.automated.event_id}"
+    )
     print(f"Reduction for this task: {report.percent_reduction:.1f}%")
     print()
     print(
@@ -92,11 +105,15 @@ def _demo() -> None:
         f"{report.automated.event_count} ({report.automated.observations_to_events_compression}x)"
     )
     print(
-        f"FireEvents -> human-review queue: {report.automated.events_to_review_queue_compression}x "
+        f"FireEvents -> human-review queue: {report.automated.event_count} -> "
+        f"{report.automated.review_queue_count} "
+        f"({report.automated.events_to_review_queue_compression}x) "
         f"-- {report.automated.events_to_review_queue_note}"
     )
     print(f"Evidence-field completeness: {report.automated.evidence_completeness}")
-    print(f"Manual interactions in the automated run: {report.automated.manual_interactions}")
+    print(
+        f"Manual interactions in the automated run: {report.automated.manual_interactions}"
+    )
 
     out_path = OUTPUT_DIR / "workload_reduction_report.json"
     out_path.write_text(json.dumps(report.to_dict(), indent=2))
