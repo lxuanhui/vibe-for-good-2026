@@ -150,6 +150,63 @@ So for any change that touches rendering, the map, or a frontend dependency,
 open the app and look at it before merging. If you cannot, say so in the PR
 rather than letting green checks imply a verification that did not happen.
 
+## Closing the loop
+
+An issue is closed by the pull request that finishes it, not by hand and not
+in advance. Put `Closes #n` in the PR description and let the merge do it, so
+the issue and the commit that satisfied it are linked forever. `Refs #n` when
+the PR advances an issue without finishing it.
+
+**Closed must mean shipped.** Closing an issue while its work sits in an
+unmerged branch is the failure to avoid: it has already happened here, when
+six issues were closed the evening before the PR carrying them landed, so the
+backlog said "done" while `main` had none of it. Anyone reading the issue list
+to see what exists got the wrong answer.
+
+If a PR does only part of an issue:
+
+- Leave the issue open, and comment saying which boxes are ticked and which
+  are not. A half-done issue that looks done is worse than an untouched one.
+- Do not silently widen the PR to finish it either. Scope that grew mid-branch
+  is scope the other person did not agree to.
+
+**Problems found along the way become their own issue, linked.** When you hit
+something real that is not what you were sent to fix — a stale claim, a
+measurement that contradicts a design, a dependency that cannot resolve —
+open an issue for it and reference it from the PR and from the original issue.
+Do not fix it quietly in an unrelated branch, and do not leave it in a PR
+comment where it will not be found again. If it invalidates something already
+decided, say so on the decision-log entry too.
+
+Cross-link both ways. An issue that mentions the PR and a PR that mentions the
+issue is the only trail either of you will have when the other's agent did the
+work.
+
+## Keeping "State of things" true
+
+`CLAUDE.md`'s **State of things** is what a fresh session reads to find out
+which endpoints are real, which data is invented, and what is wired to
+nothing. It is the most-read prose in the repo and the easiest to leave
+behind, because nothing fails when it goes stale.
+
+So it is maintained the same way the decision log is: **if your change makes a
+sentence there wrong, fix that sentence in the same PR.** It is nearly always
+one line. Things that make it wrong:
+
+- An endpoint stops being a fixture, or starts being one.
+- A module that was "wired to nothing" gets wired to something.
+- A component named there is deleted, renamed, or unmounted.
+- A limit it states stops being true.
+
+Two failure modes this prevents, both of which have already happened here. A
+paragraph said no frontend called the audit endpoints for as long as it took
+someone to notice, while agents read it and planned around a gap that had
+closed. And two PRs eventually fixed the same stale paragraph independently
+and conflicted on it, because each author found it separately.
+
+Do not add a status document instead. The issue list and the decision log
+already carry progress, and a third surface is a third thing to forget.
+
 ## Recording the decision
 
 If the change settles something an agent would otherwise re-litigate — an
