@@ -34,15 +34,22 @@ call `fetch('/api/hello')` with no CORS setup in development.
 
 The console opens with the audit-scope-first review flow: review dates, a
 private GeoJSON management-unit boundary, and a configurable context buffer
-are validated and previewed before the history-build handoff. The handoff
-only carries the anonymised audit/session scope in this issue; historical
-reconstruction is a later pipeline step.
+are validated and previewed before the history build. The known demo case
+uses the committed real 2019 FIRMS dataset as a clearly labelled cached
+reconstruction and returns its measured build-handoff time. The register then
+shows raw observations, qualified observations, clustered FireEvents, events
+requiring human review, and events selected for the engagement pack.
 
-`GET /api/events` and `GET /api/events/{id}` are served by Flask; the rest of
-the legacy event investigation console still renders from fixtures in
-`frontend/src/api/client.ts`, which
-mirror the endpoint contract in `Environmental_Assurance_Spec.md` §24 so each
-one can be swapped for a real call without touching any caller.
+The real demo path uses the audit-scoped Flask endpoints:
+`POST /api/audits`, `POST /api/audits/{id}/scope/upload`,
+`POST /api/audits/{id}/history/build`, `GET /api/audits/{id}/events`,
+`GET /api/audits/{id}/events/{event_id}/evidence`, the graph endpoint, pack
+actions, and `GET /api/audits/{id}/report`. These serve the committed cached
+real historical artifact described in [`docs/demo.md`](docs/demo.md).
+
+`GET /api/events` and `GET /api/events/{id}`, plus the older event investigation
+components, remain an explicitly separate fixture path in
+`frontend/src/api/client.ts`; they are not used by the audit-scope demo.
 
 ## Getting started
 

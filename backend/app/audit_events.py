@@ -1,6 +1,6 @@
 """Reconstructed event history for an audit scope, per §24's read endpoints.
 
-Serves the artifact `data_pipeline/export_audit_events.py` produces: real
+Serves the artifacts `data_pipeline/export_audit_events.py` produces: real
 FIRMS observations, clustered into FireEvents and run through Stage-1 triage
 offline. The API does no clustering -- see that module for why.
 
@@ -199,6 +199,12 @@ def _load_triage_detail() -> dict[str, Any]:
     return _read_gzipped_json(TRIAGE_PATH)
 
 
+def _triage_for_audit(audit_id: str) -> dict[str, Any]:
+    """Resolve the cached demo detail through an anonymised audit session."""
+    details = _load_triage_detail()
+    return details.get(audit_id) or details.get("demo-2019-haze", {})
+
+
 def get_audit(audit_id: str) -> dict[str, Any] | None:
     """The reconstructed history for an audit id, if one has been built."""
     artifact = _load_events()["audits"].get(audit_id)
@@ -223,6 +229,8 @@ def get_audit(audit_id: str) -> dict[str, Any] | None:
             "eventCount": demo_scope["eventCount"],
             "reviewQueueCount": demo_scope["reviewQueueCount"],
             "compression": demo_scope["compression"],
+            "rawObservations": demo_scope["rawObservations"],
+            "qualifiedObservations": demo_scope["qualifiedObservations"],
         },
         "events": demo["events"],
     }
@@ -246,6 +254,40 @@ def history_status(audit_id: str) -> str:
 def source_provenance() -> dict[str, Any]:
     """Where the observations came from, and which parts are derived."""
     return _load_events()["source"]
+
+
+def progression(audit_id: str) -> dict[str, Any] | None:
+    """Return current real-dataset compression and engagement review counts."""
+    audit = get_audit(audit_id)
+    if audit is None:
+        return None
+    source = source_provenance()
+    scope = audit["scope"]
+    pack = AUDIT_PACKS.get(audit_id, {})
+    return {
+        "rawObservations": source.get("rawObservations", source.get("observationsUsed")),
+        "qualifiedObservations": source.get("qualifiedObservations", source.get("observationsUsed")),
+        "fireEvents": len(audit["events"]),
+        "requiringHumanReview": scope.get("reviewQueueCount", 0),
+        "selected": len(pack),
+        "selectedEventIds": sorted(pack),
+        "compression": scope.get("compression"),
+    }
+
+
+def cached_reconstruction_ready(audit_id: str) -> bool:
+    """Check both committed artifacts before reporting a build as ready.
+
+    The register and evidence drawer intentionally load separate compressed
+    files. Reading both here makes the reported handoff time cover the real
+    cached reconstruction that the next screens depend on, rather than only
+    the list summaries.
+    """
+    audit = get_audit(audit_id)
+    if audit is None:
+        return False
+    details = _triage_for_audit(audit_id)
+    return isinstance(details, dict) and len(details) == len(audit["events"])
 
 
 def parse_bbox(raw: str | None) -> tuple[float, float, float, float] | None:
@@ -337,7 +379,7 @@ def find_event(audit_id: str, event_id: str) -> dict[str, Any] | None:
     summary = next((e for e in audit["events"] if e["eventId"] == event_id), None)
     if summary is None:
         return None
-    detail = _load_triage_detail().get(audit_id, {}).get(event_id)
+    detail = _triage_for_audit(audit_id).get(event_id)
     # The rule-by-rule breakdown and its evidence objects: what makes the
     # Stage-1 outcome inspectable rather than asserted (§17).
     return {**summary, "triageDetail": detail}
@@ -545,7 +587,7 @@ def audit_report(audit_id: str) -> dict[str, Any] | None:
             "ai": "No AI analysis is available in the current FIRMS audit artifact.",
             "source": source,
         },
-        "compressionSummary": scope.get("compression", {}),
+        "compressionSummary": {**(scope.get("compression", {}) if isinstance(scope.get("compression"), dict) else {}), **(progression(audit_id) or {})},
         "counts": _report_counts(audit, entries, evidence),
         "selectedFireEvents": [{"event": event, "review": pack[event["eventId"]], "evidence": item} for event, item in zip(selected, evidence)],
         "maps": {"selectedEventIds": [event["eventId"] for event in selected], "layers": graph["layers"]},

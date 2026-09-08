@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { fetchAuditEventEvidence, fetchInvestigationMap } from '../../api/client'
 import type { EventEvidenceResponse, EvidenceObject, InvestigationMap } from '../../api/types'
+import { Button } from '../ui/Button'
 
 function valueText(value: unknown): string {
   if (value == null) return 'not evaluated'
@@ -55,15 +56,18 @@ function GraphEvidence({ graph }: { graph: InvestigationMap | undefined }) {
 export function EvidenceDrawer({ auditId, eventId, onClose }: { auditId: string; eventId: string; onClose: () => void }) {
   const [state, setState] = useState<{ loading: boolean; data?: EventEvidenceResponse; error?: string }>({ loading: true })
   const [graph, setGraph] = useState<InvestigationMap>()
-  useEffect(() => {
-    let active = true
+  const loadEvidence = useCallback(async () => {
     setState({ loading: true })
     setGraph(undefined)
-    Promise.all([fetchAuditEventEvidence(auditId, eventId), fetchInvestigationMap(auditId, [eventId])]).then(([data, map]) => {
-      if (active) { setState({ loading: false, data }); setGraph(map) }
-    }).catch((reason: unknown) => { if (active) setState({ loading: false, error: reason instanceof Error ? reason.message : 'Evidence could not be loaded.' }) })
-    return () => { active = false }
+    try {
+      const [data, map] = await Promise.all([fetchAuditEventEvidence(auditId, eventId), fetchInvestigationMap(auditId, [eventId])])
+      setState({ loading: false, data })
+      setGraph(map)
+    } catch (reason) { setState({ loading: false, error: reason instanceof Error ? reason.message : 'Evidence could not be loaded.' }) }
   }, [auditId, eventId])
+  useEffect(() => {
+    void loadEvidence()
+  }, [loadEvidence])
   const grouped = useMemo(() => {
     const items = state.data?.derivedEvidence ?? []
     const categories = ['peat', 'weather', 'surface', 'propagation', 'imagery']
@@ -80,7 +84,7 @@ export function EvidenceDrawer({ auditId, eventId, onClose }: { auditId: string;
   return <aside aria-label="FireEvent evidence drawer" className="absolute top-0 right-0 z-20 h-full w-[min(440px,92vw)] overflow-y-auto border-l border-border-strong bg-panel/98 text-text shadow-2xl">
     <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border-strong bg-panel px-4 py-3"><div><div className="text-sm font-semibold">FireEvent evidence</div><div className="font-mono text-[10px] text-accent">{eventId}</div></div><button className="text-xs text-text-muted hover:text-text" onClick={onClose} aria-label="Close evidence drawer">CLOSE</button></div>
     {state.loading && <div role="status" className="p-4 text-xs text-text-muted">Loading current-audit evidence...</div>}
-    {state.error && <div role="alert" className="m-4 rounded border border-status-urgent/40 bg-status-urgent/10 p-3 text-xs text-red-200">{state.error}</div>}
+    {state.error && <div role="alert" className="m-4 rounded border border-status-urgent/40 bg-status-urgent/10 p-3 text-xs text-red-200"><div>{state.error}</div><Button className="mt-2" onClick={() => void loadEvidence()}>RETRY EVIDENCE</Button></div>}
     {state.data && <>
       <Section title="Summary"><div className="grid grid-cols-2 gap-2 text-xs"><div><span className="text-text-muted">Scope relation</span><div>{state.data.scopeRelation}</div></div><div><span className="text-text-muted">Sufficiency</span><div>{state.data.evidenceSufficiency.value}</div></div><div><span className="text-text-muted">Chronology</span><div>{state.data.event.firstDetection.slice(0, 16)} → {state.data.event.lastDetection.slice(0, 16)}</div></div><div><span className="text-text-muted">Observations</span><div>{state.data.event.observationCount} · max FRP {state.data.event.maxFrp?.toFixed(2) ?? '—'} MW</div></div></div><p className="mt-2 text-[10px] text-text-muted">{state.data.evidenceSufficiency.reason}</p></Section>
       <Section title="Observed evidence"><EvidenceList items={state.data.observedEvidence} /></Section>

@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Map, Marker, Source, Layer } from 'react-map-gl/maplibre'
 import type { FeatureCollection, Point, LineString, Geometry } from 'geojson'
-import type { AuditEventSummary, AuditScope, InvestigationMap } from '../../api/types'
+import type { AuditEventSummary, AuditProgression, AuditScope, InvestigationMap } from '../../api/types'
 import { addToAuditPack, fetchAuditRegister, fetchInvestigationMap, removeFromAuditPack } from '../../api/client'
 import { useAppStore } from '../../store/useAppStore'
 import { Button } from '../ui/Button'
@@ -68,26 +68,58 @@ export function HistoricalInvestigation({ scope }: { scope: AuditScope }) {
   const [events, setEvents] = useState<AuditEventSummary[]>([])
   const [investigation, setInvestigation] = useState<InvestigationMap | null>(null)
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [progression, setProgression] = useState<AuditProgression | null>(null)
+  const [mapLoading, setMapLoading] = useState(false)
   const [packed, setPacked] = useState<string[]>([])
 
-  useEffect(() => { fetchAuditRegister(scope.audit_id, { since: scope.review_start, until: scope.review_end }).then(setEvents).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : 'Register could not be loaded.')) }, [scope.audit_id, scope.review_start, scope.review_end])
+  const loadRegister = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const result = await fetchAuditRegister(scope.audit_id, { since: scope.review_start, until: scope.review_end })
+      setEvents(result.events)
+      setProgression(result.progression)
+      setPacked(result.progression.selectedEventIds)
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Register could not be loaded.') } finally { setLoading(false) }
+  }, [scope.audit_id, scope.review_start, scope.review_end])
+  useEffect(() => { void loadRegister() }, [loadRegister])
   const selectedEvents = useMemo(() => events.filter((event) => selection.includes(event.eventId)), [events, selection])
 
   async function investigate() {
     setError('')
-    try { setInvestigation(await fetchInvestigationMap(scope.audit_id, selection)); setViewMode('map') } catch (reason) { setError(reason instanceof Error ? reason.message : 'Map handoff failed.') }
+    setMapLoading(true)
+    try { setInvestigation(await fetchInvestigationMap(scope.audit_id, selection)); setViewMode('map') } catch (reason) { setError(reason instanceof Error ? reason.message : 'Map handoff failed.') } finally { setMapLoading(false) }
   }
 
-  async function addEvent(eventId: string) { try { await addToAuditPack(scope.audit_id, eventId); setPacked((ids) => ids.includes(eventId) ? ids : [...ids, eventId]) } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not add event to pack.') } }
-  async function removeEvent(eventId: string) { try { await removeFromAuditPack(scope.audit_id, eventId); setPacked((ids) => ids.filter((id) => id !== eventId)) } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not remove event from pack.') } }
+  async function addEvent(eventId: string) {
+    try {
+      await addToAuditPack(scope.audit_id, eventId)
+      const alreadyPacked = packed.includes(eventId)
+      setPacked((ids) => alreadyPacked || ids.includes(eventId) ? ids : [...ids, eventId])
+      setProgression((current) => current ? { ...current, selected: current.selected + (alreadyPacked ? 0 : 1), selectedEventIds: alreadyPacked ? current.selectedEventIds : [...current.selectedEventIds, eventId] } : current)
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not add event to pack.') }
+  }
+
+  async function removeEvent(eventId: string) {
+    try {
+      await removeFromAuditPack(scope.audit_id, eventId)
+      const wasPacked = packed.includes(eventId)
+      setPacked((ids) => ids.filter((id) => id !== eventId))
+      setProgression((current) => current ? { ...current, selected: Math.max(0, current.selected - (wasPacked ? 1 : 0)), selectedEventIds: current.selectedEventIds.filter((id) => id !== eventId) } : current)
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not remove event from pack.') }
+  }
 
   if (viewMode === 'report') return <AuditReportView auditId={scope.audit_id} onBack={() => setViewMode('table')} />
   if (viewMode === 'map' && investigation) return <InvestigationMapView investigation={investigation} scope={scope} onBack={() => setViewMode('table')} />
   return <div className="flex h-full flex-col bg-bg text-text">
-    <div className="flex shrink-0 items-center justify-between border-b border-border-strong bg-panel px-5 py-3"><div><div className="text-sm font-semibold">Historical Fire Register</div><div className="text-xs text-text-muted">{events.length.toLocaleString()} FireEvents · {scope.review_start} → {scope.review_end} · {scope.context_buffer_km} km context buffer</div></div><Button variant="primary" disabled={!selection.length} onClick={() => void investigate()}>INVESTIGATE ON MAP ({selection.length})</Button></div>
+    <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border-strong bg-panel px-5 py-3"><div><div className="text-sm font-semibold">Historical Fire Register</div><div className="text-xs text-text-muted">{progression ? `${progression.fireEvents.toLocaleString()} FireEvents` : 'FireEvents'} · {scope.review_start} → {scope.review_end} · {scope.context_buffer_km} km context buffer</div></div><Button variant="primary" disabled={!selection.length || mapLoading || loading} onClick={() => void investigate()}>{mapLoading ? 'OPENING MAP…' : `INVESTIGATE ON MAP (${selection.length})`}</Button></div>
+    {progression && <section aria-label="Observation compression progression" className="shrink-0 border-b border-border bg-border"><div className="bg-panel px-3 py-1 text-center text-[10px] uppercase tracking-[0.12em] text-text-faint">observations → qualified → FireEvents → human review → selected</div><div className="grid grid-cols-2 gap-px border-t border-border bg-border text-center text-[11px] sm:grid-cols-5"><div className="bg-panel px-3 py-2"><div className="font-semibold text-accent">{progression.rawObservations.toLocaleString()}</div><div className="text-text-faint">RAW FIRMS OBSERVATIONS</div></div><div className="bg-panel px-3 py-2"><div className="font-semibold text-accent">{progression.qualifiedObservations.toLocaleString()}</div><div className="text-text-faint">QUALIFIED OBSERVATIONS</div></div><div className="bg-panel px-3 py-2"><div className="font-semibold text-accent">{progression.fireEvents.toLocaleString()}</div><div className="text-text-faint">CLUSTERED FIREEVENTS</div></div><div className="bg-panel px-3 py-2"><div className="font-semibold text-accent">{progression.requiringHumanReview.toLocaleString()}</div><div className="text-text-faint">REQUIRING HUMAN REVIEW</div></div><div className="bg-panel px-3 py-2"><div className="font-semibold text-accent">{progression.selected.toLocaleString()}</div><div className="text-text-faint">SELECTED FOR PACK</div></div></div></section>}
+    {scope.historyBuild && <div className="border-b border-border bg-panel px-5 py-2 text-[11px] text-text-muted">Cached real historical dataset · build handoff {scope.historyBuild.duration_ms.toFixed(2)} ms · counts below are from the current audit artifact.</div>}
     <div className="px-5 py-2"><Button onClick={() => setViewMode('report')}>VIEW AUDIT REPORT ({packed.length})</Button></div>
-    {error && <div role="alert" className="border-b border-status-urgent/40 bg-status-urgent/10 px-5 py-2 text-xs text-red-200">{error}</div>}
-    <div className="flex-1 overflow-auto"><table className="w-full border-collapse text-xs"><thead className="sticky top-0 bg-panel"><tr className="border-b border-border"><th className="px-3 py-2 text-left">Select</th><th className="px-3 py-2 text-left">FireEvent ID</th><th className="px-3 py-2 text-left">First detected</th><th className="px-3 py-2 text-right">Observations</th><th className="px-3 py-2 text-left">Stage-1 state</th><th className="px-3 py-2 text-right">Max FRP</th><th className="px-3 py-2 text-left">Pack</th></tr></thead><tbody>{eventRows(events, selection, toggleSelection, packed, (id) => void addEvent(id), (id) => void removeEvent(id))}</tbody></table></div>
+    {error && <div role="alert" className="flex items-center justify-between gap-3 border-b border-status-urgent/40 bg-status-urgent/10 px-5 py-2 text-xs text-red-200"><span>{error}</span><Button onClick={() => selection.length ? void investigate() : void loadRegister()}>RETRY</Button></div>}
+    {loading && <div role="status" className="flex flex-1 items-center justify-center text-sm text-text-muted">Loading current-audit FireEvent register…</div>}
+    {!loading && <div className="flex-1 overflow-auto"><table className="w-full border-collapse text-xs"><thead className="sticky top-0 bg-panel"><tr className="border-b border-border"><th className="px-3 py-2 text-left">Select</th><th className="px-3 py-2 text-left">FireEvent ID</th><th className="px-3 py-2 text-left">First detected</th><th className="px-3 py-2 text-right">Observations</th><th className="px-3 py-2 text-left">Stage-1 state</th><th className="px-3 py-2 text-right">Max FRP</th><th className="px-3 py-2 text-left">Pack</th></tr></thead><tbody>{eventRows(events, selection, toggleSelection, packed, (id) => void addEvent(id), (id) => void removeEvent(id))}</tbody></table></div>}
     {selectedEvents.length > 0 && <div className="shrink-0 border-t border-border bg-panel px-5 py-2 text-xs text-text-muted">Selected FireEvents remain selected when you return from the map.</div>}
   </div>
 }

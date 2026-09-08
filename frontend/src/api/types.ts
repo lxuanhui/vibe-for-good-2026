@@ -187,6 +187,7 @@ export interface AuditScope {
     coordinates: [number, number][][]
   } | null
   geometry?: unknown
+  historyBuild?: { duration_ms: number; dataset_mode: string }
 }
 
 export type ScopeRelation = 'INSIDE_SCOPE' | 'BOUNDARY_INTERSECTING' | 'EXTERNAL_CONTEXT'
@@ -240,13 +241,23 @@ export interface EventEvidenceResponse {
   provenance: { source: Record<string, unknown>; algorithmVersions: string[] }
 }
 
+export interface AuditProgression {
+  rawObservations: number
+  qualifiedObservations: number
+  fireEvents: number
+  requiringHumanReview: number
+  selected: number
+  selectedEventIds: string[]
+  compression: number | null
+}
+
 export interface AuditPackReview { eventId: string; note: string; disposition: string; addedAt: string }
 
 export interface AuditReport {
   auditId: string
   auditScope: { reviewStart: string; reviewEnd: string; scope: Record<string, unknown> }
   sourceMethodSummary: { observed: string; derived: string; ai: string; source: Record<string, unknown> }
-  compressionSummary: Record<string, unknown>
+  compressionSummary: Record<string, unknown> & Partial<AuditProgression>
   counts: { identified: number; screened: number; reviewed: number; selected: number; verify: number; insufficient: number }
   selectedFireEvents: { event: AuditEventSummary; review: AuditPackReview; evidence: EventEvidenceResponse }[]
   maps: { selectedEventIds: string[]; layers: Record<string, boolean> }

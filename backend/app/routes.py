@@ -1,4 +1,5 @@
 import json
+from time import perf_counter
 
 from flask import Blueprint, jsonify, request
 
@@ -47,13 +48,19 @@ def upload_audit_scope(audit_id: str):
 
 @api.post("/audits/<audit_id>/history/build")
 def build_audit_history(audit_id: str):
+    started = perf_counter()
     try:
         result = build_history(audit_id)
         if result is None:
             return jsonify(error=f"No audit with id {audit_id}"), 404
     except AuditValidationError as exc:
         return jsonify(error=str(exc)), 409
-    # #57 owns reconstruction; this records a validated handoff only.
+    # The committed demo is a cached real reconstruction. Loading it here
+    # makes the timing cover the same artifact readiness check as the demo.
+    if not audit_events.cached_reconstruction_ready(audit_id):
+        return jsonify(error=f"No cached reconstruction for audit {audit_id}"), 503
+    result["duration_ms"] = round((perf_counter() - started) * 1000, 2)
+    result["dataset_mode"] = "cached_real_historical_dataset"
     return jsonify(result), 202
 
 
@@ -116,6 +123,7 @@ def list_audit_events(audit_id: str):
         auditId=audit_id,
         scope=audit["scope"],
         source=audit_events.source_provenance(),
+        progression=audit_events.progression(audit_id),
         total=len(matched),
         limit=limit,
         offset=offset,

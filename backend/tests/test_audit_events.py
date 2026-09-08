@@ -24,6 +24,15 @@ def test_lists_events_with_scope_and_provenance(client):
     assert body["total"] > 5
     assert body["scope"]["reviewStart"] == "2019-09-01"
     assert "FIRMS" in body["source"]["dataset"]
+    assert body["progression"] == {
+        "rawObservations": 21519,
+        "qualifiedObservations": 20471,
+        "fireEvents": 3610,
+        "requiringHumanReview": 3610,
+        "selected": 0,
+        "selectedEventIds": [],
+        "compression": 1.0,
+    }
 
 
 def test_event_shape_is_camel_case_and_carries_triage(client):
@@ -164,6 +173,10 @@ def test_auditor_can_add_update_remove_and_report_selected_event(client):
     added = client.post(f"/api/audits/{AUDIT}/events/{event_id}/add-to-pack", json={"note": "Check field record", "disposition": "VERIFY"})
     assert added.status_code == 200
     assert added.get_json()["disposition"] == "VERIFY"
+
+    progression = client.get(f"{BASE}?limit=1").get_json()["progression"]
+    assert progression["selected"] == 1
+    assert progression["selectedEventIds"] == [event_id]
 
     report = client.get(f"/api/audits/{AUDIT}/report")
     body = report.get_json()

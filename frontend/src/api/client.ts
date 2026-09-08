@@ -1,5 +1,5 @@
 import type { FeatureCollection } from './geojson'
-import type { AuditEventSummary, AuditPackReview, AuditReport, AuditScope, BBox, EventEvidenceResponse, EventStatus, FireEvent, InvestigationMap, InvestigationReport, OverlayLayerId } from './types'
+import type { AuditEventSummary, AuditPackReview, AuditProgression, AuditReport, AuditScope, BBox, EventEvidenceResponse, EventStatus, FireEvent, InvestigationMap, InvestigationReport, OverlayLayerId } from './types'
 import { getOverlay, isLayerAvailable } from './fixtures/overlays'
 import { REPORTS } from './fixtures/reports'
 
@@ -59,23 +59,23 @@ export async function uploadAuditScope(auditId: string, file: File): Promise<Aud
   return apiPost<AuditScope>(`/audits/${encodeURIComponent(auditId)}/scope/upload`, form)
 }
 
-export async function buildFireHistory(auditId: string): Promise<{ audit_id: string; scope_id: string; status: 'HISTORY_BUILD_READY' }> {
+export async function buildFireHistory(auditId: string): Promise<{ audit_id: string; scope_id: string; status: 'HISTORY_BUILD_READY'; duration_ms: number; dataset_mode: string }> {
   return apiPost(`/audits/${encodeURIComponent(auditId)}/history/build`, null)
 }
 
-export async function fetchAuditRegister(auditId: string, filters?: { since?: string; until?: string }): Promise<AuditEventSummary[]> {
+export async function fetchAuditRegister(auditId: string, filters?: { since?: string; until?: string }): Promise<{ events: AuditEventSummary[]; progression: AuditProgression }> {
   const pageSize = 2000
   const query = new URLSearchParams({ limit: String(pageSize) })
   if (filters?.since) query.set('since', filters.since)
   if (filters?.until) query.set('until', filters.until)
-  const first = await apiGet<{ total: number; events: AuditEventSummary[] }>(`/audits/${encodeURIComponent(auditId)}/events?${query}`)
+  const first = await apiGet<{ total: number; events: AuditEventSummary[]; progression: AuditProgression }>(`/audits/${encodeURIComponent(auditId)}/events?${query}`)
   const pages = [first.events]
   for (let offset = pageSize; offset < first.total; offset += pageSize) {
     query.set('offset', String(offset))
     const page = await apiGet<{ events: AuditEventSummary[] }>(`/audits/${encodeURIComponent(auditId)}/events?${query}`)
     pages.push(page.events)
   }
-  return pages.flat()
+  return { events: pages.flat(), progression: first.progression }
 }
 
 export async function fetchInvestigationMap(auditId: string, eventIds: string[]): Promise<InvestigationMap> {
@@ -92,7 +92,12 @@ export async function addToAuditPack(auditId: string, eventId: string, review: P
 }
 
 export async function removeFromAuditPack(auditId: string, eventId: string): Promise<void> {
-  await fetch(`${API_BASE}/api/audits/${encodeURIComponent(auditId)}/events/${encodeURIComponent(eventId)}/add-to-pack`, { method: 'DELETE' })
+  const path = `/audits/${encodeURIComponent(auditId)}/events/${encodeURIComponent(eventId)}/add-to-pack`
+  const response = await fetch(`${API_BASE}/api${path}`, { method: 'DELETE' })
+  if (!response.ok) {
+    const details = (await response.json().catch(() => null)) as { error?: string } | null
+    throw new Error(details?.error ?? `DELETE /api${path} failed with ${response.status}`)
+  }
 }
 
 export async function fetchAuditReport(auditId: string): Promise<AuditReport> {
