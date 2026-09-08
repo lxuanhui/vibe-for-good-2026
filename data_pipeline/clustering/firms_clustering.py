@@ -168,7 +168,9 @@ def _stable_event_id(sub: pd.DataFrame, first_dt: pd.Timestamp) -> str:
         f"{row['latitude']:.5f},{row['longitude']:.5f},{row['acq_date']},{row['acq_time']}"
         for row in sub.to_dict("records")
     )
-    digest = hashlib.sha1("|".join(keys).encode()).hexdigest()[:10]
+    # Not a security context -- just a short deterministic fingerprint of the
+    # constituent keys, so usedforsecurity=False is accurate, not a suppression.
+    digest = hashlib.sha1("|".join(keys).encode(), usedforsecurity=False).hexdigest()[:10]
     return f"FE-{first_dt.strftime('%Y%m%d')}-{digest}"
 
 
