@@ -136,6 +136,47 @@ event's 20.6km spatial extent exceeds the default 5km buffer radius, so the
 footprint check -- not the buffer -- is the representative intersection
 result for a fire complex this large.
 
+## Auditor workload-reduction benchmark
+
+`benchmark/` compares a documented manual-evidence-reconstruction estimate
+against a real, timed run of this repo's own pipeline for one representative
+FireEvent case -- the same largest event (`FE-20190901-ce19162367`) the
+weather and peat modules above demo against, so all three sections describe
+the same case. `manual_estimate.py` is a **reasoned estimate**, not a timed
+human trial: each of the seven manual tasks (retrieve FIRMS history,
+reconstruct event chronology, retrieve historical weather, inspect peat
+context, identify neighbouring events, find imagery metadata, assemble an
+evidence summary) is costed from what actually operating the real public tool
+involves, with the reasoning recorded per task rather than left as a bare
+number. `automated_run.py` chains the real modules above plus two pieces
+built only for this benchmark: `find_neighbouring_events` (a lightweight
+centroid-distance/time-window proximity check, explicitly **not** the
+`FireEventGraph` relationship model of issue #10) and an imagery-metadata
+search reusing `sources/copernicus_cds.search()` directly. `report.py`
+combines both sides into the comparison and writes
+`data_pipeline/output/workload_reduction_report.json`. Run
+`python -m data_pipeline.benchmark.report` for the live comparison: last
+verified run costed the manual estimate at 140.0 minutes, the automated run
+completed the same evidence-reconstruction case in ~26-31s (dominated by the
+FIRMS clustering step re-run on 21,519 observations and the Copernicus STAC
+search; both are network/CPU calls, not fixed costs), a 99%+ reduction,
+21,519 observations compressed to 3,683 FireEvents (5.84x), and full
+(49/49 weather + 4/4 peat) evidence-field completeness for this case.
+
+**Read the scope note before citing any of these numbers.** This benchmarks
+one task -- reconstructing the evidence for one FireEvent -- not the audit
+workflow as a whole, which also includes scope definition, screening
+judgement across many events, field verification, and report sign-off. Do
+not extrapolate "99% faster evidence reconstruction" into "the audit is 99%
+faster."
+
+**`events_to_human_review_queue_compression` is deliberately 1.0 (no
+compression), not a fabricated number.** Stage-1 triage (issue #9) doesn't
+exist yet, so every FireEvent clustering produces currently reaches a human
+reviewer undiminished -- an honest measurement of the pipeline's current
+state, to be re-measured once #9 lands, not a placeholder target invented to
+fill the metric.
+
 ## Provider interface
 
 `nasa_firms.py`, `open_meteo.py`, `nasa_power.py`, `copernicus_cds.py`, and

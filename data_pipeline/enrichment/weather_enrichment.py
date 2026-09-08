@@ -351,6 +351,13 @@ _EVIDENCE_METRICS: list[tuple[str, str, str, str]] = [
 ]
 
 
+# Single-sourced count of possible weather evidence objects per FireEvent
+# (7 windows x this many metrics) -- used by the benchmark in issue #7 to
+# compute evidence-field completeness without duplicating the "7" as a
+# separate magic number.
+EVIDENCE_METRICS_PER_WINDOW = len(_EVIDENCE_METRICS)
+
+
 def to_evidence_objects(bundle: WeatherEvidenceBundle) -> list[dict]:
     """Convert a bundle into `EvidenceObject`s (`Environmental_Assurance_Spec.md`
     §16) -- one per (window, metric) that actually has a value, each with
