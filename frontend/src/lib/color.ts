@@ -30,6 +30,8 @@ export function statusColor(status: EventStatus): string {
       return 'var(--color-status-quiet)'
     case 'STAGE2_RUNNING':
       return 'var(--color-status-info)'
+    case 'UNRESOLVED':
+      return 'var(--color-status-moderate)'
     case 'CONVERGED':
       return 'var(--color-status-good)'
   }
@@ -43,6 +45,8 @@ export function statusLabel(status: EventStatus): string {
       return 'Likely non-fire'
     case 'STAGE2_RUNNING':
       return 'Stage 2 running'
+    case 'UNRESOLVED':
+      return 'Unresolved'
     case 'CONVERGED':
       return 'Converged'
   }

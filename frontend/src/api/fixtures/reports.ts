@@ -40,7 +40,7 @@ const REPORT_B: InvestigationReport = {
     checks: STAGE1_CHECKS_TEMPLATE.map((c) => ({ ...c, passed: true, detail: '' })),
   },
   executiveSummary:
-    'Regional fire-weather conditions were unusually conducive to ignition and spread in the week leading up to detection. Evidence support for plantation-related activity is weak. Evidence is sufficient for a moderate-priority investigation; the environmental explanation should be treated as the leading hypothesis pending human review.',
+    'KBDI, rainfall, and FWI indicate fire-weather conditions conducive to ignition and spread before detection (E1, E2, E3). Available vegetation-change, concession-context, and SAR evidence does not distinguish an ignition mechanism (E5, E6, E7). Regional fire weather is the leading hypothesis, while land-management explanations remain unresolved pending human review.',
   topTheories: [
     {
       rank: 1,
@@ -119,7 +119,7 @@ const REPORT_B: InvestigationReport = {
         hypothesis: 'H3',
         support: 35,
         contra: 0,
-        summary: 'A mapped production-zone concession sits within 1.2km; plantation-related land clearing cannot be ruled out from weather data alone.',
+        summary: 'The event location intersects a mapped production-zone concession attribute, which is contextual rather than causal; weather data alone does not distinguish the ignition mechanism.',
         evidenceIds: ['E6'],
         counterEvidenceIds: ['E1', 'E3'],
       },
@@ -192,18 +192,18 @@ const REPORT_B: InvestigationReport = {
 
 const REPORT_C: InvestigationReport = {
   eventId: 'IND-02671',
-  status: 'converged',
+  status: 'unresolved',
   stage1Gate: {
     outcome: 'passed',
     checks: STAGE1_CHECKS_TEMPLATE.map((c) => ({ ...c, passed: true, detail: '' })),
   },
   executiveSummary:
-    'FIRMS lost track of this event on 2026-09-01. SAR shows a persistent burn signature under the same peat hydrological unit through 2026-09-06, and a new detection 2km away on 2026-09-07 sits inside both the peat dome and the fire-growth ellipse projected from the original ignition. The system flags this as a probable resurfacing of the same fire complex rather than an independent new ignition, with meaningful residual disagreement — this requires human confirmation.',
+    'Sentinel-1 shows a VH backscatter change at the original detection location between 29 August and 4 September (E4). A later detection lies in the same mapped peat hydrological unit (E14) and is compatible with a first-order surface-fire envelope at the modeled elapsed time (E9). These observations support, but do not establish, peat-mediated persistence; independent new ignition remains a competing hypothesis requiring human verification.',
   topTheories: [
     {
       rank: 1,
       hypothesisId: 'FC1',
-      hypothesis: 'Resurfaced fire complex (underground peat persistence)',
+      hypothesis: 'Resurfaced fire complex (peat-mediated persistence)',
       supportScore: 78,
       evidenceIds: ['E4', 'E9', 'E14'],
       counterEvidenceIds: ['E2'],
@@ -252,11 +252,11 @@ const REPORT_C: InvestigationReport = {
         { clusterId: 'IND-02671-2026-09-07', elapsedHours: 216, eastKm: 1.9, northKm: -0.2, distanceKm: 1.91, insideExpectedEnvelope: true },
       ],
       observationsOutsideExpectedEnvelope: [],
-      note: 'Projected extent reaches the KHG protected-dome boundary around the date FIRMS lost track — geometric plausibility evidence, not a tracked path.',
+      note: 'The later cluster falls inside the first-order surface-fire envelope at the modeled elapsed time (E9) — geometric compatibility only, not a tracked path.',
     },
   },
   limitations: [
-    'Sentinel-1\'s ~6-day revisit confirms the burn signature persisted within the same peat hydrological unit; it cannot resolve precise underground travel speed or path. Report language is scoped accordingly.',
+    'The Sentinel-1 VH change is consistent with persistent surface-condition change; it cannot confirm continued combustion or resolve a subsurface travel speed or path.',
     'Soil moisture is a SMAP/ERA5-Land groundwater proxy, not a borehole reading.',
     'The fire-growth ellipse is a first-order geometric estimate, not a calibrated operational fire-behavior model.',
     'Optical confirmation is incomplete for the resurfacing window; SAR evidence carries more weight than usual in this report.',
@@ -269,7 +269,7 @@ const REPORT_C: InvestigationReport = {
         hypothesis: 'FC1',
         support: 70,
         contra: 0,
-        summary: 'The 2026-09-07 detection sits inside the same KHG dome as the original ignition, with no intervening re-vegetation signal in the SAR record between the two surface detections.',
+        summary: 'The later detection lies inside the same mapped KHG unit as the original detection, while Sentinel-1 records a VH backscatter change at the original location.',
         evidenceIds: ['E4', 'E14'],
         counterEvidenceIds: [],
       },
@@ -290,7 +290,7 @@ const REPORT_C: InvestigationReport = {
         hypothesis: 'FC1',
         support: 76,
         contra: 24,
-        summary: 'The Richards-ellipse projection from the first detection plausibly reaches the second detection location by day 9-10. Combined with persistent VH drop, this supports a same-complex hypothesis.',
+        summary: 'The first-order surface-fire envelope contains the later cluster at the modeled elapsed time. Combined with the VH change, this supports a same-complex hypothesis without establishing a tracked path.',
         evidenceIds: ['E4', 'E9'],
         counterEvidenceIds: ['E2'],
       },
@@ -338,12 +338,12 @@ const REPORT_C: InvestigationReport = {
     },
   ],
   evidence: {
-    E1: { evidenceId: 'E1', category: 'weather', type: 'kbdi', observation: 'KBDI held above 490 for the full 10-day window, indicating sustained peat desiccation', source: 'Open-Meteo / ERA5-Land' },
+    E1: { evidenceId: 'E1', category: 'weather', type: 'kbdi', observation: 'KBDI held above 490 for the full 10-day window, indicating sustained dry conditions conducive to fire', source: 'Open-Meteo / ERA5-Land' },
     E2: { evidenceId: 'E2', category: 'weather', type: 'wind', observation: 'Prevailing wind direction over the period was ~95°, only partially aligned with the ellipse major axis toward the second detection', source: 'Open-Meteo' },
     E3: { evidenceId: 'E3', category: 'weather', type: 'fwi', observation: 'Fire Weather Index remained in the "very high" band for the full pre-detection window', source: 'Derived / ERA5-Land' },
-    E4: { evidenceId: 'E4', category: 'remote-sensing', type: 'sar-persistence', observation: 'VH backscatter drop deepened from -3.1dB (2026-08-29) to -4.6dB (2026-09-04) at the same location, with no re-vegetation signal', source: 'Sentinel-1' },
-    E6: { evidenceId: 'E6', category: 'context', type: 'alternative-ignition', observation: 'No infrastructure, road, or settlement adjacency near the 2026-09-07 detection that would suggest an independent ignition source', source: 'OpenStreetMap Overpass' },
-    E9: { evidenceId: 'E9', category: 'model', type: 'fire-growth-ellipse', observation: 'Richards elliptical fire-growth model, driven by observed wind, projects the original ignition\'s reach toward the KHG dome boundary around the date FIRMS lost track', source: 'Derived (Richards 1990 + single Kalman filter)' },
+    E4: { evidenceId: 'E4', category: 'remote-sensing', type: 'sar-persistence', observation: 'VH backscatter changed from -3.1dB (2026-08-29) to -4.6dB (2026-09-04) at the original detection location', source: 'Sentinel-1' },
+    E6: { evidenceId: 'E6', category: 'context', type: 'alternative-ignition', observation: 'The current OpenStreetMap snapshot contains no mapped infrastructure, road, or settlement adjacent to the later detection; this does not establish conditions at the detection date or an ignition cause', source: 'OpenStreetMap Overpass (current snapshot)' },
+    E9: { evidenceId: 'E9', category: 'model', type: 'surface-fire-envelope', observation: 'The later cluster falls inside the wind-oriented first-order surface-fire envelope at 216 elapsed hours; this is a compatibility observation, not a tracked path', source: 'Derived / surface-fire-ellipse-v1' },
     E14: { evidenceId: 'E14', category: 'context', type: 'khg-classification', observation: 'Both detections fall within the same KHG peat hydrological unit, classified as a protected dome', source: 'KLHK Geoportal ArcGIS REST' },
   },
 }

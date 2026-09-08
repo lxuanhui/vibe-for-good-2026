@@ -13,6 +13,7 @@ const STATUS_FILTERS: { value: EventStatus | 'ALL'; label: string }[] = [
   { value: 'AMBIGUOUS', label: 'Ambiguous' },
   { value: 'LIKELY_NON_FIRE', label: 'Likely non-fire' },
   { value: 'STAGE2_RUNNING', label: 'Stage 2 running' },
+  { value: 'UNRESOLVED', label: 'Unresolved' },
   { value: 'CONVERGED', label: 'Converged' },
 ]
 
