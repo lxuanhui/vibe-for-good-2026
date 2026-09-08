@@ -153,3 +153,30 @@ def get_audit_graph(audit_id: str):
     if result is None:
         return jsonify(error=f"No reconstructed history or event selection for audit {audit_id}"), 404
     return jsonify(result)
+
+
+@api.post("/audits/<audit_id>/events/<event_id>/add-to-pack")
+def add_audit_pack_event(audit_id: str, event_id: str):
+    payload = request.get_json(silent=True) or {}
+    result = audit_events.add_to_pack(
+        audit_id, event_id, str(payload.get("note", "")), str(payload.get("disposition", ""))
+    )
+    if result is None:
+        return jsonify(error=f"No event with id {event_id} in audit {audit_id}"), 404
+    return jsonify(result)
+
+
+@api.delete("/audits/<audit_id>/events/<event_id>/add-to-pack")
+def remove_audit_pack_event(audit_id: str, event_id: str):
+    result = audit_events.remove_from_pack(audit_id, event_id)
+    if result is None:
+        return jsonify(error=f"No audit with id {audit_id}"), 404
+    return jsonify(removed=event_id)
+
+
+@api.route("/audits/<audit_id>/report", methods=["GET", "POST"])
+def audit_report_view(audit_id: str):
+    report = audit_events.audit_report(audit_id)
+    if report is None:
+        return jsonify(error=f"No reconstructed history for audit {audit_id}"), 404
+    return jsonify(report)

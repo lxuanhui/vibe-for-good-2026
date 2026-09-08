@@ -40,6 +40,12 @@ VALID_STATES = frozenset({"LIKELY_FIRE", "LIKELY_NON_FIRE", "AMBIGUOUS"})
 DEFAULT_LIMIT = 500
 MAX_LIMIT = 2000
 
+# Persistence is intentionally process-local until the repository chooses a
+# durable metadata store. The pack is engagement-scoped and contains only
+# event IDs plus human review fields; report assembly always re-reads the
+# current structured evidence artifact.
+AUDIT_PACKS: dict[str, dict[str, dict[str, Any]]] = {}
+
 
 def _point_in_ring(lon: float, lat: float, ring: list[list[float]]) -> bool:
     inside = False
@@ -470,4 +476,87 @@ def evidence_for_event(audit_id: str, event_id: str) -> dict[str, Any] | None:
             "source": source_provenance(),
             "algorithmVersions": ["stage1-rules-v1", "audit-scope-relation-v1", "fire-complexity-evidence-v1", "investigation-priority-v1"],
         },
+    }
+
+
+def _pack(audit_id: str) -> dict[str, dict[str, Any]] | None:
+    if get_audit(audit_id) is None:
+        return None
+    return AUDIT_PACKS.setdefault(audit_id, {})
+
+
+def add_to_pack(audit_id: str, event_id: str, note: str = "", disposition: str = "") -> dict[str, Any] | None:
+    pack = _pack(audit_id)
+    if pack is None or find_event(audit_id, event_id) is None:
+        return None
+    existing = pack.get(event_id, {})
+    pack[event_id] = {
+        "eventId": event_id,
+        "note": note.strip()[:2000],
+        "disposition": disposition.strip()[:80],
+        "addedAt": existing.get("addedAt", datetime.now(UTC).isoformat()),
+    }
+    return pack[event_id]
+
+
+def remove_from_pack(audit_id: str, event_id: str) -> bool | None:
+    pack = _pack(audit_id)
+    if pack is None:
+        return None
+    pack.pop(event_id, None)
+    return True
+
+
+def _report_counts(audit: dict[str, Any], entries: list[dict[str, Any]], evidence: list[dict[str, Any]]) -> dict[str, int]:
+    sufficiency = [item["evidenceSufficiency"]["value"] for item in evidence]
+    total = len(audit["events"])
+    return {
+        "identified": total,
+        "screened": total,
+        "reviewed": len(entries),
+        "selected": len(entries),
+        "verify": sum(1 for item in entries if item.get("disposition", "").upper() == "VERIFY"),
+        "insufficient": sum(1 for value in sufficiency if value == "INSUFFICIENT"),
+    }
+
+
+def audit_report(audit_id: str) -> dict[str, Any] | None:
+    audit = get_audit(audit_id)
+    pack = _pack(audit_id)
+    if audit is None or pack is None:
+        return None
+    entries = list(pack.values())
+    selected = [find_event(audit_id, entry["eventId"]) for entry in entries]
+    selected = [event for event in selected if event is not None]
+    evidence = [evidence_for_event(audit_id, event["eventId"]) for event in selected]
+    evidence = [item for item in evidence if item is not None]
+    graph = investigation_map(audit_id, [event["eventId"] for event in selected]) if selected else {
+        "auditId": audit_id, "selectedEventIds": [], "scope": audit["scope"], "nodes": [], "edges": [],
+        "layers": {"selectedRawObservations": False, "fireEvents": True, "graph": True},
+    }
+    source = source_provenance()
+    scope = audit["scope"]
+    return {
+        "auditId": audit_id,
+        "auditScope": {"reviewStart": scope["reviewStart"], "reviewEnd": scope["reviewEnd"], "scope": scope},
+        "sourceMethodSummary": {
+            "observed": "NASA FIRMS thermal detections clustered into FireEvents",
+            "derived": "Stage-1 deterministic triage and audit-scope relation",
+            "ai": "No AI analysis is available in the current FIRMS audit artifact.",
+            "source": source,
+        },
+        "compressionSummary": scope.get("compression", {}),
+        "counts": _report_counts(audit, entries, evidence),
+        "selectedFireEvents": [{"event": event, "review": pack[event["eventId"]], "evidence": item} for event, item in zip(selected, evidence)],
+        "maps": {"selectedEventIds": [event["eventId"] for event in selected], "layers": graph["layers"]},
+        "chronology": sorted([{"eventId": event["eventId"], "firstDetection": event["firstDetection"], "lastDetection": event["lastDetection"]} for event in selected], key=lambda item: item["firstDetection"]),
+        "deterministicEvidence": [{"eventId": item["event"]["eventId"], "observed": item["observedEvidence"], "derived": item["derivedEvidence"]} for item in evidence],
+        "graphRelationships": graph["edges"],
+        "aiAnalysis": [],
+        "unresolvedQuestions": [],
+        "verificationRecommendations": [],
+        "limitations": ["The current artifact contains FIRMS clustering and Stage-1 output only; peat, weather, imagery and adversarial analysis are unavailable.", "Selected events are evidence for human review, not conclusions about cause or responsibility."],
+        "provenance": {"source": source, "algorithmVersions": sorted({version for item in evidence for version in item["provenance"]["algorithmVersions"]})},
+        "humanNotes": [{"eventId": entry["eventId"], "note": entry["note"], "disposition": entry["disposition"]} for entry in entries],
+        "disclaimer": "This report is an investigative-support product. It does not establish legal responsibility, intent, culpability, ownership liability, or criminal wrongdoing. Findings require human verification.",
     }

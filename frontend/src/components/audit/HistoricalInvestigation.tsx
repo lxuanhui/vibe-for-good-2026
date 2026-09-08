@@ -2,11 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { Map, Marker, Source, Layer } from 'react-map-gl/maplibre'
 import type { FeatureCollection, Point, LineString, Geometry } from 'geojson'
 import type { AuditEventSummary, AuditScope, InvestigationMap } from '../../api/types'
-import { fetchAuditRegister, fetchInvestigationMap } from '../../api/client'
+import { addToAuditPack, fetchAuditRegister, fetchInvestigationMap, removeFromAuditPack } from '../../api/client'
 import { useAppStore } from '../../store/useAppStore'
 import { Button } from '../ui/Button'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { EvidenceDrawer } from './EvidenceDrawer'
+import { AuditReportView } from './AuditReportView'
 
 const RELATION_COLORS = { INSIDE_SCOPE: '#22d3ee', BOUNDARY_INTERSECTING: '#eab308', EXTERNAL_CONTEXT: '#a78bfa' } as const
 
@@ -14,7 +15,7 @@ function eventPoint(event: { centroid: { lat: number; lon: number } }, propertie
   return { type: 'Feature', geometry: { type: 'Point', coordinates: [event.centroid.lon, event.centroid.lat] }, properties }
 }
 
-function eventRows(events: AuditEventSummary[], selected: string[], toggle: (id: string) => void) {
+function eventRows(events: AuditEventSummary[], selected: string[], toggle: (id: string) => void, packed: string[], add: (id: string) => void, remove: (id: string) => void) {
   return events.map((event) => (
     <tr key={event.eventId} className="border-b border-border/60 hover:bg-panel-raised">
       <td className="px-3 py-2"><input aria-label={`Select ${event.eventId}`} type="checkbox" checked={selected.includes(event.eventId)} onChange={() => toggle(event.eventId)} /></td>
@@ -22,6 +23,7 @@ function eventRows(events: AuditEventSummary[], selected: string[], toggle: (id:
       <td className="px-3 py-2 text-text-muted">{event.firstDetection.slice(0, 10)}</td>
       <td className="px-3 py-2 text-right">{event.observationCount}</td>
       <td className="px-3 py-2 text-text-muted">{event.triage.state}</td>
+      <td className="px-3 py-2"><Button className="whitespace-nowrap text-[10px]" onClick={() => packed.includes(event.eventId) ? remove(event.eventId) : add(event.eventId)}>{packed.includes(event.eventId) ? 'REMOVE FROM PACK' : 'ADD TO AUDIT EVIDENCE PACK'}</Button></td>
       <td className="px-3 py-2 text-right">{event.maxFrp?.toFixed(1) ?? '—'}</td>
     </tr>
   ))
@@ -66,6 +68,7 @@ export function HistoricalInvestigation({ scope }: { scope: AuditScope }) {
   const [events, setEvents] = useState<AuditEventSummary[]>([])
   const [investigation, setInvestigation] = useState<InvestigationMap | null>(null)
   const [error, setError] = useState('')
+  const [packed, setPacked] = useState<string[]>([])
 
   useEffect(() => { fetchAuditRegister(scope.audit_id, { since: scope.review_start, until: scope.review_end }).then(setEvents).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : 'Register could not be loaded.')) }, [scope.audit_id, scope.review_start, scope.review_end])
   const selectedEvents = useMemo(() => events.filter((event) => selection.includes(event.eventId)), [events, selection])
@@ -75,11 +78,16 @@ export function HistoricalInvestigation({ scope }: { scope: AuditScope }) {
     try { setInvestigation(await fetchInvestigationMap(scope.audit_id, selection)); setViewMode('map') } catch (reason) { setError(reason instanceof Error ? reason.message : 'Map handoff failed.') }
   }
 
+  async function addEvent(eventId: string) { try { await addToAuditPack(scope.audit_id, eventId); setPacked((ids) => ids.includes(eventId) ? ids : [...ids, eventId]) } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not add event to pack.') } }
+  async function removeEvent(eventId: string) { try { await removeFromAuditPack(scope.audit_id, eventId); setPacked((ids) => ids.filter((id) => id !== eventId)) } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not remove event from pack.') } }
+
+  if (viewMode === 'report') return <AuditReportView auditId={scope.audit_id} onBack={() => setViewMode('table')} />
   if (viewMode === 'map' && investigation) return <InvestigationMapView investigation={investigation} scope={scope} onBack={() => setViewMode('table')} />
   return <div className="flex h-full flex-col bg-bg text-text">
     <div className="flex shrink-0 items-center justify-between border-b border-border-strong bg-panel px-5 py-3"><div><div className="text-sm font-semibold">Historical Fire Register</div><div className="text-xs text-text-muted">{events.length.toLocaleString()} FireEvents · {scope.review_start} → {scope.review_end} · {scope.context_buffer_km} km context buffer</div></div><Button variant="primary" disabled={!selection.length} onClick={() => void investigate()}>INVESTIGATE ON MAP ({selection.length})</Button></div>
+    <div className="px-5 py-2"><Button onClick={() => setViewMode('report')}>VIEW AUDIT REPORT ({packed.length})</Button></div>
     {error && <div role="alert" className="border-b border-status-urgent/40 bg-status-urgent/10 px-5 py-2 text-xs text-red-200">{error}</div>}
-    <div className="flex-1 overflow-auto"><table className="w-full border-collapse text-xs"><thead className="sticky top-0 bg-panel"><tr className="border-b border-border"><th className="px-3 py-2 text-left">Select</th><th className="px-3 py-2 text-left">FireEvent ID</th><th className="px-3 py-2 text-left">First detected</th><th className="px-3 py-2 text-right">Observations</th><th className="px-3 py-2 text-left">Stage-1 state</th><th className="px-3 py-2 text-right">Max FRP</th></tr></thead><tbody>{eventRows(events, selection, toggleSelection)}</tbody></table></div>
+    <div className="flex-1 overflow-auto"><table className="w-full border-collapse text-xs"><thead className="sticky top-0 bg-panel"><tr className="border-b border-border"><th className="px-3 py-2 text-left">Select</th><th className="px-3 py-2 text-left">FireEvent ID</th><th className="px-3 py-2 text-left">First detected</th><th className="px-3 py-2 text-right">Observations</th><th className="px-3 py-2 text-left">Stage-1 state</th><th className="px-3 py-2 text-right">Max FRP</th><th className="px-3 py-2 text-left">Pack</th></tr></thead><tbody>{eventRows(events, selection, toggleSelection, packed, (id) => void addEvent(id), (id) => void removeEvent(id))}</tbody></table></div>
     {selectedEvents.length > 0 && <div className="shrink-0 border-t border-border bg-panel px-5 py-2 text-xs text-text-muted">Selected FireEvents remain selected when you return from the map.</div>}
   </div>
 }

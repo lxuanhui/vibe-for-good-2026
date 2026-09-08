@@ -240,6 +240,28 @@ export interface EventEvidenceResponse {
   provenance: { source: Record<string, unknown>; algorithmVersions: string[] }
 }
 
+export interface AuditPackReview { eventId: string; note: string; disposition: string; addedAt: string }
+
+export interface AuditReport {
+  auditId: string
+  auditScope: { reviewStart: string; reviewEnd: string; scope: Record<string, unknown> }
+  sourceMethodSummary: { observed: string; derived: string; ai: string; source: Record<string, unknown> }
+  compressionSummary: Record<string, unknown>
+  counts: { identified: number; screened: number; reviewed: number; selected: number; verify: number; insufficient: number }
+  selectedFireEvents: { event: AuditEventSummary; review: AuditPackReview; evidence: EventEvidenceResponse }[]
+  maps: { selectedEventIds: string[]; layers: Record<string, boolean> }
+  chronology: { eventId: string; firstDetection: string; lastDetection: string }[]
+  deterministicEvidence: { eventId: string; observed: EvidenceObject[]; derived: EvidenceObject[] }[]
+  graphRelationships: InvestigationMap['edges']
+  aiAnalysis: unknown[]
+  unresolvedQuestions: unknown[]
+  verificationRecommendations: unknown[]
+  limitations: string[]
+  provenance: { source: Record<string, unknown>; algorithmVersions: string[] }
+  humanNotes: AuditPackReview[]
+  disclaimer: string
+}
+
 export interface OverlayAvailability {
   date: string
   layers: Partial<Record<OverlayLayerId | RasterLayerId, boolean>>

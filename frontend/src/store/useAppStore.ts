@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import type { OverlayLayerId, RasterLayerId } from '../api/types'
 import { TIMELINE_DATES } from '../api/fixtures/dates'
 
-export type ViewMode = 'map' | 'table'
+export type ViewMode = 'map' | 'table' | 'report'
 
 type LayerId = OverlayLayerId | RasterLayerId
 

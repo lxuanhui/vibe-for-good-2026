@@ -1,5 +1,5 @@
 import type { FeatureCollection } from './geojson'
-import type { AuditEventSummary, AuditScope, BBox, EventEvidenceResponse, EventStatus, FireEvent, InvestigationMap, InvestigationReport, OverlayLayerId } from './types'
+import type { AuditEventSummary, AuditPackReview, AuditReport, AuditScope, BBox, EventEvidenceResponse, EventStatus, FireEvent, InvestigationMap, InvestigationReport, OverlayLayerId } from './types'
 import { getOverlay, isLayerAvailable } from './fixtures/overlays'
 import { REPORTS } from './fixtures/reports'
 
@@ -85,6 +85,18 @@ export async function fetchInvestigationMap(auditId: string, eventIds: string[])
 
 export async function fetchAuditEventEvidence(auditId: string, eventId: string): Promise<EventEvidenceResponse> {
   return apiGet<EventEvidenceResponse>(`/audits/${encodeURIComponent(auditId)}/events/${encodeURIComponent(eventId)}/evidence`)
+}
+
+export async function addToAuditPack(auditId: string, eventId: string, review: Partial<Pick<AuditPackReview, 'note' | 'disposition'>> = {}): Promise<AuditPackReview> {
+  return apiPost<AuditPackReview>(`/audits/${encodeURIComponent(auditId)}/events/${encodeURIComponent(eventId)}/add-to-pack`, JSON.stringify(review), { 'Content-Type': 'application/json' })
+}
+
+export async function removeFromAuditPack(auditId: string, eventId: string): Promise<void> {
+  await fetch(`${API_BASE}/api/audits/${encodeURIComponent(auditId)}/events/${encodeURIComponent(eventId)}/add-to-pack`, { method: 'DELETE' })
+}
+
+export async function fetchAuditReport(auditId: string): Promise<AuditReport> {
+  return apiGet<AuditReport>(`/audits/${encodeURIComponent(auditId)}/report`)
 }
 
 export async function fetchEvents(opts?: { bbox?: BBox; since?: string; status?: EventStatus }): Promise<FireEvent[]> {

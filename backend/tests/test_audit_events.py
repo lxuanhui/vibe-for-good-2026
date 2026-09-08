@@ -157,3 +157,25 @@ def test_created_audit_reports_history_pending_not_missing(client):
 
     assert response.status_code == 404
     assert response.get_json()["status"] == "PENDING_RECONSTRUCTION"
+
+
+def test_auditor_can_add_update_remove_and_report_selected_event(client):
+    event_id = client.get(f"{BASE}?limit=1").get_json()["events"][0]["eventId"]
+    added = client.post(f"/api/audits/{AUDIT}/events/{event_id}/add-to-pack", json={"note": "Check field record", "disposition": "VERIFY"})
+    assert added.status_code == 200
+    assert added.get_json()["disposition"] == "VERIFY"
+
+    report = client.get(f"/api/audits/{AUDIT}/report")
+    body = report.get_json()
+    assert body["counts"]["identified"] == body["counts"]["screened"]
+    assert body["counts"]["selected"] == 1
+    assert body["counts"]["verify"] == 1
+    assert body["selectedFireEvents"][0]["event"]["eventId"] == event_id
+    assert body["selectedFireEvents"][0]["evidence"]["observedEvidence"]
+    assert body["deterministicEvidence"][0]["derived"]
+    assert body["disclaimer"].startswith("This report is an investigative-support product.")
+
+    updated = client.post(f"/api/audits/{AUDIT}/events/{event_id}/add-to-pack", json={"note": "Updated"})
+    assert updated.get_json()["note"] == "Updated"
+    assert client.delete(f"/api/audits/{AUDIT}/events/{event_id}/add-to-pack").status_code == 200
+    assert client.get(f"/api/audits/{AUDIT}/report").get_json()["counts"]["selected"] == 0

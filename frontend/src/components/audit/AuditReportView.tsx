@@ -1,0 +1,37 @@
+import { useEffect, useState } from 'react'
+import { addToAuditPack, fetchAuditReport } from '../../api/client'
+import type { AuditEventSummary, AuditPackReview, AuditReport, EvidenceObject } from '../../api/types'
+import { Button } from '../ui/Button'
+
+function EvidenceList({ title, items }: { title: string; items: EvidenceObject[] }) {
+  return <section className="rounded border border-border bg-panel p-4"><h3 className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">{title}</h3>{items.length ? <ul className="space-y-2 text-xs">{items.map((item) => <li key={item.evidence_id ?? item.evidenceId}><span className="mr-2 font-mono text-accent">{item.evidence_id ?? item.evidenceId}</span>{item.observation}<span className="ml-2 text-text-faint">({item.source})</span></li>)}</ul> : <p className="text-xs text-text-faint">No structured evidence available.</p>}</section>
+}
+
+function ReviewRow({ eventId, event, review, onSave }: { eventId: string; event: AuditEventSummary; review: AuditPackReview; onSave: (eventId: string, note: string, disposition: string) => void }) {
+  const [note, setNote] = useState(review.note)
+  const [disposition, setDisposition] = useState(review.disposition)
+  return <article className="border-l-2 border-accent pl-3 text-xs"><div className="font-mono text-accent">{event.eventId}</div><div>{event.firstDetection.slice(0, 10)} → {event.lastDetection.slice(0, 10)} · {event.observationCount} observations · {event.triage.state}</div><div className="mt-2 flex flex-wrap gap-2"><select aria-label={`Disposition for ${eventId}`} value={disposition} onChange={(e) => setDisposition(e.target.value)} className="rounded border border-border-strong bg-bg px-2 py-1 text-xs"><option value="">No disposition</option><option value="VERIFY">VERIFY</option><option value="INSUFFICIENT">INSUFFICIENT</option><option value="NO_FURTHER_ACTION">NO FURTHER ACTION</option><option value="UNRESOLVED">UNRESOLVED</option></select><input aria-label={`Note for ${eventId}`} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional human note" className="min-w-[220px] flex-1 rounded border border-border-strong bg-bg px-2 py-1 text-xs" /><Button onClick={() => onSave(eventId, note, disposition)}>SAVE REVIEW</Button></div></article>
+}
+
+export function AuditReportView({ auditId, onBack }: { auditId: string; onBack: () => void }) {
+  const [report, setReport] = useState<AuditReport | null>(null)
+  const [error, setError] = useState('')
+  useEffect(() => { fetchAuditReport(auditId).then(setReport).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : 'Report could not be loaded.')) }, [auditId])
+  if (error) return <div role="alert" className="p-6 text-sm text-red-200">{error}</div>
+  if (!report) return <div role="status" className="p-6 text-sm text-text-muted">Loading engagement report…</div>
+  const currentReport = report
+  async function saveReview(eventId: string, note: string, disposition: string) {
+    try { const review = await addToAuditPack(auditId, eventId, { note, disposition }); setReport({ ...currentReport, selectedFireEvents: currentReport.selectedFireEvents.map((item) => item.event.eventId === eventId ? { ...item, review } : item), humanNotes: currentReport.humanNotes.map((item) => item.eventId === eventId ? review : item) }) } catch (reason) { setError(reason instanceof Error ? reason.message : 'Human review could not be saved.') }
+  }
+  return <div className="h-full overflow-auto bg-bg p-5 text-text"><div className="mx-auto max-w-6xl space-y-4">
+    <div className="flex items-start justify-between"><div><div className="text-[10px] uppercase tracking-[0.2em] text-accent">Environmental Fire Review / Investigation Pack</div><h1 className="mt-1 text-xl font-semibold">Engagement report</h1><p className="text-xs text-text-muted">Audit scope · {report.auditScope.reviewStart} → {report.auditScope.reviewEnd}</p></div><Button onClick={onBack}>RETURN TO REGISTER</Button></div>
+    <div className="grid grid-cols-3 gap-2 text-center text-xs sm:grid-cols-6">{Object.entries(report.counts).map(([label, value]) => <div key={label} className="rounded border border-border bg-panel p-3"><div className="text-xl font-semibold text-accent">{value}</div><div className="uppercase tracking-wider text-text-faint">{label}</div></div>)}</div>
+    <section className="grid gap-3 md:grid-cols-2"><div className="rounded border border-border bg-panel p-4 text-xs"><h2 className="mb-2 font-semibold">Source and method</h2><p><span className="text-text-muted">Observed:</span> {report.sourceMethodSummary.observed}</p><p className="mt-1"><span className="text-text-muted">Derived:</span> {report.sourceMethodSummary.derived}</p><p className="mt-1"><span className="text-text-muted">AI interpretation:</span> {report.sourceMethodSummary.ai}</p></div><div className="rounded border border-border bg-panel p-4 text-xs"><h2 className="mb-2 font-semibold">Compression summary</h2><pre className="whitespace-pre-wrap text-text-muted">{JSON.stringify(report.compressionSummary, null, 2)}</pre></div></section>
+    <section className="rounded border border-border bg-panel p-4"><h2 className="mb-3 text-sm font-semibold">Selected FireEvents</h2>{report.selectedFireEvents.length ? <div className="space-y-3">{report.selectedFireEvents.map(({ event, review }) => <ReviewRow key={event.eventId} eventId={event.eventId} event={event} review={review} onSave={saveReview} />)}</div> : <p className="text-xs text-text-faint">No FireEvents have been added to this pack.</p>}</section>
+    <section className="rounded border border-border bg-panel p-4 text-xs"><h2 className="mb-2 text-sm font-semibold">Maps and chronology</h2><p>Map handoff contains {report.maps.selectedEventIds.length} selected FireEvent(s); {report.graphRelationships.length} deterministic graph relationship(s) are retained.</p>{report.chronology.map((item) => <div key={item.eventId} className="mt-2 font-mono text-text-muted">{item.firstDetection.slice(0, 10)} — {item.lastDetection.slice(0, 10)} · {item.eventId}</div>)}</section>
+    {report.deterministicEvidence.map((item) => <div key={item.eventId} className="space-y-3"><EvidenceList title={`Observed evidence · ${item.eventId}`} items={item.observed} /><EvidenceList title={`Derived metrics · ${item.eventId}`} items={item.derived} /></div>)}
+    <section className="rounded border border-border bg-panel p-4 text-xs"><h2 className="mb-2 text-sm font-semibold">AI interpretation and human decision</h2><p>AI analysis: {report.aiAnalysis.length ? 'Structured analysis available.' : 'Not available in the selected structured evidence.'}</p><p className="mt-1">Unresolved questions: {report.unresolvedQuestions.length || 'None recorded.'}</p><p className="mt-1">Verification recommendations: {report.verificationRecommendations.length || 'None recorded.'}</p></section>
+    <section className="rounded border border-border bg-panel p-4 text-xs"><h2 className="mb-2 text-sm font-semibold">Limitations, provenance and model versions</h2>{report.limitations.map((item) => <p key={item} className="mb-1 text-text-muted">• {item}</p>)}<p className="mt-2 font-mono text-text-faint">{report.provenance.algorithmVersions.join(' · ')}</p></section>
+    <p className="rounded border border-status-moderate/40 bg-status-moderate/10 p-4 text-xs text-text-muted">{report.disclaimer}</p>
+  </div></div>
+}
