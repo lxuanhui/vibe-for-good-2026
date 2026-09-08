@@ -5,7 +5,7 @@
 **Project:** Vibe For Good 2026 hackathon MVP  
 **Challenge:** ACCA Challenge Statement #1  
 **Primary geography:** Indonesia  
-**Stack:** Vite + React; Cloudflare Workers; D1 + R2 + KV  
+**Stack:** Vite + React; Flask on AWS Lambda behind an API Gateway HTTP API; DynamoDB + S3  
 
 > This file is the single source of truth. It consolidates the original Claude Code build specification, peat-aware v2 architecture, and Assurance Console UI specification. Where older documents conflict, this file wins.
 
@@ -123,21 +123,27 @@ Store uploaded geometry privately, tenant-scoped, encrypted/access-controlled wh
 
 | Evidence | Source | Role | Persistence default |
 |---|---|---|---|
-| thermal observations | NASA FIRMS VIIRS/MODIS | historical observations/qualifier | R2 historical; cache recent |
-| weather | Open-Meteo / NASA POWER | event context, wind/rain/RH/temp | KV raw cache; D1 finalized derived evidence |
-| optical | Sentinel-2 / Landsat | pre/post visual/burn/vegetation evidence | metadata D1; selected derived imagery R2 |
-| SAR | Sentinel-1 | cloud-independent change evidence | metadata D1; selected derived imagery R2 |
-| peat | Greifswald/KHG where legally/technically suitable | peat context | versioned R2; derived facts D1 |
-| land cover | ESA WorldCover | contextual class only | versioned R2/static |
-| roads/settlements | OSM | context | KV cache |
+| thermal observations | NASA FIRMS VIIRS/MODIS | historical observations/qualifier | S3 historical; cache recent |
+| weather | Open-Meteo / NASA POWER | event context, wind/rain/RH/temp | cache table raw; DynamoDB finalized derived evidence |
+| optical | Sentinel-2 / Landsat | pre/post visual/burn/vegetation evidence | metadata DynamoDB; selected derived imagery S3 |
+| SAR | Sentinel-1 | cloud-independent change evidence | metadata DynamoDB; selected derived imagery S3 |
+| peat | Greifswald/KHG where legally/technically suitable | peat context | versioned S3; derived facts DynamoDB |
+| land cover | ESA WorldCover | contextual class only | versioned S3/static |
+| roads/settlements | OSM | context | cache table |
 
 WorldCover 2020/2021 must not be presented as contemporaneous 2019 land cover. Historical land change should come from contemporaneous imagery.
 
 # 8. Persistence architecture
 
-**D1 stores what the product learned or humans decided. R2 stores bulky/historical evidence. KV stores disposable/re-fetchable cache.**
+**DynamoDB stores what the product learned or humans decided. S3 stores bulky/historical evidence. A TTL-expiring cache table stores disposable/re-fetchable responses.**
 
-D1:
+The three roles matter more than the products. Revisions of this spec before
+2026-09-08 named Cloudflare D1, R2 and KV; the running system is AWS, so the
+same three roles map to DynamoDB, S3, and DynamoDB with a TTL attribute. One
+store with TTL rather than a separate cache service keeps the number of moving
+parts down. See `docs/decision-log.md`.
+
+DynamoDB (durable, queryable — "what we learned or decided"):
 - audit scopes metadata
 - FireEvent summaries
 - membership/index references
@@ -149,7 +155,7 @@ D1:
 - source runs/checkpoints
 - algorithm/model versions
 
-R2:
+S3 (bulky, immutable — "the evidence itself"):
 - historical FIRMS Parquet/GeoParquet partitions
 - uploaded private scope geometry
 - reference rasters/datasets
@@ -157,7 +163,7 @@ R2:
 - frozen report evidence snapshots
 - PDFs/demo fixtures
 
-KV:
+Cache table, TTL-expiring (disposable — "we can always re-fetch this"):
 - weather responses
 - STAC searches
 - OSM responses
@@ -452,9 +458,9 @@ type AuditScope = {
 Every provider declares storage semantics:
 ```python
 storage_policy = {
-  "raw": "R2|NONE",
-  "metadata": "D1",
-  "cache": "KV|NONE",
+  "raw": "S3|NONE",
+  "metadata": "DYNAMODB",
+  "cache": "CACHE|NONE",
   "cache_ttl": 86400,
 }
 ```

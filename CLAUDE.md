@@ -24,7 +24,8 @@ docs/           Decision log and environment facts — read before re-deciding a
 frontend/       Vite + React + TS console (MapLibre, Tailwind 4, zustand, recharts)
 backend/        Flask API — runs locally via wsgi.py, on Lambda via lambda_handler.py
 infra/          Terraform: Lambda + API Gateway HTTP API, applied by CI
-data_pipeline/  Python feasibility spike for the environmental data sources
+data_pipeline/  Clustering, triage, graph, priority and analysis modules — plus
+                the original source feasibility spike. Unit-tested; wired to nothing
 DesignSpecs/    The specs. Environmental_Assurance_Spec.md is canonical; the
                 other three are superseded legacy documents kept for history.
 ```
@@ -37,6 +38,14 @@ three legacy files (`environmental_assurance_claude_code_spec.md`,
 conflict with it, the canonical file wins. Each legacy file carries a
 "2026-09-08 Canonical Audit-Workflow Update" banner pointing back here; don't
 cite a legacy section number in new code or docs.
+
+**The stack is AWS.** The canonical spec named Cloudflare Workers with
+D1/R2/KV until 2026-09-08; it now says Flask on Lambda behind API Gateway
+with DynamoDB and S3, which is what is actually deployed. The three legacy
+specs still say Cloudflare — they are history, not instructions. §8's
+persistence *roles* are unchanged: durable/queryable (DynamoDB), bulky and
+immutable (S3), disposable cache (DynamoDB with a TTL attribute). Serverless
+only; anything always-on needs justification first.
 
 Check [`docs/decision-log.md`](docs/decision-log.md) before changing anything
 architectural — it records what was already tried and rejected, and why.
@@ -71,7 +80,10 @@ seam intact: every function there mirrors `Environmental_Assurance_Spec.md`
 §24 (API), so a caller cannot tell which are real.
 
 Real: `GET /api/events` and `GET /api/events/{id}`, served by Flask from
-`backend/app/data/events.json`. Still fixtures in the browser:
+`backend/app/data/events.json`. Note these are *flat* routes; the canonical
+§24 API is audit-scoped (`/api/audits/{audit_id}/events`). The flat pair was
+built before the canonical spec landed and is interim — build new endpoints
+audit-scoped rather than extending the flat shape. Still fixtures in the browser:
 `fetchOverlay`, `fetchReport`, and `generateReport` — the last of which fakes
 the Investigator/Skeptic loop with `setTimeout`, and is where a real agent
 goes.
@@ -79,10 +91,19 @@ goes.
 The events being served are still *fixture cases*; the endpoint is real, the
 data is invented. Nothing yet derives an event from an observation.
 
-`data_pipeline/` writes to no database by design — it answers "can this
-source be pulled, and pulled *historically*". Its negative results (FIRMS
+`data_pipeline/` is no longer only a feasibility spike. It now holds the
+analysis engine — `clustering/`, `triage/`, `graph/`, `priority/`,
+`complexity/`, `enrichment/`, `propagation/`, `imagery/`, plus `benchmark/`
+and `golden/` regression cases — across ~58 modules with unit tests.
+
+**None of it is reachable from the API.** `backend/app/` imports nothing from
+`data_pipeline`, and nothing persists: no module touches a database, an S3
+bucket, or any store. The engine and the console have not met. That gap, not
+any single endpoint, is the largest thing between here and the demo in §31.
+
+The spike's negative results are still the valuable part of `sources/` (FIRMS
 `day_range` caps at 5 not 10; Overpass attic queries silently return empty;
-NASA FIRMS needs `truststore` for TLS) are the valuable part.
+NASA FIRMS needs `truststore` for TLS).
 
 The only real data reaching the UI is a static FIRMS export from the 2019
 haze window, behind its own clearly-labelled toggle. The demo must never blur
@@ -96,6 +117,7 @@ which data is real and which is a fixture.
 | `add-map-layer` | Adding or changing a console overlay layer |
 | `add-data-source` | Adding or re-checking a source in `data_pipeline/` |
 | `deploy-api` | Deploying or debugging the Lambda-hosted API |
+| `branch-and-pr` | Before the first edit of any task, and again before merging |
 
 ## Working in this repo
 

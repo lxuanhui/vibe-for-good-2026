@@ -6,6 +6,51 @@ more valuable half.
 
 ---
 
+## 2026-09-08 — The canonical spec's stack is now AWS, not Cloudflare
+
+**Status:** done · PR #72
+
+**Decision.** `Environmental_Assurance_Spec.md` was edited to name the stack
+it is actually built on: Flask on AWS Lambda behind an API Gateway HTTP API,
+with DynamoDB and S3. It previously said "Cloudflare Workers; D1 + R2 + KV".
+§8's persistence *model* is unchanged — three roles, not three products:
+
+| Role | Was | Now | What it holds |
+|---|---|---|---|
+| Durable, queryable | D1 | DynamoDB | Decisions, FireEvent summaries, graph edges, evidence metadata, analysis runs |
+| Bulky, immutable | R2 | S3 | FIRMS partitions, uploaded scope geometry, derived imagery, frozen snapshots |
+| Disposable cache | KV | DynamoDB with a TTL attribute | Weather, STAC, OSM, prepared viewport responses |
+
+**Why change the spec rather than record a deviation.** The spec declares
+itself the single source of truth where documents conflict, so a deviation
+documented only in this log loses to it by the spec's own rule. An agent
+reading the spec cold would have been told to provision D1 and R2 against an
+AWS account. The infrastructure has been AWS since 2026-09-07 (see "Backend
+runs on AWS Lambda, not Cloudflare Workers"), it is deployed and working, and
+rebuilding it on Cloudflare would spend the remaining hackathon budget to
+arrive at the same behaviour. The document was the thing that was wrong.
+
+**Why one store with a TTL instead of a separate cache service.** KV's role is
+"we can always re-fetch this". DynamoDB's TTL attribute does that, and a
+second service earns its place only when the first one cannot do the job.
+
+**Safe to change.** Nothing implements it yet: `storage_policy` from §26
+appears in no module, and no code anywhere references `R2`, `D1` or `KV`. The
+mapping is a decision about what to build, not a description of what exists —
+`data_pipeline/` still writes to no store at all.
+
+**Constraint that shaped it.** Serverless only, per the project owner: Lambda,
+S3, DynamoDB are fine; anything always-on, EC2 in particular, needs
+justification first. A container pushed to ECR is acceptable where one is
+genuinely needed — the trigger to watch for is the Lambda bundle outgrowing
+the 250 MB unzipped limit.
+
+**Left alone.** The three legacy specs still say Cloudflare. They are kept for
+history and are superseded by the canonical file; editing them would rewrite
+a record of what was true when they were written.
+
+---
+
 ## 2026-09-08 - Investigator/Skeptic analysis is a bounded structured boundary
 
 **Status:** implemented on issue #15 branch
@@ -280,11 +325,16 @@ not change here.
 is invented. Worth stating plainly because "served by the API" reads as "real"
 and it is not.
 
-**Spec discrepancy found.** UI spec §5 lists the status enum as
-`AMBIGUOUS|REJECTED|STAGE2_RUNNING|CONVERGED`; `frontend/src/api/types.ts`
-uses `AWAITING_REVIEW|STAGE1_REJECTED|STAGE2_RUNNING|CONVERGED`, and so does
-the fixture data and the UI. The backend follows the frontend names, since
-those are what actually exist on both sides. The spec is the stale one.
+**Spec discrepancy found — ~~the spec is the stale one~~. SUPERSEDED, see
+"`EventStatus` renamed to match the canonical spec's Stage-1 vocabulary"
+above.** At the time: UI spec §5 listed `AMBIGUOUS|REJECTED|...` while
+`types.ts`, the fixture data and the UI used
+`AWAITING_REVIEW|STAGE1_REJECTED|...`, so the backend followed the frontend
+names. That reasoning did not survive contact with
+`Environmental_Assurance_Spec.md`, which arrived hours later and made
+`AMBIGUOUS`/`LIKELY_NON_FIRE` canonical. The conclusion was wrong, not just
+the citation — flagged here because a reader who stops at this entry would
+act on it.
 
 **Known duplication.** `frontend/src/api/fixtures/events.ts` still holds the
 same three events, because `fixtures/overlays.ts` anchors its overlay geometry
