@@ -106,6 +106,36 @@ products can differ over a 90-day accumulation. See the module docstring for
 why NASA POWER is a disagreement check rather than a second primary source,
 and why historical anomaly is computed for rainfall only.
 
+## Peat intersection and context service
+
+`enrichment/peat_context.py` makes peat a first-class environmental attribute
+of every `FireEvent` -- `get_peat_context_for_event(event)` returns a
+`PeatContext` covering direct footprint intersection, peat fraction within
+the event's footprint and a configurable buffer, distance to the nearest
+mapped peat if none intersects, and (via `peat_fraction_along_corridor`) the
+peat fraction of a straight-line corridor between two linked events'
+centroids. It reads the Greifswald Mire Centre's Global Peatland Map 2.0 (a
+single static 3.6MB zip containing one ~550MP unprojected-WGS84 GeoTIFF) with
+Pillow plus hand-rolled affine math rather than pulling in a GDAL/rasterio
+stack, downloads and crops it to `INDONESIA_BBOX` exactly once, and caches
+the crop as a `.npy` array (~9MB on disk) in `data_pipeline/output/` so every
+later call in the same or a later process skips the network entirely.
+`compute_peat_context()` is pure (no network) and is what the tests exercise
+directly against a small synthetic raster; only `load_peat_raster()` and its
+`_demo()` touch the network. `to_evidence_objects()` converts a `PeatContext`
+into `Environmental_Assurance_Spec.md` §16 `EvidenceObject`s, and always
+attaches a non-inference limitation stating that peat overlap is geometric
+context only -- never a claim of underground combustion, smouldering, or
+fire persistence, which stays an interpretation layer's hypothesis to weigh
+against SAR persistence and elapsed time (§15). Run
+`python -m data_pipeline.enrichment.peat_context` for a live demo against the
+same largest FireEvent used in the weather-enrichment demo above: last
+verified run found the event's footprint and 5km buffer 100% mapped peat
+(`FE-20190901-ce19162367`, direct on-peat centroid) and flagged that the
+event's 20.6km spatial extent exceeds the default 5km buffer radius, so the
+footprint check -- not the buffer -- is the representative intersection
+result for a fire complex this large.
+
 ## Provider interface
 
 `nasa_firms.py`, `open_meteo.py`, `nasa_power.py`, `copernicus_cds.py`, and
