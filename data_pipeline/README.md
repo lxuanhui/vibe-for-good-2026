@@ -34,6 +34,19 @@ python -m data_pipeline.sources.open_meteo
 
 Sample pulls land in `data_pipeline/output/` (gitignored).
 
+## Provider interface
+
+`nasa_firms.py`, `open_meteo.py`, `nasa_power.py`, `copernicus_cds.py`, and
+`global_peatland_database.py` all return a `SourceResult`
+(`common/result.py`) from `fetch_historical_sample()` instead of a bespoke
+dict or a bare `None` — one status enum (`PASS`/`FAIL`/`SKIPPED`), one
+provenance shape (endpoint, retrieved-at, auth method), and a
+`limitations` list carrying each source's known caveats (e.g. FIRMS's
+5-day `day_range` cap). `run_all.py` reads that shape to print a per-source
+PASS/FAIL/SKIPPED summary without knowing anything module-specific.
+`esa_worldcover.py` and `overpass_api.py` are still plain print-and-return
+spike scripts; `run_all.py` treats "ran without raising" as PASS for those.
+
 ## Sources covered
 
 | Module | Source | Auth needed | Historical? |

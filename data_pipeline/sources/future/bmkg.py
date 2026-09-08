@@ -10,15 +10,22 @@ exists, then fill in below.
 """
 from __future__ import annotations
 
+from data_pipeline.common.result import Provenance, SourceResult, SourceStatus
 from data_pipeline.config import BMKG_API_KEY
 
 
-def fetch_historical_sample() -> None:
+def fetch_historical_sample() -> SourceResult:
     print("== BMKG (placeholder) ==")
+    provenance = Provenance(endpoint="https://data.bmkg.go.id/", auth="api_key")
     if not BMKG_API_KEY:
         print("BMKG_API_KEY not set -- account still being provisioned. "
               "Skipping. See module docstring for notes.\n")
-        return
+        return SourceResult(
+            source_name="BMKG",
+            status=SourceStatus.SKIPPED,
+            provenance=provenance,
+            summary="BMKG_API_KEY not set",
+        )
     raise NotImplementedError("Fill in once BMKG credentials are ready.")
 
 

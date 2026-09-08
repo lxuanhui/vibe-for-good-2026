@@ -12,15 +12,22 @@ named-concession directory).
 """
 from __future__ import annotations
 
+from data_pipeline.common.result import Provenance, SourceResult, SourceStatus
 from data_pipeline.config import GFW_API_KEY
 
 
-def fetch_historical_sample() -> None:
+def fetch_historical_sample() -> SourceResult:
     print("== Global Forest Watch Data API (placeholder) ==")
+    provenance = Provenance(endpoint="https://data-api.globalforestwatch.org/", auth="api_key")
     if not GFW_API_KEY:
         print("GFW_API_KEY not set -- account still being provisioned. "
               "Skipping. See module docstring for the planned integration.\n")
-        return
+        return SourceResult(
+            source_name="Global Forest Watch Data API",
+            status=SourceStatus.SKIPPED,
+            provenance=provenance,
+            summary="GFW_API_KEY not set",
+        )
     raise NotImplementedError("Fill in once the GFW account/API key is ready.")
 
 

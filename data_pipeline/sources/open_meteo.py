@@ -19,9 +19,16 @@ import pandas as pd
 import openmeteo_requests
 
 from data_pipeline.common.http import SESSION
+from data_pipeline.common.result import Provenance, SourceResult, SourceStatus
 from data_pipeline.config import HISTORICAL_WINDOW, OUTPUT_DIR, POINTS
 
 ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
+
+LIMITATIONS: list[str] = [
+    "ERA5/ERA5-Land reanalysis, not direct station observation -- ~0.25 deg "
+    "grid interpolated to the query point, not a measurement at that exact "
+    "coordinate.",
+]
 
 HOURLY_VARS = [
     "temperature_2m",
@@ -99,34 +106,54 @@ def _hourly_to_df(response) -> pd.DataFrame:
     return pd.DataFrame(data)
 
 
-def fetch_historical_sample() -> None:
+def fetch_historical_sample() -> SourceResult:
     print("== Open-Meteo (Historical Weather Archive) ==")
-    start, end = HISTORICAL_WINDOW
-    per_point_means = {}
-    for name, (lat, lon) in POINTS.items():
-        response = fetch_point(lat, lon, start, end)
-        df = _hourly_to_df(response)
-        per_point_means[name] = float(df["temperature_2m"].mean())
-        out = OUTPUT_DIR / f"open_meteo_hourly_{name}.csv"
-        df.to_csv(out, index=False)
-        print(f"{name} ({lat},{lon}): {len(df)} hourly rows, "
-              f"mean temp_2m={per_point_means[name]:.2f}C, elevation={response.Elevation()}m")
+    provenance = Provenance(endpoint=ARCHIVE_URL, auth="none")
 
-    distinct = len(set(round(v, 2) for v in per_point_means.values())) > 1
-    print(f"Values differ across points: {distinct} "
-          "-> confirms per-coordinate retrieval, not a single national value.")
+    try:
+        start, end = HISTORICAL_WINDOW
+        per_point_means = {}
+        for name, (lat, lon) in POINTS.items():
+            response = fetch_point(lat, lon, start, end)
+            df = _hourly_to_df(response)
+            per_point_means[name] = float(df["temperature_2m"].mean())
+            out = OUTPUT_DIR / f"open_meteo_hourly_{name}.csv"
+            df.to_csv(out, index=False)
+            print(f"{name} ({lat},{lon}): {len(df)} hourly rows, "
+                  f"mean temp_2m={per_point_means[name]:.2f}C, elevation={response.Elevation()}m")
 
-    batch = fetch_batch(POINTS, start, end)
-    print(f"Batched single-request pull for {len(POINTS)} points returned "
-          f"{len(batch)} responses, coords: "
-          f"{[(round(r.Latitude(), 2), round(r.Longitude(), 2)) for r in batch]} "
-          "-- multi-point historical pulls work in one HTTP call, useful for cron efficiency.")
+        distinct = len(set(round(v, 2) for v in per_point_means.values())) > 1
+        print(f"Values differ across points: {distinct} "
+              "-> confirms per-coordinate retrieval, not a single national value.")
 
-    old_name, (lat, lon) = next(iter(POINTS.items()))
-    old_response = fetch_point(lat, lon, "2005-01-01", "2005-01-03")
-    old_df = _hourly_to_df(old_response)
-    print(f"2005-01-01..03 sample for {old_name}: {len(old_df)} hourly rows "
-          "(non-empty confirms the archive reaches back at least this far).\n")
+        batch = fetch_batch(POINTS, start, end)
+        print(f"Batched single-request pull for {len(POINTS)} points returned "
+              f"{len(batch)} responses, coords: "
+              f"{[(round(r.Latitude(), 2), round(r.Longitude(), 2)) for r in batch]} "
+              "-- multi-point historical pulls work in one HTTP call, useful for cron efficiency.")
+
+        old_name, (lat, lon) = next(iter(POINTS.items()))
+        old_response = fetch_point(lat, lon, "2005-01-01", "2005-01-03")
+        old_df = _hourly_to_df(old_response)
+        print(f"2005-01-01..03 sample for {old_name}: {len(old_df)} hourly rows "
+              "(non-empty confirms the archive reaches back at least this far).\n")
+    except Exception as exc:  # noqa: BLE001 -- normalized into SourceResult, not swallowed
+        return SourceResult(
+            source_name="Open-Meteo",
+            status=SourceStatus.FAILED,
+            provenance=provenance,
+            limitations=LIMITATIONS,
+            error=str(exc),
+        )
+
+    return SourceResult(
+        source_name="Open-Meteo",
+        status=SourceStatus.OK,
+        provenance=provenance,
+        limitations=LIMITATIONS,
+        summary=f"{len(POINTS)} points, per-point values distinct={distinct}, "
+                f"archive reaches back to at least 2005 ({len(old_df)} rows)",
+    )
 
 
 if __name__ == "__main__":
