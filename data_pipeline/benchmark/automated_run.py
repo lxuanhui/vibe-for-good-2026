@@ -19,6 +19,7 @@ goes, not just a single opaque total. `find_neighbouring_events` and
 exercise directly; `run_automated_benchmark` is the only network-touching
 entry point (besides its `_demo()`).
 """
+
 from __future__ import annotations
 
 import json
@@ -32,12 +33,15 @@ from data_pipeline.clustering.firms_clustering import FireEvent, cluster_events
 from data_pipeline.config import OUTPUT_DIR, SUMATRA_KALIMANTAN_BBOX
 from data_pipeline.enrichment import peat_context, weather_enrichment
 from data_pipeline.sources import copernicus_cds
+from data_pipeline.triage.stage1 import summarize_triage, triage_events
 
 EARTH_RADIUS_KM = 6371.0088
 DEFAULT_NEIGHBOUR_RADIUS_KM = 50.0
 DEFAULT_NEIGHBOUR_WINDOW_DAYS = 30.0
 DEFAULT_PEAT_BUFFER_KM = 5.0
-PEAT_EVIDENCE_FIELDS_POSSIBLE = 4  # direct_intersection, footprint_fraction, buffer_fraction, distance_to_peat
+PEAT_EVIDENCE_FIELDS_POSSIBLE = (
+    4  # direct_intersection, footprint_fraction, buffer_fraction, distance_to_peat
+)
 
 # One command invocation runs the whole chain below; the only human
 # interaction the automated path requires is selecting which FireEvent to
@@ -46,10 +50,11 @@ PEAT_EVIDENCE_FIELDS_POSSIBLE = 4  # direct_intersection, footprint_fraction, bu
 MANUAL_INTERACTIONS = 1
 
 EVENTS_TO_REVIEW_QUEUE_NOTE = (
-    "No compression measured: Stage-1 triage (issue #9) is not implemented yet, so every "
-    "FireEvent produced by clustering currently reaches the human-review queue undiminished. "
-    "This is an honest 1:1 ratio reflecting the pipeline's current state, not a placeholder "
-    "target -- re-measure once #9 lands."
+    "Stage-1 queue compression in this benchmark uses FIRMS confidence, FRP, and repeat "
+    "observations plus spatially and temporally nearby FIRMS detections for every event. Optional "
+    "land-cover, settlement, persistent heat-source, volcano/geothermal, and recent-rainfall "
+    "context is not supplied for the full event collection; rules without evidence remain "
+    "NOT_EVALUATED, and LIKELY_FIRE plus AMBIGUOUS events remain in the review queue."
 )
 
 
@@ -87,7 +92,9 @@ def find_neighbouring_events(
     for e in events:
         if e.event_id == target.event_id:
             continue
-        distance = _haversine_km(target.centroid[0], target.centroid[1], e.centroid[0], e.centroid[1])
+        distance = _haversine_km(
+            target.centroid[0], target.centroid[1], e.centroid[0], e.centroid[1]
+        )
         if distance > radius_km:
             continue
         e_start = pd.Timestamp(e.first_detection)
@@ -108,12 +115,17 @@ def find_neighbouring_events(
     return neighbours
 
 
-def evidence_field_completeness(weather_objects: list[dict], peat_objects: list[dict]) -> dict:
+def evidence_field_completeness(
+    weather_objects: list[dict], peat_objects: list[dict]
+) -> dict:
     """Fraction of possible evidence fields actually populated for this
     FireEvent. A missing field means the underlying source genuinely had no
     data for that window/metric (both modules document `None` as never
     fabricated -- see their docstrings), not a bug here."""
-    max_weather = len(weather_enrichment.WINDOW_NAMES) * weather_enrichment.EVIDENCE_METRICS_PER_WINDOW
+    max_weather = (
+        len(weather_enrichment.WINDOW_NAMES)
+        * weather_enrichment.EVIDENCE_METRICS_PER_WINDOW
+    )
     max_peat = PEAT_EVIDENCE_FIELDS_POSSIBLE
     weather_count = len(weather_objects)
     peat_count = len(peat_objects)
@@ -124,7 +136,9 @@ def evidence_field_completeness(weather_objects: list[dict], peat_objects: list[
         "weather_fields_possible": max_weather,
         "peat_fields_present": peat_count,
         "peat_fields_possible": max_peat,
-        "completeness_fraction": round(total_present / total_possible, 4) if total_possible else None,
+        "completeness_fraction": round(total_present / total_possible, 4)
+        if total_possible
+        else None,
     }
 
 
@@ -142,18 +156,25 @@ class AutomatedBenchmarkResult:
     stage_timings: list[StageTiming]
     total_seconds: float
     observations_to_events_compression: float | None
-    events_to_review_queue_compression: float
+    events_to_review_queue_compression: float | None
+    review_queue_count: int
+    triage_state_counts: dict[str, int]
     events_to_review_queue_note: str
     evidence_completeness: dict
     neighbouring_event_count: int
     imagery_scene_count: dict
     manual_interactions: int
     evidence_summary_path: str
-    generated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    generated_at: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
 
     def to_dict(self) -> dict:
         d = asdict(self)
-        d["stage_timings"] = [{"stage": s.stage, "seconds": round(s.seconds, 3)} for s in self.stage_timings]
+        d["stage_timings"] = [
+            {"stage": s.stage, "seconds": round(s.seconds, 3)}
+            for s in self.stage_timings
+        ]
         d["total_seconds"] = round(self.total_seconds, 3)
         return d
 
@@ -174,7 +195,9 @@ def _event_row(e: FireEvent) -> dict:
     }
 
 
-def run_automated_benchmark(buffer_km: float = DEFAULT_PEAT_BUFFER_KM) -> AutomatedBenchmarkResult:
+def run_automated_benchmark(
+    buffer_km: float = DEFAULT_PEAT_BUFFER_KM,
+) -> AutomatedBenchmarkResult:
     timings: list[StageTiming] = []
     t_start = time.perf_counter()
 
@@ -199,8 +222,17 @@ def run_automated_benchmark(buffer_km: float = DEFAULT_PEAT_BUFFER_KM) -> Automa
             start_date="2019-09-01",
         )
 
-    events, _annotated = _stage("reconstruct_event_chronology", cluster_events, observations)
+    events, _annotated = _stage(
+        "reconstruct_event_chronology", cluster_events, observations
+    )
+    triage_results = _stage(
+        "deterministic_stage1_triage", triage_events, events, observations
+    )
+    triage_summary = summarize_triage(triage_results)
     target = max(events, key=lambda e: e.observation_count)
+    target_triage = next(
+        result for result in triage_results if result.event_id == target.event_id
+    )
 
     weather_bundle = _stage(
         "retrieve_historical_weather",
@@ -211,20 +243,33 @@ def run_automated_benchmark(buffer_km: float = DEFAULT_PEAT_BUFFER_KM) -> Automa
     )
     weather_objects = weather_enrichment.to_evidence_objects(weather_bundle)
 
-    peat_ctx = _stage("inspect_peat_context", peat_context.get_peat_context_for_event, target, buffer_km)
+    peat_ctx = _stage(
+        "inspect_peat_context",
+        peat_context.get_peat_context_for_event,
+        target,
+        buffer_km,
+    )
     peat_objects = peat_context.to_evidence_objects(peat_ctx)
 
-    neighbours = _stage("identify_neighbouring_events", find_neighbouring_events, target, events)
+    neighbours = _stage(
+        "identify_neighbouring_events", find_neighbouring_events, target, events
+    )
 
     west, south, east, north = target.bbox
     pad_deg = 0.2  # a small cluster's own bbox is far smaller than one Sentinel tile footprint
     imagery_bbox = (west - pad_deg, south - pad_deg, east + pad_deg, north + pad_deg)
     imagery_start = pd.Timestamp(target.first_detection).strftime("%Y-%m-%d")
-    imagery_end = (pd.Timestamp(target.last_detection) + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+    imagery_end = (pd.Timestamp(target.last_detection) + pd.Timedelta(days=1)).strftime(
+        "%Y-%m-%d"
+    )
 
     def _search_imagery():
-        s1 = copernicus_cds.search("sentinel-1-grd", imagery_bbox, imagery_start, imagery_end)
-        s2 = copernicus_cds.search("sentinel-2-l2a", imagery_bbox, imagery_start, imagery_end)
+        s1 = copernicus_cds.search(
+            "sentinel-1-grd", imagery_bbox, imagery_start, imagery_end
+        )
+        s2 = copernicus_cds.search(
+            "sentinel-2-l2a", imagery_bbox, imagery_start, imagery_end
+        )
         return s1.get("features", []), s2.get("features", [])
 
     s1_features, s2_features = _stage("find_imagery_metadata", _search_imagery)
@@ -232,12 +277,14 @@ def run_automated_benchmark(buffer_km: float = DEFAULT_PEAT_BUFFER_KM) -> Automa
     def _assemble_summary():
         return {
             "event": _event_row(target),
+            "stage1_triage": target_triage.to_dict(),
             "weather_evidence": weather_objects,
             "peat_evidence": peat_objects,
             "neighbouring_events": [asdict(n) for n in neighbours],
             "imagery_candidates": {
                 "sentinel1_grd": [
-                    {"id": f["id"], "datetime": f["properties"].get("datetime")} for f in s1_features[:10]
+                    {"id": f["id"], "datetime": f["properties"].get("datetime")}
+                    for f in s1_features[:10]
                 ],
                 "sentinel2_l2a": [
                     {
@@ -264,12 +311,21 @@ def run_automated_benchmark(buffer_km: float = DEFAULT_PEAT_BUFFER_KM) -> Automa
         event_count=len(events),
         stage_timings=timings,
         total_seconds=total_seconds,
-        observations_to_events_compression=round(len(observations) / len(events), 2) if events else None,
-        events_to_review_queue_compression=1.0,
+        observations_to_events_compression=round(len(observations) / len(events), 2)
+        if events
+        else None,
+        events_to_review_queue_compression=triage_summary.events_to_review_queue_compression,
+        review_queue_count=triage_summary.review_queue_count,
+        triage_state_counts=triage_summary.state_counts,
         events_to_review_queue_note=EVENTS_TO_REVIEW_QUEUE_NOTE,
-        evidence_completeness=evidence_field_completeness(weather_objects, peat_objects),
+        evidence_completeness=evidence_field_completeness(
+            weather_objects, peat_objects
+        ),
         neighbouring_event_count=len(neighbours),
-        imagery_scene_count={"sentinel1_grd": len(s1_features), "sentinel2_l2a": len(s2_features)},
+        imagery_scene_count={
+            "sentinel1_grd": len(s1_features),
+            "sentinel2_l2a": len(s2_features),
+        },
         manual_interactions=MANUAL_INTERACTIONS,
         evidence_summary_path=str(out_path),
     )

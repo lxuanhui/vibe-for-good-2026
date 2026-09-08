@@ -6,6 +6,40 @@ more valuable half.
 
 ---
 
+## 2026-09-08 — Stage-1 triage stays deterministic, provenance-bound, and conservative
+
+**Status:** implemented on issue #9 branch
+
+**Decision.** Stage 1 is a versioned additive rule engine (`stage1-rules-v1`).
+It derives FIRMS confidence, FRP, repeat-observation evidence, and nearby
+detections from the supplied event collection. It accepts other context only
+when the caller supplies an EvidenceObject-compatible value with an evidence
+ID and source. Missing context is `NOT_EVALUATED`, never silently treated as
+absence. A score of four is required for `LIKELY_FIRE` or `LIKELY_NON_FIRE`;
+if both sides reach the threshold, the outcome is `AMBIGUOUS` rather than
+allowing one explanation to cancel the other.
+
+**Why.** The pipeline has no labelled validation set from which to fit or
+calibrate a probabilistic classifier. Explicit rules make every screening
+decision inspectable today and allow the thresholds to be replaced later
+without pretending the current numbers are learned probabilities. Strong
+documented persistent-heat-source or volcano/geothermal context can meet the
+non-fire threshold alone. Weak urban/settlement context cannot: it needs
+corroborating low-confidence, low-FRP, or singleton evidence before deeper
+investigation spend is withheld.
+
+**Routing.** Only `AMBIGUOUS` requests bounded AI review. `LIKELY_FIRE` remains
+eligible for deterministic evidence acquisition. `LIKELY_NON_FIRE` records why
+deeper investigation budget was not used. These are screening states about
+the available observations and context, not findings about ignition cause,
+intent, legality, or responsibility.
+
+**Revisit when** a representative labelled set is available. Calibrate the
+thresholds against false-negative cost before production use and increment
+the algorithm version whenever a threshold or rule weight changes.
+
+---
+
 ## 2026-09-08 — `EventStatus` renamed to match the canonical spec's Stage-1 vocabulary
 
 **Status:** done

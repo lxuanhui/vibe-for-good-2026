@@ -15,6 +15,7 @@ regression anywhere -- clustering, weather, peat, or imagery-candidate
 selection -- is caught, not just the stage a given code change happened to
 touch.
 """
+
 from __future__ import annotations
 
 import json
@@ -35,6 +36,7 @@ from data_pipeline.golden.cases import (
     strip_volatile,
     weather_dir,
 )
+from data_pipeline.triage.stage1 import Stage1State, triage_event
 
 CASE_IDS = [c.case_id for c in CASES]
 
@@ -99,11 +101,17 @@ def test_weather_evidence_is_stable(case_id):
 
     om_hourly = pd.read_csv(wdir / "om_hourly.csv", parse_dates=["date"])
     om_hourly[_OM_FLOAT_COLUMNS] = om_hourly[_OM_FLOAT_COLUMNS].astype("float32")
-    power_daily = pd.read_csv(wdir / "power_daily.csv", index_col="date", parse_dates=["date"])
+    power_daily = pd.read_csv(
+        wdir / "power_daily.csv", index_col="date", parse_dates=["date"]
+    )
     baseline = json.loads((wdir / "baseline_rainfall.json").read_text())
 
-    windows = weather_enrichment.compute_weather_windows(event, om_hourly, power_daily, baseline)
-    bundle = weather_enrichment.WeatherEvidenceBundle(event_id=event.event_id, centroid=event.centroid, windows=windows)
+    windows = weather_enrichment.compute_weather_windows(
+        event, om_hourly, power_daily, baseline
+    )
+    bundle = weather_enrichment.WeatherEvidenceBundle(
+        event_id=event.event_id, centroid=event.centroid, windows=windows
+    )
     actual = strip_volatile(weather_enrichment.to_evidence_objects(bundle))
     expected = _load_expected(case_id, "weather_evidence")
 
@@ -174,8 +182,25 @@ def test_cases_cover_simple_complex_and_peat_shapes():
         peat_related,
         peat_context.PeatRaster(
             array=np.load(peat_dir("peat_related") / "raster_crop.npy"),
-            **json.loads((peat_dir("peat_related") / "raster_transform.json").read_text()),
+            **json.loads(
+                (peat_dir("peat_related") / "raster_transform.json").read_text()
+            ),
         ),
     )
     assert peat_ctx.direct_intersection is True
     assert peat_ctx.footprint_peat_fraction is not None
+
+
+@pytest.mark.parametrize(
+    ("case_id", "expected_state"),
+    [
+        ("simple", Stage1State.AMBIGUOUS),
+        ("complex_multilobe", Stage1State.LIKELY_FIRE),
+        ("peat_related", Stage1State.LIKELY_FIRE),
+    ],
+)
+def test_stage1_outcome_is_stable_for_golden_cases(case_id, expected_state):
+    observations = pd.read_csv(observations_path(case_id))
+    event = _event_for(case_id)
+    result = triage_event(event, observations)
+    assert result.state == expected_state

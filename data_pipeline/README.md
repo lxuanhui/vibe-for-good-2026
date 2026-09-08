@@ -170,12 +170,33 @@ judgement across many events, field verification, and report sign-off. Do
 not extrapolate "99% faster evidence reconstruction" into "the audit is 99%
 faster."
 
-**`events_to_human_review_queue_compression` is deliberately 1.0 (no
-compression), not a fabricated number.** Stage-1 triage (issue #9) doesn't
-exist yet, so every FireEvent clustering produces currently reaches a human
-reviewer undiminished -- an honest measurement of the pipeline's current
-state, to be re-measured once #9 lands, not a placeholder target invented to
-fill the metric.
+## Deterministic Stage-1 triage
+
+`triage/stage1.py` screens reconstructed FireEvents before imagery acquisition
+or AI analysis. It always evaluates FIRMS confidence, FRP, and repeat
+observations. Batch triage derives spatially and temporally nearby FIRMS
+detections with one spatial index. Callers may add provenance-linked
+land-cover, urban, settlement, persistent heat-source, volcano/geothermal, and
+recent-rainfall context through `Stage1Context`. Missing context stays explicit
+as `NOT_EVALUATED`; it is never treated as evidence that a feature is absent.
+`MetricEvidence.from_evidence_object()` adapts existing weather or contextual
+EvidenceObjects while preserving their source, quality, limitations, time
+window, retrieval time, algorithm version, and raw reference.
+
+Every result includes all rule evaluations, the evidence IDs behind each
+measured claim, separate fire/non-fire support scores, the decisive rule IDs,
+and a budget explanation. Only `AMBIGUOUS` requests bounded AI review.
+`LIKELY_NON_FIRE` prevents deeper investigation spend but remains a screening
+state, not a conclusion about ignition cause or responsibility. Thresholds are
+versioned as `stage1-rules-v1` and should be calibrated against labelled cases
+before production use.
+
+The workload benchmark now measures FireEvents-to-review-queue compression
+using FIRMS-only Stage-1 evidence for the full collection. Its result records
+the state counts and exactly which optional rules were unavailable, rather
+than presenting missing context as benign. Run the benchmark again before
+citing a numeric queue-compression result; it depends on the current cached
+FIRMS sample.
 
 ## Golden historical regression cases
 
