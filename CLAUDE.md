@@ -40,12 +40,16 @@ conflict with it, the canonical file wins. Each legacy file carries a
 cite a legacy section number in new code or docs.
 
 **The stack is AWS.** The canonical spec named Cloudflare Workers with
-D1/R2/KV until 2026-09-08; it now says Flask on Lambda behind API Gateway
-with DynamoDB and S3, which is what is actually deployed. The three legacy
-specs still say Cloudflare — they are history, not instructions. §8's
-persistence *roles* are unchanged: durable/queryable (DynamoDB), bulky and
-immutable (S3), disposable cache (DynamoDB with a TTL attribute). Serverless
-only; anything always-on needs justification first.
+D1/R2/KV until 2026-09-08; it now says Flask on Lambda behind API Gateway,
+which is what is actually deployed. The three legacy specs still say
+Cloudflare — they are history, not instructions.
+
+§8's persistence *roles* are canonical — durable/queryable metadata, bulky
+immutable evidence, disposable cache — but the AWS services behind them are
+deliberately **not chosen yet**, so the spec names roles rather than products.
+Nothing persists today, so nothing forces the decision; don't quietly settle
+it by writing DynamoDB or S3 into the spec. Serverless only when it is made,
+and anything always-on needs justification first.
 
 Check [`docs/decision-log.md`](docs/decision-log.md) before changing anything
 architectural — it records what was already tried and rejected, and why.

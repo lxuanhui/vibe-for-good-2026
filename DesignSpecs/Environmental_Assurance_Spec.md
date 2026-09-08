@@ -5,7 +5,7 @@
 **Project:** Vibe For Good 2026 hackathon MVP  
 **Challenge:** ACCA Challenge Statement #1  
 **Primary geography:** Indonesia  
-**Stack:** Vite + React; Flask on AWS Lambda behind an API Gateway HTTP API; DynamoDB + S3  
+**Stack:** Vite + React frontend; Flask API on AWS Lambda behind API Gateway HTTP API; Terraform-managed AWS infrastructure
 
 > This file is the single source of truth. It consolidates the original Claude Code build specification, peat-aware v2 architecture, and Assurance Console UI specification. Where older documents conflict, this file wins.
 
@@ -123,27 +123,25 @@ Store uploaded geometry privately, tenant-scoped, encrypted/access-controlled wh
 
 | Evidence | Source | Role | Persistence default |
 |---|---|---|---|
-| thermal observations | NASA FIRMS VIIRS/MODIS | historical observations/qualifier | S3 historical; cache recent |
-| weather | Open-Meteo / NASA POWER | event context, wind/rain/RH/temp | cache table raw; DynamoDB finalized derived evidence |
-| optical | Sentinel-2 / Landsat | pre/post visual/burn/vegetation evidence | metadata DynamoDB; selected derived imagery S3 |
-| SAR | Sentinel-1 | cloud-independent change evidence | metadata DynamoDB; selected derived imagery S3 |
-| peat | Greifswald/KHG where legally/technically suitable | peat context | versioned S3; derived facts DynamoDB |
-| land cover | ESA WorldCover | contextual class only | versioned S3/static |
-| roads/settlements | OSM | context | cache table |
+| thermal observations | NASA FIRMS VIIRS/MODIS | historical observations/qualifier | bulky evidence store; cache recent |
+| weather | Open-Meteo / NASA POWER | event context, wind/rain/RH/temp | disposable cache; finalized derived evidence store |
+| optical | Sentinel-2 / Landsat | pre/post visual/burn/vegetation evidence | metadata store; selected derived imagery store |
+| SAR | Sentinel-1 | cloud-independent change evidence | metadata store; selected derived imagery store |
+| peat | Greifswald/KHG where legally/technically suitable | peat context | versioned evidence store; derived facts metadata store |
+| land cover | ESA WorldCover | contextual class only | versioned evidence store/static |
+| roads/settlements | OSM | context | disposable cache |
 
 WorldCover 2020/2021 must not be presented as contemporaneous 2019 land cover. Historical land change should come from contemporaneous imagery.
 
 # 8. Persistence architecture
 
-**DynamoDB stores what the product learned or humans decided. S3 stores bulky/historical evidence. A TTL-expiring cache table stores disposable/re-fetchable responses.**
+The repository currently deploys the API as Flask on AWS Lambda behind API
+Gateway HTTP API and does not yet provision application persistence. The
+logical storage roles below remain canonical; the AWS service mapping is a
+separate infrastructure decision and must not be replaced with an unselected
+provider stack.
 
-The three roles matter more than the products. Revisions of this spec before
-2026-09-08 named Cloudflare D1, R2 and KV; the running system is AWS, so the
-same three roles map to DynamoDB, S3, and DynamoDB with a TTL attribute. One
-store with TTL rather than a separate cache service keeps the number of moving
-parts down. See `docs/decision-log.md`.
-
-DynamoDB (durable, queryable — "what we learned or decided"):
+Durable metadata store (AWS service not yet chosen):
 - audit scopes metadata
 - FireEvent summaries
 - membership/index references
@@ -155,7 +153,7 @@ DynamoDB (durable, queryable — "what we learned or decided"):
 - source runs/checkpoints
 - algorithm/model versions
 
-S3 (bulky, immutable — "the evidence itself"):
+Bulky/private evidence store (AWS service not yet chosen):
 - historical FIRMS Parquet/GeoParquet partitions
 - uploaded private scope geometry
 - reference rasters/datasets
@@ -163,7 +161,7 @@ S3 (bulky, immutable — "the evidence itself"):
 - frozen report evidence snapshots
 - PDFs/demo fixtures
 
-Cache table, TTL-expiring (disposable — "we can always re-fetch this"):
+Disposable/re-fetchable cache (AWS service not yet chosen):
 - weather responses
 - STAC searches
 - OSM responses
@@ -445,7 +443,7 @@ type AuditScope = {
   label?: string;
   reviewStart: string;
   reviewEnd: string;
-  geometryS3Key?: string;
+  geometryObjectKey?: string;
   bbox: [number, number, number, number];
   centroid: [number, number];
   contextBufferKm: number;
@@ -458,12 +456,16 @@ type AuditScope = {
 Every provider declares storage semantics:
 ```python
 storage_policy = {
-  "raw": "S3|NONE",
-  "metadata": "DYNAMODB",
-  "cache": "CACHE|NONE",
-  "cache_ttl": 86400,
+    "raw": "EVIDENCE_STORE|NONE",
+    "metadata": "METADATA_STORE",
+    "cache": "DISPOSABLE_CACHE|NONE",
+    "cache_ttl": 86400,
 }
 ```
+
+These are logical roles, not provider names. The current AWS service mapping
+remains intentionally undecided until the ingestion and persistence work is
+scoped.
 
 Do not duplicate overlapping weather windows per event when a shared cached query can serve them.
 

@@ -6,48 +6,66 @@ more valuable half.
 
 ---
 
-## 2026-09-08 — The canonical spec's stack is now AWS, not Cloudflare
+## 2026-09-08 — The spec drops Cloudflare, and names storage roles not products
 
 **Status:** done · PR #72
 
-**Decision.** `Environmental_Assurance_Spec.md` was edited to name the stack
-it is actually built on: Flask on AWS Lambda behind an API Gateway HTTP API,
-with DynamoDB and S3. It previously said "Cloudflare Workers; D1 + R2 + KV".
-§8's persistence *model* is unchanged — three roles, not three products:
-
-| Role | Was | Now | What it holds |
-|---|---|---|---|
-| Durable, queryable | D1 | DynamoDB | Decisions, FireEvent summaries, graph edges, evidence metadata, analysis runs |
-| Bulky, immutable | R2 | S3 | FIRMS partitions, uploaded scope geometry, derived imagery, frozen snapshots |
-| Disposable cache | KV | DynamoDB with a TTL attribute | Weather, STAC, OSM, prepared viewport responses |
+**Decision.** `Environmental_Assurance_Spec.md` no longer says "Cloudflare
+Workers; D1 + R2 + KV". The stack line names what is deployed — Flask on AWS
+Lambda behind an API Gateway HTTP API, Terraform-managed — and §8 describes
+the three persistence roles by role: a durable queryable metadata store, a
+bulky immutable evidence store, and a disposable cache. `storage_policy` in
+§26 and `geometryObjectKey` in §25 use the same neutral names.
 
 **Why change the spec rather than record a deviation.** The spec declares
-itself the single source of truth where documents conflict, so a deviation
-documented only in this log loses to it by the spec's own rule. An agent
-reading the spec cold would have been told to provision D1 and R2 against an
-AWS account. The infrastructure has been AWS since 2026-09-07 (see "Backend
-runs on AWS Lambda, not Cloudflare Workers"), it is deployed and working, and
-rebuilding it on Cloudflare would spend the remaining hackathon budget to
-arrive at the same behaviour. The document was the thing that was wrong.
+itself the source of truth where documents conflict, so a deviation recorded
+only in this log loses to it by the spec's own rule. An agent reading the spec
+cold would have been told to provision D1 and R2 against an AWS account. The
+infrastructure has been AWS since 2026-09-07, it is deployed and working, and
+rebuilding on Cloudflare would spend the remaining budget to arrive at the
+same behaviour. The document was the thing that was wrong.
 
-**Why one store with a TTL instead of a separate cache service.** KV's role is
-"we can always re-fetch this". DynamoDB's TTL attribute does that, and a
-second service earns its place only when the first one cannot do the job.
+**Rejected: naming DynamoDB and S3 in the spec.** This PR originally did
+exactly that, mapping D1→DynamoDB, R2→S3 and KV→a TTL-expiring DynamoDB
+table. Issue #56 landed the neutral wording first and it is the better answer:
+nothing implements persistence yet, so the service choice is not made, and
+writing it into the canonical spec would have made an unmade decision look
+settled to every agent that reads it. Removing the *wrong* stack does not
+require inventing the right one. When persistence is actually built, that is a
+separate decision and belongs in its own entry here.
 
-**Safe to change.** Nothing implements it yet: `storage_policy` from §26
-appears in no module, and no code anywhere references `R2`, `D1` or `KV`. The
-mapping is a decision about what to build, not a description of what exists —
-`data_pipeline/` still writes to no store at all.
-
-**Constraint that shaped it.** Serverless only, per the project owner: Lambda,
-S3, DynamoDB are fine; anything always-on, EC2 in particular, needs
-justification first. A container pushed to ECR is acceptable where one is
+**Constraint that will shape that decision.** Serverless only, per the project
+owner: Lambda, S3, DynamoDB are fine; anything always-on, EC2 in particular,
+needs justification first. A container pushed to ECR is acceptable where one is
 genuinely needed — the trigger to watch for is the Lambda bundle outgrowing
 the 250 MB unzipped limit.
 
 **Left alone.** The three legacy specs still say Cloudflare. They are kept for
-history and are superseded by the canonical file; editing them would rewrite
-a record of what was true when they were written.
+history and are superseded by the canonical file; editing them would rewrite a
+record of what was true when they were written.
+
+---
+
+## 2026-09-08 - Audit-scope sessions use a small adapter until persistence is chosen
+
+**Status:** implemented on issue #56
+
+**Decision.** The audit-first entry flow creates an anonymised `audit_id` and
+`scope_id`, validates the uploaded private GeoJSON boundary, and carries dates,
+bbox, centroid, context buffer, and buffer preview through a minimal Flask
+contract. The current adapter keeps sessions process-local and exposes the
+history-build handoff without reconstructing history.
+
+**Why.** The repository's real deployment path is Flask on AWS Lambda behind
+API Gateway HTTP API, while application persistence is explicitly not yet
+provisioned. A small interface gives #57 a stable scope contract without
+silently inventing a DynamoDB/S3 design or moving the product to the stale
+Cloudflare Workers/D1/R2/KV wording in the earlier spec.
+
+**Rejected.** Company identity, public concession lookup, and KML/KMZ/SHP
+parsers are outside the audit-scope boundary. A process-local session is not a
+production retention model and must be replaced by the later persistence
+decision before multi-instance or multi-tenant use.
 
 ---
 
