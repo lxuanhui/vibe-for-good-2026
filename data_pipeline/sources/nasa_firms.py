@@ -42,13 +42,24 @@ def data_availability(sensor: str = "ALL") -> pd.DataFrame:
     return pd.read_csv(io.StringIO(resp.text))
 
 
-def fetch_area(source: str, bbox: tuple[float, float, float, float], day_range: int, start_date: str | None = None) -> pd.DataFrame:
+def fetch_area(
+    source: str,
+    bbox: tuple[float, float, float, float],
+    day_range: int,
+    start_date: str | None = None,
+    expire_after: int | None = None,
+) -> pd.DataFrame:
+    """`expire_after` overrides the shared session's default 1-hour cache --
+    used by the backfill in `nasa_firms_backfill.py` to cache windows that
+    are old enough FIRMS will never revise them (`requests_cache.NEVER_EXPIRE`)
+    instead of re-fetching stable history every hour."""
     day_range = min(day_range, MAX_DAY_RANGE)
     bbox_str = ",".join(str(v) for v in bbox)
     url = f"{FIRMS_ROOT}/api/area/csv/{NASA_FIRMS_MAP_KEY}/{source}/{bbox_str}/{day_range}"
     if start_date:
         url += f"/{start_date}"
-    resp = SESSION.get(url)
+    kwargs = {} if expire_after is None else {"expire_after": expire_after}
+    resp = SESSION.get(url, **kwargs)
     resp.raise_for_status()
     return pd.read_csv(io.StringIO(resp.text))
 

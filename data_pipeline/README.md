@@ -34,6 +34,30 @@ python -m data_pipeline.sources.open_meteo
 
 Sample pulls land in `data_pipeline/output/` (gitignored).
 
+## FIRMS historical backfill
+
+`sources/nasa_firms_backfill.py` sits on top of `nasa_firms.fetch_area()`
+and turns the Area API's 5-day `day_range` cap into an implementation
+detail: `fetch_historical_range(bbox, start_date, end_date)` pages an
+arbitrary-length request into `<=5`-day calls, retries a window that fails
+independently of the shared session's own retry logic, deduplicates
+detections at window boundaries, and returns one result set split into
+`observations` (inside the Indonesia analysis region) and
+`external_context` (inside the queried bbox but outside it) rather than
+silently dropping nearby cross-border detections. Run
+`python -m data_pipeline.sources.nasa_firms_backfill` for a live demo
+against the 2019-08-01..2019-10-31 haze window (268,543 deduplicated
+observations, 0 failed windows, last verified run). `external_context` is
+empty in that demo because it queries `SUMATRA_KALIMANTAN_BBOX`, which is a
+strict subset of the default `INDONESIA_BBOX` analysis region — the
+region-split logic itself is covered directly by
+`data_pipeline/tests/test_nasa_firms_backfill.py` with synthetic
+cross-border points, not left to depend on where real hotspots happened to
+fall. `analysis_region` is a bounding box, not a political boundary, so it
+cannot precisely separate Indonesian from Malaysian/Bruneian hotspots
+inside the same rectangle near the Kalimantan border — see the module
+docstring.
+
 ## Provider interface
 
 `nasa_firms.py`, `open_meteo.py`, `nasa_power.py`, `copernicus_cds.py`, and
