@@ -6,6 +6,30 @@ more valuable half.
 
 ---
 
+## 2026-09-08 - Investigation Priority is an evidence-backed routing score
+
+**Status:** implemented on issue #14 branch
+
+**Decision.** `priority/investigation_priority.py` computes a bounded 0--100
+score and `LOW|MEDIUM|HIGH|URGENT` label from nine environmental/event factors.
+Each result returns all nine components, fixed visible weights, evidence IDs,
+quality, limitations, coverage, and the source EvidenceObjects. Existing
+Stage-1, Fire Complexity, FireEventGraph, peat, and surface-compatibility
+outputs can feed the relevant factors without flattening their provenance.
+
+**Why.** Investigative attention needs a reproducible queueing aid while the
+canonical product boundary forbids a guilt or responsibility score. Fixed
+weights make the current policy inspectable until a labelled calibration set
+exists; missing context remains `NOT_EVALUATED` and is reported in coverage.
+Evidence sufficiency increases routing attention when it is partial or
+insufficient, but does not imply a cause or adverse finding.
+
+**Rejected.** Company identity, reputation, previous misconduct, intent,
+culpability, responsibility, and legal fields are rejected as inputs rather
+than merely ignored. A learned model and an opaque aggregate complexity
+number were rejected because the repository has no calibration set and issue
+#12 deliberately preserves complexity as named evidence.
+
 ## 2026-09-08 - Copernicus scenes are selected deterministically from STAC metadata
 
 **Status:** implemented on issue #13 branch

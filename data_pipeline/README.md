@@ -268,6 +268,29 @@ and outside-envelope observations are compatibility mismatches only; they do
 not establish a separate fire, underground propagation, cause, intent, or
 responsibility.
 
+## Explainable Investigation Priority routing
+
+`priority/investigation_priority.py` turns environmental evidence into a
+bounded 0--100 Investigation Priority Score and one of `LOW`, `MEDIUM`,
+`HIGH`, or `URGENT`. It combines nine explicit, weighted routing factors:
+event validity, environmental significance, event complexity, evidence
+inconsistency, unresolved event relationships, evidence sufficiency, peat
+involvement, land-change indicators, and propagation uncertainty. Every
+factor is returned as a component with its normalized value, weight,
+contribution, evidence IDs, source, quality, and limitations.
+The score is the sum of `weight * normalized_signal * evidence_quality` for
+evaluated factors; the weights sum to 100. This makes lower-quality evidence
+visible in the contribution instead of turning it into a false certainty.
+
+The scorer can consume existing Stage-1, Fire Complexity, FireEventGraph,
+peat, and surface-compatibility results. Missing context is
+`NOT_EVALUATED`, never silently treated as reassuring evidence. The weights
+are a transparent routing policy rather than calibrated probabilities, and
+the scorer rejects company identity/reputation, previous misconduct, guilt,
+intent, culpability, responsibility, and legal fields entirely. A priority
+result is therefore a queueing aid for human investigation, not a finding
+about who caused an event or who is responsible for it.
+
 ## Golden historical regression cases
 
 `golden/` freezes real 2019 haze-window data end to end so the pipeline's
