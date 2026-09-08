@@ -182,6 +182,37 @@ export interface AuditScope {
   geometry?: unknown
 }
 
+export type ScopeRelation = 'INSIDE_SCOPE' | 'BOUNDARY_INTERSECTING' | 'EXTERNAL_CONTEXT'
+
+export interface AuditEventSummary {
+  eventId: string
+  auditId: string
+  firstDetection: string
+  lastDetection: string
+  durationHours: number
+  observationCount: number
+  centroid: { lat: number; lon: number }
+  bbox: [number, number, number, number]
+  spatialExtentKm: number
+  maxFrp: number | null
+  meanFrp: number | null
+  triage: { state: 'LIKELY_FIRE' | 'LIKELY_NON_FIRE' | 'AMBIGUOUS'; deeperInvestigationEligible: boolean }
+}
+
+export interface InvestigationMapNode extends AuditEventSummary {
+  scopeRelation: ScopeRelation
+  mapRole: 'SELECTED' | 'EXTERNAL_CONTEXT'
+}
+
+export interface InvestigationMap {
+  auditId: string
+  selectedEventIds: string[]
+  scope: Record<string, unknown>
+  nodes: InvestigationMapNode[]
+  edges: { sourceEventId: string; targetEventId: string; state: string; distanceKm: number; modelVersion: string }[]
+  layers: Record<string, boolean>
+}
+
 export interface OverlayAvailability {
   date: string
   layers: Partial<Record<OverlayLayerId | RasterLayerId, boolean>>

@@ -1,5 +1,5 @@
 import type { FeatureCollection } from './geojson'
-import type { AuditScope, BBox, EventStatus, FireEvent, InvestigationReport, OverlayLayerId } from './types'
+import type { AuditEventSummary, AuditScope, BBox, EventStatus, FireEvent, InvestigationMap, InvestigationReport, OverlayLayerId } from './types'
 import { getOverlay, isLayerAvailable } from './fixtures/overlays'
 import { REPORTS } from './fixtures/reports'
 
@@ -61,6 +61,26 @@ export async function uploadAuditScope(auditId: string, file: File): Promise<Aud
 
 export async function buildFireHistory(auditId: string): Promise<{ audit_id: string; scope_id: string; status: 'HISTORY_BUILD_READY' }> {
   return apiPost(`/audits/${encodeURIComponent(auditId)}/history/build`, null)
+}
+
+export async function fetchAuditRegister(auditId: string, filters?: { since?: string; until?: string }): Promise<AuditEventSummary[]> {
+  const pageSize = 2000
+  const query = new URLSearchParams({ limit: String(pageSize) })
+  if (filters?.since) query.set('since', filters.since)
+  if (filters?.until) query.set('until', filters.until)
+  const first = await apiGet<{ total: number; events: AuditEventSummary[] }>(`/audits/${encodeURIComponent(auditId)}/events?${query}`)
+  const pages = [first.events]
+  for (let offset = pageSize; offset < first.total; offset += pageSize) {
+    query.set('offset', String(offset))
+    const page = await apiGet<{ events: AuditEventSummary[] }>(`/audits/${encodeURIComponent(auditId)}/events?${query}`)
+    pages.push(page.events)
+  }
+  return pages.flat()
+}
+
+export async function fetchInvestigationMap(auditId: string, eventIds: string[]): Promise<InvestigationMap> {
+  const query = encodeURIComponent(eventIds.join(','))
+  return apiGet<InvestigationMap>(`/audits/${encodeURIComponent(auditId)}/graph?event_ids=${query}`)
 }
 
 export async function fetchEvents(opts?: { bbox?: BBox; since?: string; status?: EventStatus }): Promise<FireEvent[]> {

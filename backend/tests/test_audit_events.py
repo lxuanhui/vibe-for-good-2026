@@ -97,6 +97,18 @@ def test_single_event_adds_the_inspectable_triage_detail(client):
     assert event["triageDetail"]["rules"]
 
 
+def test_graph_handoff_returns_selected_events_and_context_neighbours(client):
+    selected = client.get(f"{BASE}?limit=1").get_json()["events"][0]["eventId"]
+    response = client.get(f"/api/audits/{AUDIT}/graph?event_ids={selected}")
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["selectedEventIds"] == [selected]
+    assert any(node["mapRole"] == "SELECTED" for node in body["nodes"])
+    assert body["layers"]["graph"] is True
+    assert all(edge["modelVersion"] == "fire-event-graph-v1" for edge in body["edges"])
+
+
 def test_unknown_event_in_a_known_audit_is_404(client):
     response = client.get(f"{BASE}/FE-does-not-exist")
 

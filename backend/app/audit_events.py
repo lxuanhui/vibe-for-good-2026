@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from app.audits import get_audit as get_audit_session
+from app.audits import get_scope_geometry
 
 DATA_DIR = Path(__file__).parent / "data"
 EVENTS_PATH = DATA_DIR / "audit_events.json.gz"
@@ -38,6 +39,115 @@ VALID_STATES = frozenset({"LIKELY_FIRE", "LIKELY_NON_FIRE", "AMBIGUOUS"})
 # can say how many matched.
 DEFAULT_LIMIT = 500
 MAX_LIMIT = 2000
+
+
+def _point_in_ring(lon: float, lat: float, ring: list[list[float]]) -> bool:
+    inside = False
+    for index, point in enumerate(ring):
+        previous = ring[index - 1]
+        if ((point[1] > lat) != (previous[1] > lat)) and (
+            lon < (previous[0] - point[0]) * (lat - point[1]) / (previous[1] - point[1]) + point[0]
+        ):
+            inside = not inside
+    return inside
+
+
+def _geometry_polygons(geometry: dict[str, Any]) -> list[list[list[list[float]]]]:
+    if geometry.get("type") == "Feature":
+        return _geometry_polygons(geometry.get("geometry") or {})
+    if geometry.get("type") == "FeatureCollection":
+        return [polygon for feature in geometry.get("features", []) for polygon in _geometry_polygons(feature)]
+    coordinates = geometry.get("coordinates", [])
+    if geometry.get("type") == "Polygon":
+        return [coordinates]
+    if geometry.get("type") == "MultiPolygon":
+        return coordinates
+    return []
+
+
+def _relation(event: dict[str, Any], scope: dict[str, Any] | None) -> str:
+    """Classify a centroid against private scope geometry, never as attribution."""
+    if not scope or not scope.get("geometry"):
+        return "EXTERNAL_CONTEXT"
+    centroid = event["centroid"]
+    polygons = _geometry_polygons(scope["geometry"])
+    if any(_point_in_ring(centroid["lon"], centroid["lat"], polygon[0]) for polygon in polygons if polygon):
+        return "INSIDE_SCOPE"
+    bbox = scope.get("buffer_bbox")
+    if isinstance(bbox, list) and len(bbox) == 4:
+        bbox = {"minLon": bbox[0], "minLat": bbox[1], "maxLon": bbox[2], "maxLat": bbox[3]}
+    event_bbox = event.get("bbox", [])
+    scope_bbox = scope.get("bbox")
+    if isinstance(scope_bbox, dict):
+        scope_bbox = [scope_bbox["minLon"], scope_bbox["minLat"], scope_bbox["maxLon"], scope_bbox["maxLat"]]
+    if scope_bbox and len(event_bbox) == 4 and not (
+        event_bbox[2] < scope_bbox[0] or event_bbox[0] > scope_bbox[2]
+        or event_bbox[3] < scope_bbox[1] or event_bbox[1] > scope_bbox[3]
+    ):
+        return "BOUNDARY_INTERSECTING"
+    if bbox and bbox["minLon"] <= centroid["lon"] <= bbox["maxLon"] and bbox["minLat"] <= centroid["lat"] <= bbox["maxLat"]:
+        return "EXTERNAL_CONTEXT"
+    return "EXTERNAL_CONTEXT"
+
+
+def _distance_km(first: dict[str, Any], second: dict[str, Any]) -> float:
+    import math
+
+    lat1, lon1 = first["centroid"]["lat"], first["centroid"]["lon"]
+    lat2, lon2 = second["centroid"]["lat"], second["centroid"]["lon"]
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    value = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+    return 6371.0088 * 2 * math.asin(math.sqrt(min(1.0, value)))
+
+
+def investigation_map(audit_id: str, event_ids: list[str]) -> dict[str, Any] | None:
+    audit = get_audit(audit_id)
+    if audit is None:
+        return None
+    selected_ids = set(event_ids)
+    selected = [event for event in audit["events"] if event["eventId"] in selected_ids]
+    if len(selected) != len(selected_ids):
+        return None
+    neighbours = []
+    for candidate in audit["events"]:
+        if candidate["eventId"] in selected_ids:
+            continue
+        distances = [_distance_km(candidate, subject) for subject in selected]
+        if distances and min(distances) <= 50:
+            neighbours.append(candidate)
+    session = get_audit_session(audit_id)
+    scope = {**audit["scope"], **(session or {})}
+    private_geometry = get_scope_geometry(audit_id)
+    if private_geometry is not None:
+        scope["geometry"] = private_geometry
+    visible = selected + neighbours
+    nodes = [
+        {
+            **event,
+            "scopeRelation": _relation(event, scope),
+            "mapRole": "SELECTED" if event in selected else "EXTERNAL_CONTEXT",
+        }
+        for event in visible
+    ]
+    edges = []
+    for candidate in neighbours:
+        subject = min(selected, key=lambda event: _distance_km(candidate, event))
+        edges.append({
+            "sourceEventId": subject["eventId"],
+            "targetEventId": candidate["eventId"],
+            "state": "RELATED_POSSIBLE",
+            "distanceKm": round(_distance_km(subject, candidate), 3),
+            "modelVersion": "fire-event-graph-v1",
+        })
+    return {
+        "auditId": audit_id,
+        "selectedEventIds": event_ids,
+        "scope": scope,
+        "nodes": nodes,
+        "edges": edges,
+        "layers": {"selectedRawObservations": False, "fireEvents": True, "graph": True, "peat": False, "weatherWind": False, "surfaceEnvelope": False},
+    }
 
 
 def _read_gzipped_json(path: Path) -> dict[str, Any]:
@@ -65,7 +175,31 @@ def _load_triage_detail() -> dict[str, Any]:
 
 def get_audit(audit_id: str) -> dict[str, Any] | None:
     """The reconstructed history for an audit id, if one has been built."""
-    return _load_events()["audits"].get(audit_id)
+    artifact = _load_events()["audits"].get(audit_id)
+    if artifact is not None:
+        return artifact
+    # The current history adapter has one committed real dataset. Once a
+    # session completes its build handoff, expose that cached dataset under
+    # the anonymised audit id until persistence/reconstruction is replaced.
+    session = get_audit_session(audit_id)
+    if not session or session.get("status") != "HISTORY_BUILD_READY":
+        return None
+    demo = _load_events()["audits"].get("demo-2019-haze")
+    if demo is None:
+        return None
+    demo_scope = demo["scope"]
+    return {
+        "scope": {
+            "id": audit_id,
+            "reviewStart": session["review_start"],
+            "reviewEnd": session["review_end"],
+            "contextBufferKm": session["context_buffer_km"],
+            "eventCount": demo_scope["eventCount"],
+            "reviewQueueCount": demo_scope["reviewQueueCount"],
+            "compression": demo_scope["compression"],
+        },
+        "events": demo["events"],
+    }
 
 
 def history_status(audit_id: str) -> str:
@@ -77,7 +211,10 @@ def history_status(audit_id: str) -> str:
     """
     if audit_id in _load_events()["audits"]:
         return "AVAILABLE"
-    return "PENDING_RECONSTRUCTION" if get_audit_session(audit_id) else "NO_SUCH_AUDIT"
+    session = get_audit_session(audit_id)
+    if session and session.get("status") == "HISTORY_BUILD_READY":
+        return "AVAILABLE"
+    return "PENDING_RECONSTRUCTION" if session else "NO_SUCH_AUDIT"
 
 
 def source_provenance() -> dict[str, Any]:

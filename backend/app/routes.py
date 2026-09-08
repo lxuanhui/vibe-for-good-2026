@@ -132,3 +132,15 @@ def get_audit_event(audit_id: str, event_id: str):
             return jsonify(error=f"No reconstructed history for audit {audit_id}", status=status), 404
         return jsonify(error=f"No event with id {event_id} in audit {audit_id}"), 404
     return jsonify(event)
+
+
+@api.get("/audits/<audit_id>/graph")
+def get_audit_graph(audit_id: str):
+    raw_ids = request.args.get("event_ids", "")
+    event_ids = [event_id for event_id in raw_ids.split(",") if event_id]
+    if not event_ids:
+        return jsonify(error="event_ids must contain at least one FireEvent ID"), 400
+    result = audit_events.investigation_map(audit_id, event_ids)
+    if result is None:
+        return jsonify(error=f"No reconstructed history or event selection for audit {audit_id}"), 404
+    return jsonify(result)
