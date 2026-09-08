@@ -6,6 +6,48 @@ more valuable half.
 
 ---
 
+## 2026-09-09 — Terraform creates the Amplify app; a human connects the repo
+
+**Status:** done · issue #96
+
+**Decision.** `aws_amplify_app.console` is declared without `repository`, and
+there is no `aws_amplify_branch` resource at all. Terraform owns the app's
+name, build spec, SPA rewrite and environment variables. The GitHub
+connection, the `main` branch, auto-build and pull-request previews are set
+once by hand in the Amplify console.
+
+**Why.** The first apply of the Amplify config failed twice on `main`. The
+first failure was IAM: `infra/bootstrap` is applied by hand and had not been
+re-applied after the `AmplifyConsoleHosting` statement was added, so the CI
+role could not call Amplify at all. The second failure is the one that
+mattered:
+
+```
+CreateApp, StatusCode: 400, BadRequestException:
+You should at least provide one valid token
+```
+
+Amplify's API reference requires `accessToken` or `oauthToken` when a new app
+names a repository. There is no token-free way to declare a connected
+repository. So the choice was: put a GitHub personal access token in Terraform
+state, or stop the configuration one step short of the connection.
+
+**What was rejected.** Passing a PAT, sourced from a variable or from Secrets
+Manager. Either way the value lands in the state file in S3. This stack has no
+long-lived credential anywhere by design — GitHub authenticates to AWS over
+OIDC precisely so that none is needed — and a hosting convenience is not worth
+being the exception.
+
+**What this costs.** Auto-build and pull-request previews are now console
+checkboxes rather than declared HCL, so they are not reproducible from the
+repository and a rebuild in a fresh account needs the walkthrough in
+`docs/environments.md`. Previews were the reason Amplify beat S3 + CloudFront
+and they still work; they are just configured by a person once. Terraform also
+cannot manage the branch afterwards, because the connection wizard creates it
+and an `aws_amplify_branch` would collide with what already exists.
+
+---
+
 ## 2026-09-09 — The console is hosted on Amplify, not S3 + CloudFront
 
 **Status:** done · issue #91

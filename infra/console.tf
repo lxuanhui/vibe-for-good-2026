@@ -14,19 +14,24 @@
 # GitHub Actions. Accepted, because the preview URLs are the point.
 
 resource "aws_amplify_app" "console" {
-  name       = "${local.name}-console"
-  repository = "https://github.com/lxuanhui/vibe-for-good-2026"
+  name = "${local.name}-console"
 
-  # No oauth_token or access_token on purpose. A PAT here would be a real
-  # credential in Terraform state, which is the one thing this repo has been
-  # careful to avoid (there are no AWS keys either -- CI uses OIDC). The
-  # repository is connected once, by hand, through the Amplify GitHub App:
-  # apply this, then open the app in the console and complete the connection.
-  # Builds do not run until that is done.
+  # No repository, no oauth_token, no access_token -- and the first two are a
+  # consequence of the third. CreateApp answers a repository with no token
+  # "You should at least provide one valid token" (issue #96); the API
+  # reference is explicit that one of accessToken or oauthToken is required
+  # when a new app names a repository. A PAT would satisfy it and would then
+  # sit in Terraform state, which is the one credential this stack has avoided
+  # everywhere else -- there are no AWS keys either, CI assumes a role over
+  # OIDC. So Terraform creates the app and stops at the connection.
   #
-  # ignore_changes keeps Terraform from fighting what the console sets: after
-  # authorization Amplify records connection details on the app, and without
-  # this every subsequent plan would try to strip them.
+  # The repository is attached once, by hand, through the Amplify GitHub App:
+  # open the app in the console, connect lxuanhui/vibe-for-good-2026 on `main`,
+  # and tick auto-build and pull-request previews there. Nothing builds until
+  # that is done. docs/environments.md carries the walkthrough.
+  #
+  # ignore_changes then keeps Terraform from stripping what the wizard wrote
+  # back onto the app on the next plan.
   lifecycle {
     ignore_changes = [repository, oauth_token, access_token]
   }
@@ -73,15 +78,10 @@ resource "aws_amplify_app" "console" {
   }
 }
 
-resource "aws_amplify_branch" "main" {
-  app_id      = aws_amplify_app.console.id
-  branch_name = "main"
-  stage       = "PRODUCTION"
-
-  enable_auto_build = true
-
-  # One preview URL per pull request. This is the reason for choosing Amplify:
-  # it is the only check in this repo that can show the map actually rendering
-  # before a branch lands.
-  enable_pull_request_preview = true
-}
+# There is deliberately no aws_amplify_branch here. The console wizard that
+# performs the GitHub App connection makes you pick a branch and creates it, so
+# a Terraform branch resource would race it and then fail on a branch that
+# already exists. Auto-build and pull-request previews are set in that same
+# wizard. Losing them from code is the cost of the decision above; previews are
+# still the reason Amplify was chosen over S3 + CloudFront, they are just
+# configured once by a human rather than declared here.
