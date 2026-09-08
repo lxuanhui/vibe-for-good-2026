@@ -133,12 +133,32 @@ def investigation_map(audit_id: str, event_ids: list[str]) -> dict[str, Any] | N
     edges = []
     for candidate in neighbours:
         subject = min(selected, key=lambda event: _distance_km(candidate, event))
+        distance = round(_distance_km(subject, candidate), 3)
+        edge_evidence_id = f"GRAPH_{subject['eventId']}_{candidate['eventId']}_distance"
         edges.append({
             "sourceEventId": subject["eventId"],
             "targetEventId": candidate["eventId"],
             "state": "RELATED_POSSIBLE",
-            "distanceKm": round(_distance_km(subject, candidate), 3),
+            "distanceKm": distance,
             "modelVersion": "fire-event-graph-v1",
+            "supportingEvidenceIds": [edge_evidence_id],
+            "contradictingEvidenceIds": [],
+            "evidence": [{
+                "evidence_id": edge_evidence_id,
+                "category": "graph",
+                "type": "candidate_edge_distance",
+                "observation": f"Candidate FireEvent relationship is {distance} km apart.",
+                "source": "FireEventGraph deterministic neighbour gate",
+                "time_window": f"{subject['firstDetection']} to {candidate['lastDetection']}",
+                "value": {"distance_km": distance, "max_candidate_distance_km": 50},
+                "quality": 1.0,
+                "limitations": [
+                    "A candidate edge is a relationship for review, not evidence of a shared cause or responsibility.",
+                    "This current audit adapter exposes distance only; wind, peat-corridor and surface compatibility are not available in this artifact.",
+                ],
+                "algorithm_version": "fire-event-graph-v1",
+                "raw_reference": f"{subject['eventId']}->{candidate['eventId']}",
+            }],
         })
     return {
         "auditId": audit_id,

@@ -216,7 +216,16 @@ export interface InvestigationMap {
   selectedEventIds: string[]
   scope: Record<string, unknown>
   nodes: InvestigationMapNode[]
-  edges: { sourceEventId: string; targetEventId: string; state: string; distanceKm: number; modelVersion: string }[]
+  edges: {
+    sourceEventId: string
+    targetEventId: string
+    state: string
+    distanceKm: number
+    modelVersion: string
+    supportingEvidenceIds?: string[]
+    contradictingEvidenceIds?: string[]
+    evidence?: EvidenceObject[]
+  }[]
   layers: Record<string, boolean>
 }
 

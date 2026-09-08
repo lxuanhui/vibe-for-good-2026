@@ -130,6 +130,8 @@ def test_graph_handoff_returns_selected_events_and_context_neighbours(client):
     assert any(node["mapRole"] == "SELECTED" for node in body["nodes"])
     assert body["layers"]["graph"] is True
     assert all(edge["modelVersion"] == "fire-event-graph-v1" for edge in body["edges"])
+    assert all(edge["supportingEvidenceIds"] for edge in body["edges"])
+    assert all(edge["evidence"][0]["algorithm_version"] == "fire-event-graph-v1" for edge in body["edges"])
 
 
 def test_unknown_event_in_a_known_audit_is_404(client):
