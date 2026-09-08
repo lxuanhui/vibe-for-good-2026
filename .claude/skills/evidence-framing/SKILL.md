@@ -8,9 +8,11 @@ description: The product's hard boundary on attribution, causation, and evidence
 This tool is an investigative-**efficiency** product. It narrows what a human
 auditor looks at. It does not conclude anything about blame. Getting the
 wording wrong here is not a style problem — it is the difference between a
-triage aid and a defamation risk. Sources:
-`DesignSpecs/environmental_assurance_claude_code_spec.md` §20, §42–45, and
-`DesignSpecs/environmental_assurance_spec_v2.md` §2, §7, §8.
+triage aid and a defamation risk. Source of truth:
+`DesignSpecs/Environmental_Assurance_Spec.md` §4 (non-goals and safety
+boundary), §14–15 (surface-fire/peat inference limits), §18–19 (hypotheses
+and adversarial AI constraints). The three legacy spec documents are
+superseded — this file wins where they conflict.
 
 ## Never generate
 
@@ -26,8 +28,12 @@ triage aid and a defamation risk. Sources:
   elapsed time, and absence of revegetation — never observed.
 - A confident claim sourced from the fire-growth ellipse. It is a first-order
   geometric estimate, not a validated fire-behaviour forecast.
-- Raw concession or peatland boundary geometry in any output, stored or
-  rendered. Attribute lookups return attributes only (spec v2 §2, §9.1).
+- A public, named-concession lookup/directory, or third-party concession
+  polygon geometry beyond an attribute-only lookup (`Environmental_Assurance_Spec.md`
+  §4). This does **not** ban storing geometry outright: an auditor's own
+  uploaded management-unit boundary is legitimate private audit-scope data
+  and may be stored tenant-scoped/encrypted (§6.2–6.3) — the rule is "never
+  public, never a third party's polygon," not "never stored."
 
 ## Always
 

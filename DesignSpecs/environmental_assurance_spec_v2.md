@@ -12,6 +12,74 @@ This version supersedes the original spec's Stage 0/1 detection model. The core 
 
 ---
 
+# 2026-09-08 Canonical Audit-Workflow Update
+
+> **Status:** This section overrides conflicting workflow, concession-boundary, UI-entry-point, and hypothesis wording elsewhere in this legacy specification. The consolidated source of truth is `Environmental_Assurance_Spec.md`.
+
+## Product workflow
+
+The MVP is an **audit-scope-first historical environmental review tool**, not an Indonesia-wide enforcement monitor. The auditor begins with an engagement-defined spatial and temporal scope, reconstructs the historical fire register, screens events temporally in a table, then sends selected events and contextual neighbours into the spatial investigation map.
+
+```text
+Create Audit Review
+  -> upload/draw management-unit boundary (or lat/lon + radius fallback)
+  -> choose review start/end dates
+  -> choose contextual buffer
+  -> acquire/filter FIRMS + relevant S1/S2/weather/peat evidence
+  -> cluster observations into FireEvents
+  -> Historical Fire Register (Table-first)
+  -> select events
+  -> Investigate on Map
+  -> Evidence Drawer + imagery + provenance
+  -> Generate Investigation Analysis
+  -> Investigator/Skeptic structured assessment
+  -> Add selected events to Audit Evidence Pack
+  -> Human auditor verifies/decides
+```
+
+## Audit-supplied boundary policy
+
+The product does **not** provide a searchable public directory of named Indonesian concession polygons. For an audit engagement, an authorised user may upload a management-unit boundary as private workspace data (GeoJSON/KML/KMZ/SHP where implemented), draw an area, or use lat/lon + radius for quick analysis. The geometry is treated as client-supplied audit scope, not proof of ownership or responsibility.
+
+Uploaded geometry may be retained privately for the audit according to tenant retention policy and may be deleted at audit completion. Environmental reasoning should use an anonymised `scope_id`; company identity must not alter physical/environmental scores.
+
+Always query a configurable external context buffer around the audit boundary. Classify events as `INSIDE_SCOPE`, `BOUNDARY_INTERSECTING`, or `EXTERNAL_CONTEXT`. External events may explain events inside scope but are not automatically subjects of the engagement.
+
+## Table-first, map-second UX
+
+The **Historical Fire Register** is the primary screening workspace. It compresses raw observations into coherent FireEvents and supports sorting/filtering by date, scope relation, persistence, peat overlap, complexity, evidence sufficiency, investigation priority, and review state.
+
+The Palantir-style map is the **Spatial Investigation Workspace**. It receives selected FireEvents plus relevant contextual neighbours and is optimized for event relationships, boundary context, peat, wind, satellite imagery, and surface-propagation compatibility. Do not dump the entire regional raw FIRMS archive into this view by default.
+
+## Event interaction
+
+Clicking a FireEvent opens an Evidence Drawer. Render cached/cheap deterministic metrics immediately; load Sentinel imagery asynchronously. Every important metric should be inspectable: selecting peat overlap highlights the intersection; selecting nearby events highlights graph edges; selecting surface-spread compatibility shows observed detections versus the first-order ellipse; selecting weather opens the supporting time series.
+
+AI is an explicit downstream action: `Generate Investigation Analysis`. Agents receive only structured evidence IDs and must return competing explanations, unresolved disagreement, evidence sufficiency, and recommended verification questions. AI does not create the observations.
+
+## Updated hypothesis space
+
+Prefer event-history hypotheses over actor categories:
+
+- H1 Independent local ignition
+- H2 Surface propagation from an earlier neighbouring event
+- H3 Peat-mediated persistence/propagation
+- H4 Multiple related land-management ignitions
+- H5 Regional independent events under shared conducive conditions
+- H6 Other mechanism
+- Evidence sufficiency is a separate state: `SUFFICIENT | PARTIAL | INSUFFICIENT`
+
+These hypotheses do not establish intent, illegality, ownership liability, or legal responsibility.
+
+## Assurance differentiation
+
+Government enforcement intelligence and assurance intelligence may use similar remote-sensing inputs but support different decisions. Government systems can monitor territory-wide current risk and prioritize intervention. This product begins with an auditor-defined management unit and historical review period and asks: **what happened within and around this audit scope, which event relationships remain unresolved, and what should be verified with scarce field time?**
+
+## Smallholder/fairness principle
+
+The product should lower the technical cost of assembling environmental evidence without privileging the party with the larger GIS, ESG, legal, or expert team. Evidence must cut both ways. A hotspot inside a supplied boundary is not evidence that the fire originated there. Exculpatory propagation evidence and uncertainty receive the same visibility as evidence supporting deeper scrutiny.
+
+
 # 1. Product Thesis (unchanged)
 
 Existing satellite systems already detect thermal anomalies and possible fires. The bottleneck is deciding which detected events deserve scarce human investigative effort — and, as of v2, also detecting fire activity that thermal-only systems miss entirely.
@@ -39,7 +107,7 @@ Do **not** build the MVP as:
 - a legal conclusion engine or automated enforcement system
 - a replacement for human auditors, NASA FIRMS, or remote-sensing platforms
 - a canal/drainage-ditch detector — **dropped from scope.** Mapping newly dug drainage as evidence of deliberate arson preparation is a defamation-adjacent inference this product should not make, and it's a heavy computer-vision workload for marginal audit value. Peat hydrology stress is instead inferred from soil-moisture proxies, not intent-implying infrastructure detection.
-- a system that publishes concession or peatland boundary shapefiles. Indonesian law restricts non-government parties from publishing/sharing plantation boundaries in shapefile form — this is why platforms like Nusantara Atlas and GeoRSPO are UI-only for Indonesia. **This product never stores or renders raw boundary geometry; it only resolves point-in-polygon attribute lookups against government-hosted services at query time.**
+- a public searchable concession-boundary directory or a system that republishes named Indonesian concession shapefiles. **The audit workflow may accept an auditor/client-supplied management-unit polygon as private workspace data.** Uploaded geometry is scope input only, is access-controlled, and is never treated as proof of ownership or responsibility.
 - a consumer of RSPO Hotspot Hub. That platform re-filters raw FIRMS data down to a consent-gated subset of RSPO member concessions (~35% SEA consent rate) — narrower coverage than raw FIRMS + our own triage, not a cleaner upstream source.
 
 ---

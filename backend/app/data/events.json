@@ -5,7 +5,7 @@
     "lon": 101.447,
     "location": "Pekanbaru, Riau",
     "firstDetected": "2026-09-05T06:12:00Z",
-    "status": "STAGE1_REJECTED",
+    "status": "LIKELY_NON_FIRE",
     "qualifiesForInvestigation": false,
     "peatClassification": "not_applicable",
     "detections": [

@@ -6,6 +6,75 @@ more valuable half.
 
 ---
 
+## 2026-09-08 — `EventStatus` renamed to match the canonical spec's Stage-1 vocabulary
+
+**Status:** done
+
+**Decision.** `AWAITING_REVIEW` → `AMBIGUOUS`, `STAGE1_REJECTED` →
+`LIKELY_NON_FIRE`. `STAGE2_RUNNING` and `CONVERGED` are unchanged. Same shape
+— one flat `EventStatus` field on `FireEvent` — just renamed. Touched every
+call site: `frontend/src/api/types.ts`, `lib/color.ts`,
+`components/table/EventTable.tsx`, `api/fixtures/events.ts`,
+`backend/app/events.py` (`VALID_STATUSES`), `backend/app/data/events.json`,
+`backend/tests/test_events.py`.
+
+**Why these two, and not a bigger change.** `AMBIGUOUS` and `LIKELY_NON_FIRE`
+are exact matches for the Stage-1 triage outcomes in
+`Environmental_Assurance_Spec.md` §10, so renaming them removes a real
+naming collision, not just a cosmetic one. `STAGE2_RUNNING`/`CONVERGED` stay
+as this repo's own vocabulary for Stage-2 adversarial-analysis progress —
+the canonical spec doesn't enumerate an AnalysisRun status, and `CONVERGED`
+already matches `InvestigationReport.status` (`'running' | 'converged'`)
+exactly.
+
+**What this is not.** The canonical spec's actual `FireEvent` model (§9)
+replaces a single status field with `evidenceSufficiency`
+(SUFFICIENT/PARTIAL/INSUFFICIENT) and `investigationPriority`
+(LOW/MEDIUM/HIGH/URGENT) — two separate fields driven by real scoring logic,
+not four string literals. That is the Stage-1-triage and
+investigation-priority-scoring work already tracked as its own issues, not a
+naming fix. Do not read this entry as having done that migration.
+
+---
+
+## 2026-09-08 — `Environmental_Assurance_Spec.md` is now the canonical spec
+
+**Status:** done
+
+**Decision.** `DesignSpecs/Environmental_Assurance_Spec.md` consolidates the
+three prior documents (`environmental_assurance_claude_code_spec.md`,
+`environmental_assurance_spec_v2.md`, `assurance_console_ui_spec.md`) into one
+audit-scope-first spec. Where they conflict, the canonical file wins. Each
+legacy file got a short banner section pointing back to it; the legacy files
+themselves are kept for history, not deleted.
+
+**Why.** The product moved to an audit-scope-first workflow (auditor supplies
+a management-unit boundary and review period; table-first screening; map for
+selected-event investigation) rather than the prior Indonesia-wide monitoring
+console with a demo timeline over fixed mock cases. That is too large a shift
+to express as edits scattered across three documents with drifting section
+numbers.
+
+**Repo-wide reference sweep.** Every citation of the three legacy filenames
+or their section numbers, outside `DesignSpecs/` itself, was repointed at the
+canonical file's sections: `.claude/skills/{add-map-layer,evidence-framing}`,
+`CLAUDE.md`, `README.md`, `backend/app/{events,routes}.py`,
+`frontend/src/{api/client.ts,api/fixtures/events.ts,lib/color.ts,lib/layerColors.ts}`,
+`data_pipeline/{README.md,run_all.py,sources/future/global_forest_watch.py}`,
+`docs/environments.md`, and the "Standing constraints" section below. Dated
+entries above this one keep their original citations untouched — they are a
+record of what was true when written, not live documentation.
+
+**One citation carried a stale rule, not just a stale pointer.** The legacy
+"never render or store raw concession/peatland boundary geometry" rule is
+narrower in the canonical spec: a public named-concession directory or
+third-party concession polygon geometry is still forbidden (§4), but an
+auditor's own uploaded management-unit boundary is now legitimate private
+audit-scope data and may be stored tenant-scoped/encrypted (§6.2–6.3). Fixed
+the rule's wording everywhere it appeared, not only the citation.
+
+---
+
 ## 2026-09-08 — Events move behind the API; the FIRMS export deliberately does not
 
 **Status:** done · PR #49
@@ -330,11 +399,14 @@ Renovate propose the bump.
 - **The product does not determine blame, guilt, legal responsibility, intent,
   or culpability.** This shapes the architecture, not just the wording. See
   `.claude/skills/evidence-framing`.
-- **Never render or store raw concession/peatland boundary geometry.**
-  Indonesian law restricts publishing plantation boundaries; attribute-only
-  lookups. Spec v2 §2.
+- **Never build a public named-concession directory or render third-party
+  concession polygon geometry beyond an attribute-only lookup.**
+  `Environmental_Assurance_Spec.md` §4. This does not ban geometry storage
+  outright: an auditor's own uploaded management-unit boundary is legitimate
+  private audit-scope data and may be stored tenant-scoped/encrypted (§6.2–6.3)
+  — that policy changed from the original spec's blanket "never store."
 - **The console is fixture-driven.** `frontend/src/api/client.ts` mocks the
-  UI spec §5 contract exactly so it can be swapped for real calls without
-  touching callers. Keep that seam.
+  `Environmental_Assurance_Spec.md` §24 (API) contract exactly so it can be
+  swapped for real calls without touching callers. Keep that seam.
 - **The demo must never blur real data and fixtures.** The one real dataset
   (2019 FIRMS haze export) sits behind its own labelled toggle.

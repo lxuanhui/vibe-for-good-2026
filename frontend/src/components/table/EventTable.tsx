@@ -10,8 +10,8 @@ type SortDir = 'asc' | 'desc'
 
 const STATUS_FILTERS: { value: EventStatus | 'ALL'; label: string }[] = [
   { value: 'ALL', label: 'All statuses' },
-  { value: 'AWAITING_REVIEW', label: 'Awaiting review' },
-  { value: 'STAGE1_REJECTED', label: 'Stage 1 rejected' },
+  { value: 'AMBIGUOUS', label: 'Ambiguous' },
+  { value: 'LIKELY_NON_FIRE', label: 'Likely non-fire' },
   { value: 'STAGE2_RUNNING', label: 'Stage 2 running' },
   { value: 'CONVERGED', label: 'Converged' },
 ]

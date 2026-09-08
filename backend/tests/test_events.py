@@ -42,7 +42,7 @@ def test_since_is_inclusive_of_the_boundary(client):
 
 
 def test_status_filters_to_one_kind(client):
-    events = client.get("/api/events?status=STAGE1_REJECTED").get_json()["events"]
+    events = client.get("/api/events?status=LIKELY_NON_FIRE").get_json()["events"]
     assert [e["id"] for e in events] == ["IND-01120"]
 
 

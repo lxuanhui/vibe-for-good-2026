@@ -4,10 +4,10 @@ import { getOverlay, isLayerAvailable } from './fixtures/overlays'
 import { REPORTS } from './fixtures/reports'
 
 // Every function here mirrors the endpoint contract in
-// assurance_console_ui_spec.md Section 5 (bbox/date/status filters, response
-// shapes). Functions move from fixture to real `fetch()` one at a time
-// without any caller changing -- events have moved; overlays and reports
-// have not.
+// DesignSpecs/Environmental_Assurance_Spec.md Section 24 (API) -- bbox/date
+// filters, response shapes. Functions move from fixture to real `fetch()`
+// one at a time without any caller changing -- events have moved; overlays
+// and reports have not.
 
 // Empty in dev: Vite proxies /api to the Flask server on :5001. Set
 // VITE_API_BASE_URL when the console is served from somewhere that is not

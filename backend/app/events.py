@@ -1,9 +1,9 @@
 """Event listing and lookup behind `/api/events`.
 
 The event objects are the console's fixture cases, moved server-side so the
-endpoint contract in `assurance_console_ui_spec.md` Section 5 is served by the
-real API rather than mocked in the browser. They are still fixtures; nothing
-here derives an event from an observation yet.
+endpoint contract in `DesignSpecs/Environmental_Assurance_Spec.md` Section 24
+(API) is served by the real API rather than mocked in the browser. They are
+still fixtures; nothing here derives an event from an observation yet.
 """
 
 import json
@@ -14,11 +14,17 @@ from typing import Any
 
 DATA_PATH = Path(__file__).parent / "data" / "events.json"
 
-# Matches the EventStatus union in frontend/src/api/types.ts. Section 5 of the
-# UI spec lists an older set (AMBIGUOUS/REJECTED); the frontend names are the
-# ones the data and the UI actually use.
+# Matches the EventStatus union in frontend/src/api/types.ts. AMBIGUOUS and
+# LIKELY_NON_FIRE are the canonical spec's Stage-1 triage outcomes
+# (`Environmental_Assurance_Spec.md` §10); STAGE2_RUNNING/CONVERGED are this
+# repo's own naming for Stage-2 adversarial-analysis progress. This is still
+# one flat status field, not the canonical model's separate
+# `evidenceSufficiency`/`investigationPriority` fields (§9, §20) -- that
+# split is a larger, not-yet-started migration (see GitHub issues for
+# Stage-1 triage and investigation-priority scoring), tracked separately
+# from this naming fix.
 VALID_STATUSES = frozenset(
-    {"AWAITING_REVIEW", "STAGE1_REJECTED", "STAGE2_RUNNING", "CONVERGED"}
+    {"AMBIGUOUS", "LIKELY_NON_FIRE", "STAGE2_RUNNING", "CONVERGED"}
 )
 
 
@@ -36,7 +42,7 @@ def load_events() -> tuple[dict[str, Any], ...]:
 
 
 def parse_bbox(raw: str | None) -> tuple[float, float, float, float] | None:
-    """Parse `minLon,minLat,maxLon,maxLat` as ordered by UI spec Section 5."""
+    """Parse `minLon,minLat,maxLon,maxLat` as ordered by Environmental_Assurance_Spec.md Section 24."""
     if raw is None:
         return None
     parts = raw.split(",")
@@ -76,7 +82,7 @@ def filter_events(
     since: datetime | None = None,
     status: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Apply the Section 5 filters. Absent filters match everything."""
+    """Apply the Environmental_Assurance_Spec.md Section 24 filters. Absent filters match everything."""
     selected = []
     for event in events:
         if bbox is not None:

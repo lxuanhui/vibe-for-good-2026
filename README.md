@@ -4,11 +4,16 @@ AI-driven investigative-efficiency tool for environmental assurance, built for t
 
 ## Design specs
 
-Read the specs in `DesignSpecs/` in this order:
+[`Environmental_Assurance_Spec.md`](DesignSpecs/Environmental_Assurance_Spec.md)
+is the single source of truth: audit-scope-first workflow, data model, API
+contract, and UI spec in one document. It consolidates and supersedes three
+earlier documents, still kept in `DesignSpecs/` for history:
 
 1. [`environmental_assurance_claude_code_spec.md`](DesignSpecs/environmental_assurance_claude_code_spec.md) — original project overview, goals, and architecture.
-2. [`environmental_assurance_spec_v2.md`](DesignSpecs/environmental_assurance_spec_v2.md) — updated architecture accounting for peatland fires that are invisible to FIRMS; supersedes Stage 0/1 of the original spec.
-3. [`assurance_console_ui_spec.md`](DesignSpecs/assurance_console_ui_spec.md) — frontend/UI specification for the console (Map/Table views, investigation report layout, API contract).
+2. [`environmental_assurance_spec_v2.md`](DesignSpecs/environmental_assurance_spec_v2.md) — updated architecture accounting for peatland fires that are invisible to FIRMS.
+3. [`assurance_console_ui_spec.md`](DesignSpecs/assurance_console_ui_spec.md) — frontend/UI specification for the console.
+
+Where any of the three conflict with the canonical file, the canonical file wins.
 
 ## Layout
 
@@ -21,7 +26,7 @@ infra/          Terraform — Lambda + API Gateway HTTP API. See infra/README.md
 data_pipeline/  Python feasibility spike for the environmental data sources.
                 See data_pipeline/README.md.
 docs/           Decision log and environment facts. See docs/README.md.
-DesignSpecs/    The specs the product is built against.
+DesignSpecs/    The specs the product is built against; Environmental_Assurance_Spec.md is canonical.
 ```
 
 The Vite dev server proxies `/api/*` to the Flask backend, so the frontend can
@@ -29,8 +34,8 @@ call `fetch('/api/hello')` with no CORS setup in development.
 
 `GET /api/events` and `GET /api/events/{id}` are served by Flask; the rest of
 the console still renders from fixtures in `frontend/src/api/client.ts`, which
-mirror the endpoint contract in the UI spec so each one can be swapped for a
-real call without touching any caller.
+mirror the endpoint contract in `Environmental_Assurance_Spec.md` §24 so each
+one can be swapped for a real call without touching any caller.
 
 ## Getting started
 

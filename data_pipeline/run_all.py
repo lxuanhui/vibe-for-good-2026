@@ -1,8 +1,9 @@
 """Run every data-source feasibility check in sequence and report pass/fail.
 
 This does not write to any database -- it is a feasibility check for the
-ingestion cron jobs described in DesignSpecs/environmental_assurance_spec_v2.md
-(Sections 4, 5, 11). See README.md for the per-source cadence this maps to.
+ingestion jobs described in DesignSpecs/Environmental_Assurance_Spec.md
+(§7 Data sources, §8 Persistence architecture). See README.md for the
+per-source cadence this maps to.
 """
 from __future__ import annotations
 

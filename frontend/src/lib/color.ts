@@ -1,9 +1,11 @@
 import type { EventStatus } from '../api/types'
 
 // One scale, reused everywhere a magnitude appears (map markers, table
-// support-score column, report hypothesis cards) — see UI spec Section 6.
-// Bands mirror the 0-20/21-40/41-60/61-80/81-100 support-score bands from
-// the original build spec's Section 17.
+// support-score column, report hypothesis cards) -- this repo's own
+// convention, not spec text. Scores this coloring the hypothesis-support/
+// investigation-priority values from `Environmental_Assurance_Spec.md`
+// §19-20; the 0-20/21-40/41-60/61-80/81-100 breakpoints are ours, the spec
+// doesn't mandate specific bands.
 export function scoreColor(score: number): string {
   if (score <= 20) return 'var(--color-status-quiet)'
   if (score <= 40) return 'var(--color-status-info)'
@@ -22,9 +24,9 @@ export function scoreLabel(score: number): string {
 
 export function statusColor(status: EventStatus): string {
   switch (status) {
-    case 'AWAITING_REVIEW':
+    case 'AMBIGUOUS':
       return 'var(--color-status-moderate)'
-    case 'STAGE1_REJECTED':
+    case 'LIKELY_NON_FIRE':
       return 'var(--color-status-quiet)'
     case 'STAGE2_RUNNING':
       return 'var(--color-status-info)'
@@ -35,10 +37,10 @@ export function statusColor(status: EventStatus): string {
 
 export function statusLabel(status: EventStatus): string {
   switch (status) {
-    case 'AWAITING_REVIEW':
-      return 'Awaiting review'
-    case 'STAGE1_REJECTED':
-      return 'Stage 1 rejected'
+    case 'AMBIGUOUS':
+      return 'Ambiguous'
+    case 'LIKELY_NON_FIRE':
+      return 'Likely non-fire'
     case 'STAGE2_RUNNING':
       return 'Stage 2 running'
     case 'CONVERGED':

@@ -1,6 +1,11 @@
+// Stage-1 outcomes (AMBIGUOUS, LIKELY_NON_FIRE) match the triage states in
+// `Environmental_Assurance_Spec.md` §10; STAGE2_RUNNING/CONVERGED are this
+// repo's own naming for Stage-2 adversarial-analysis progress (matches
+// InvestigationReport.status below) since the canonical spec doesn't
+// enumerate an AnalysisRun status.
 export type EventStatus =
-  | 'AWAITING_REVIEW'
-  | 'STAGE1_REJECTED'
+  | 'AMBIGUOUS'
+  | 'LIKELY_NON_FIRE'
   | 'STAGE2_RUNNING'
   | 'CONVERGED'
 
