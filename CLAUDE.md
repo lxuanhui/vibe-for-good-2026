@@ -92,18 +92,29 @@ audit-scoped rather than extending the flat shape. Still fixtures in the browser
 the Investigator/Skeptic loop with `setTimeout`, and is where a real agent
 goes.
 
-The events being served are still *fixture cases*; the endpoint is real, the
-data is invented. Nothing yet derives an event from an observation.
+The events `GET /api/events` serves are still *fixture cases*; that endpoint
+is real, its data is invented.
 
 `data_pipeline/` is no longer only a feasibility spike. It now holds the
 analysis engine — `clustering/`, `triage/`, `graph/`, `priority/`,
 `complexity/`, `enrichment/`, `propagation/`, `imagery/`, plus `benchmark/`
 and `golden/` regression cases — across ~58 modules with unit tests.
 
-**None of it is reachable from the API.** `backend/app/` imports nothing from
-`data_pipeline`, and nothing persists: no module touches a database, an S3
-bucket, or any store. The engine and the console have not met. That gap, not
-any single endpoint, is the largest thing between here and the demo in §31.
+The first of it reaches the API: `GET /api/audits/{id}/events` serves 3,610
+FireEvents clustered from 20,471 FIRMS detections in the 2019 haze window and
+run through Stage-1 triage. Clustering happens offline in
+`data_pipeline/export_audit_events.py` and the API serves the committed
+artifact, because scipy/pandas would take the Lambda bundle to the edge of its
+250 MB limit and the derivation is identical for every caller. Nothing
+persists yet: no module touches a database, an S3 bucket, or any store.
+
+**No frontend calls those endpoints** — `FireEvent` in
+`frontend/src/api/types.ts` requires `location`, `peatClassification` and
+`currentConditions`, none of which FIRMS-only data can honestly supply.
+Filling them with placeholders is exactly the blurring the product boundary
+forbids, so the register needs its own view. That gap between the engine and
+the console, not any single endpoint, is the largest thing between here and
+the demo in §31.
 
 The spike's negative results are still the valuable part of `sources/` (FIRMS
 `day_range` caps at 5 not 10; Overpass attic queries silently return empty;
