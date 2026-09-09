@@ -95,6 +95,19 @@ and lands in Terraform state in plain text like that one — acceptable for a
 free, re-issuable key on a dev stack, and recorded in `infra/variables.tf`
 rather than left to be discovered.
 
+**The plan for this PR turned up a second, unrelated finding worth keeping.**
+`environment_variables` on `aws_amplify_app.console` is a Terraform-owned map
+and is replaced wholesale on every apply, so both variables that had been
+typed into the Amplify console by hand — `VITE_FIRMS_MAP_KEY` and
+`VITE_CARTO_API_KEY` — showed as deletions. For the FIRMS key that is the
+correct outcome and does the cleanup for us. For the Carto key it is a silent
+regression: the basemap would drop to unauthenticated, rate-limited tiles with
+nothing in the repository explaining why. `VITE_CARTO_API_KEY` is therefore
+declared in `console.tf` and fed by a `CARTO_API_KEY` GitHub *variable* — a
+variable, not a secret, because it is public by design and masking it would
+only hide it from us. The general rule: an Amplify environment variable that
+is not in `console.tf` does not exist past the next infra merge.
+
 ---
 
 ## 2026-09-10 - Analysis runs as an async job on a second Lambda

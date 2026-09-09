@@ -37,6 +37,10 @@ env:
   # landing map's live layer reporting itself unavailable -- which is the
   # correct render -- rather than failing the deploy.
   TF_VAR_nasa_firms_map_key: ${{ secrets.NASA_FIRMS_MAP_KEY }}
+  # Client-side Carto basemap key, baked into the bundle by Vite and restricted
+  # by origin in the Carto dashboard. A repository *variable*, not a secret --
+  # it is public by design, and masking it would only hide it from us.
+  TF_VAR_carto_api_key: ${{ vars.CARTO_API_KEY }}
 
 jobs:
   terraform:
