@@ -204,7 +204,14 @@ def test_event_evidence_separates_real_observed_derived_and_missing_context(clie
     assert body["investigationPriority"] in {"MEDIUM", "HIGH"}
     assert isinstance(body["reviewRouting"]["escalationReasonCodes"], list)
     assert {item["kind"] for item in body["availability"]} == {"peat", "weather", "imagery"}
-    assert all(item["status"] == "unavailable" for item in body["availability"])
+    # Availability tracks whatever derivedEvidence actually contains for that
+    # audit artifact -- enrich_audit_events.py may have added real weather/
+    # imagery evidence for some events, so this must not assume "always
+    # unavailable" as a fixed fact about the artifact.
+    present_categories = {item["category"] for item in body["derivedEvidence"]}
+    for item in body["availability"]:
+        expected = "available" if item["kind"] in present_categories else "unavailable"
+        assert item["status"] == expected, f"{item['kind']}: expected {expected}, got {item['status']}"
 
 
 def test_unknown_event_evidence_is_explicitly_not_found(client):

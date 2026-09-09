@@ -59,6 +59,7 @@ export interface EvidenceObject {
   evidence_id?: string
   time_window?: string
   value?: unknown
+  unit?: string | null
   quality?: number | null
   limitations?: string[]
   algorithm_version?: string | null
