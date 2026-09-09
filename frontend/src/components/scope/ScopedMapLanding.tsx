@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Layer, Map, Source, type MapLayerMouseEvent } from 'react-map-gl/maplibre'
 import type { Feature, FeatureCollection, Geometry, LineString, Point, Polygon } from 'geojson'
 import type { AuditEventSummary, AuditScope, EventEvidenceResponse, InvestigationMap } from '../../api/types'
-import { fetchAuditRegister, fetchInvestigationBundle, fetchInvestigationMap } from '../../api/client'
+import { addToAuditPack, fetchAuditRegister, fetchInvestigationBundle, fetchInvestigationMap } from '../../api/client'
 import { AUDIT_EVENT_COLORS, AUDIT_SCOPE_BOUNDARY_COLOR, AUDIT_SCOPE_BUFFER_COLOR, SURFACE_FIRE_ENVELOPE_COLOR } from '../../lib/layerColors'
 import { useAppStore } from '../../store/useAppStore'
 import { Button } from '../ui/Button'
@@ -83,8 +83,11 @@ function scopeFeature(geometry: unknown): Feature<Geometry> | null {
   return geometry ? { type: 'Feature', geometry: geometry as Geometry, properties: {} } : null
 }
 
-export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister }: { scope: AuditScope; onOpenScope: () => void; onOpenRegister: () => void }) {
+export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewReport }: { scope: AuditScope; onOpenScope: () => void; onOpenRegister: () => void; onViewReport: () => void }) {
   const [events, setEvents] = useState<AuditEventSummary[]>([])
+  const [packed, setPacked] = useState<string[]>([])
+  const [candidateIds, setCandidateIds] = useState<string[]>([])
+  const [packError, setPackError] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const positionedForAudit = useRef('')
@@ -156,11 +159,26 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister }: { scope
     setLoading(true)
     setError('')
     fetchAuditRegister(scope.audit_id, { since: scope.review_start, until: scope.review_end, bbox: scope.buffer_bbox ?? undefined })
-      .then((result) => { if (active) setEvents(result.events) })
+      .then((result) => { if (active) { setEvents(result.events); setPacked(result.progression.selectedEventIds); setCandidateIds([]) } })
       .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : 'FireEvents could not be loaded.') })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [scope.audit_id, scope.review_start, scope.review_end, scope.buffer_bbox])
+
+  function toggleCandidate(eventId: string) {
+    setCandidateIds((ids) => ids.includes(eventId) ? ids.filter((id) => id !== eventId) : [...ids, eventId])
+  }
+
+  async function addCandidatesToPack() {
+    const additions = candidateIds.filter((id) => !packed.includes(id))
+    if (!additions.length) return
+    setPackError('')
+    try {
+      await Promise.all(additions.map((id) => addToAuditPack(scope.audit_id, id)))
+      setPacked((ids) => [...ids, ...additions.filter((id) => !ids.includes(id))])
+      setCandidateIds([])
+    } catch (reason) { setPackError(reason instanceof Error ? reason.message : 'Could not add the selected FireEvents to the audit report.') }
+  }
 
   const points = useMemo(() => mapPoints(events, graph), [events, graph])
   const edges = useMemo(() => graphEdges(graph), [graph])
@@ -206,7 +224,7 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister }: { scope
   return <div className="relative flex h-full w-full flex-col bg-bg text-text">
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-border-strong bg-panel px-5">
       <div><div className="text-sm font-semibold tracking-wide">Environmental Assurance Console</div><div className="text-[10px] uppercase tracking-[0.2em] text-text-faint">Scoped FireEvent review · {scope.review_start} → {scope.review_end}</div></div>
-      <div className="flex items-center gap-2"><span className="rounded border border-status-good/50 px-2 py-1 text-[10px] uppercase tracking-wider text-status-good">Real derived events</span><Button onClick={onOpenScope}>EDIT SCOPE</Button></div>
+      <Button onClick={onOpenScope}>EDIT SCOPE</Button>
     </header>
     <div className="relative flex min-h-0 flex-1">
       <div className="relative min-w-0 flex-1">
@@ -270,16 +288,27 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister }: { scope
           <div className="text-xs uppercase tracking-[0.16em] text-accent">Audit scope map</div>
           <h1 className="mt-1 text-sm font-semibold">FireEvents in scope + context</h1>
           <p className="mt-2 text-xs leading-5 text-text-muted">Review scoped FireEvents and optional peat context.</p>
-          <div className="mt-3 grid grid-cols-2 gap-2 text-xs"><div className="rounded border border-border bg-bg p-2"><div className="text-text-faint">EVENTS SHOWN</div><div className="mt-1 text-lg font-semibold text-accent">{loading ? '…' : events.length.toLocaleString()}</div></div><div className="rounded border border-border bg-bg p-2"><div className="text-text-faint">SOURCE</div><div className="mt-1 text-status-good">API artifact</div></div></div>
+          <div className="mt-3 rounded border border-border bg-bg p-2 text-xs"><div className="text-text-faint">EVENTS SHOWN</div><div className="mt-1 text-lg font-semibold text-accent">{loading ? '…' : events.length.toLocaleString()}</div></div>
           <p className="mt-3 text-[10px] leading-4 text-text-faint">Peat is environmental context, not cause. Compare it with selected-event evidence and candidate links.</p>
           {envelopes.features.length > 0 && <p className="mt-2 text-[10px] leading-4 text-text-faint">Dashed outline: a first-order wind-oriented surface-spread compatibility estimate for a candidate FireEvent pair -- not a validated fire-behaviour forecast, and not a claim about what happened.</p>}
           {error && <div role="alert" className="mt-3 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-xs text-red-200">{error}</div>}
           {graphError && <div role="alert" className="mt-3 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-xs text-red-200">{graphError}</div>}
-          {loading && <div role="status" className="mt-3 text-xs text-text-muted">Loading real audit FireEvents…</div>}
+          {loading && <div role="status" className="mt-3 text-xs text-text-muted">Loading scoped FireEvents…</div>}
           {!loading && !error && events.length === 0 && <div className="mt-3 text-xs text-text-muted">No events intersect this audit scope and buffer.</div>}
           <Button variant="primary" className="mt-4 w-full" onClick={onOpenRegister}>OPEN FIRE REGISTER</Button>
           <Button className="mt-2 w-full" onClick={() => setShowPeatland((shown) => !shown)}>{showPeatland ? 'HIDE PEATLAND' : 'SHOW PEATLAND'}</Button>
           {envelopes.features.length > 0 && <Button className="mt-2 w-full" onClick={() => setShowSpreadEnvelopes((shown) => !shown)}>{showSpreadEnvelopes ? 'HIDE SPREAD ENVELOPES' : 'SHOW SPREAD ENVELOPES'}</Button>}
+        </div>
+        <div className="p-4">
+          <div className="flex items-center justify-between"><div className="text-xs uppercase tracking-[0.16em] text-accent">Investigation candidates</div><span className="rounded border border-border px-1.5 py-0.5 text-[10px] text-text-muted">{packed.length} IN REPORT</span></div>
+          <p className="mt-2 text-xs leading-5 text-text-muted">Select one or more scoped FireEvents to add them to the audit report for further assisted investigation.</p>
+          {packError && <div role="alert" className="mt-2 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-xs text-red-200">{packError}</div>}
+          {!loading && events.length === 0 ? <p className="mt-3 text-[11px] text-text-faint">No scoped FireEvents are available to add.</p> : <ul className="mt-3 max-h-64 space-y-1.5 overflow-y-auto pr-1">{events.map((event) => {
+            const inReport = packed.includes(event.eventId)
+            return <li key={event.eventId} className="rounded border border-border bg-bg px-2 py-1.5 text-[11px]"><label className="flex cursor-pointer items-center gap-2"><input aria-label={`Add ${event.eventId} to audit report`} type="checkbox" checked={candidateIds.includes(event.eventId)} disabled={inReport} onChange={() => toggleCandidate(event.eventId)} /><span className="min-w-0 flex-1 truncate font-mono text-text-muted">{event.eventId}</span><span className="shrink-0 text-[10px] text-text-faint">{inReport ? 'IN REPORT' : event.investigationPriority}</span></label></li>
+          })}</ul>}
+          <Button className="mt-3 w-full" disabled={!candidateIds.length} onClick={() => void addCandidatesToPack()}>{`ADD SELECTED TO REPORT (${candidateIds.length})`}</Button>
+          <Button variant="primary" className="mt-3 w-full" onClick={onViewReport}>{`VIEW AUDIT REPORT (${packed.length})`}</Button>
         </div>
       </aside>
       {drawerEventId && (

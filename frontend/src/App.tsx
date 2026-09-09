@@ -5,6 +5,7 @@ import { AuditLanding } from './components/scope/AuditLanding'
 import { ConsoleContextModal } from './components/scope/ConsoleContextPanel'
 import { ScopedMapLanding } from './components/scope/ScopedMapLanding'
 import { HistoricalInvestigation } from './components/audit/HistoricalInvestigation'
+import { AuditReportView } from './components/audit/AuditReportView'
 import { useConsoleContextPanel } from './lib/useConsoleContextPanel'
 import { useAppStore } from './store/useAppStore'
 
@@ -53,16 +54,23 @@ export default function App() {
     </div>
   )
 
+  if (viewMode === 'report') return (
+    <div className="relative h-screen overflow-hidden bg-bg text-text">
+      <AuditReportView auditId={scope.audit_id} onBack={() => setViewMode('scoped-map')} />
+    </div>
+  )
+
   return (
     <div className="relative h-screen overflow-hidden bg-bg text-text">
       {viewMode === 'scoped-map'
-        ? <ScopedMapLanding scope={scope} onOpenScope={() => setScopePanelOpen(true)} onOpenRegister={() => setViewMode('table')} />
+        ? <ScopedMapLanding scope={scope} onOpenScope={() => setScopePanelOpen(true)} onOpenRegister={() => setViewMode('table')} onViewReport={() => setViewMode('report')} />
         : <HistoricalInvestigation scope={scope} onOpenScopedMap={() => setViewMode('scoped-map')} />}
       {scopePanelOpen && (
-        <div className="absolute inset-y-3 right-3 z-30 w-[min(680px,calc(100%-1.5rem))]">
+        <div className="absolute inset-0 z-30">
           <AuditStart
             onReady={(next) => { setScope(next); setViewMode('table'); setScopePanelOpen(false) }}
             overlay
+            fullScreen
             onClose={() => setScopePanelOpen(false)}
           />
         </div>
