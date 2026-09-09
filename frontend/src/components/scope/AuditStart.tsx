@@ -2,7 +2,9 @@ import { useMemo, useState, type FormEvent } from 'react'
 import type { AuditScope } from '../../api/types'
 import { buildFireHistory, createAuditReview, uploadAuditScope, uploadAuditScopeGeometry } from '../../api/client'
 import { buildScopePreview, DEFAULT_MANAGEMENT_UNIT_GEOMETRY } from '../../lib/scope'
+import { useConsoleContextPanel } from '../../lib/useConsoleContextPanel'
 import { Button } from '../ui/Button'
+import { ConsoleContextPanel } from './ConsoleContextPanel'
 import { ScopePreviewMap } from './ScopePreviewMap'
 
 function errorMessage(error: unknown): string {
@@ -24,6 +26,10 @@ export function AuditStart({ onReady, overlay = false, onClose }: { onReady: (sc
   const [fileError, setFileError] = useState('')
   const [submitError, setSubmitError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  // Only the full-screen first load explains the console. Re-opening this
+  // panel as an overlay means the user has already worked in it.
+  const contextPanel = useConsoleContextPanel()
+  const showContextPanel = !overlay && contextPanel.open
 
   const preview = useMemo(() => {
     if (!geometry) return null
@@ -94,10 +100,16 @@ export function AuditStart({ onReady, overlay = false, onClose }: { onReady: (sc
           <div className="text-sm font-semibold tracking-wide">Environmental Assurance Console</div>
           <div className="text-[10px] uppercase tracking-[0.2em] text-text-faint">Create audit review</div>
         </div>
-        <div className="flex items-center gap-3"><span className="rounded border border-accent-muted px-2 py-1 text-[10px] uppercase tracking-widest text-accent">Scope first</span>{onClose && <Button onClick={onClose}>CLOSE</Button>}</div>
+        <div className="flex items-center gap-3">
+          {!overlay && !contextPanel.open && <Button onClick={contextPanel.reopen}>WHAT IS THIS?</Button>}
+          <span className="rounded border border-accent-muted px-2 py-1 text-[10px] uppercase tracking-widest text-accent">Scope first</span>
+          {onClose && <Button onClick={onClose}>CLOSE</Button>}
+        </div>
       </header>
 
-      <main className="mx-auto grid w-full max-w-6xl flex-1 gap-6 overflow-auto p-6 lg:grid-cols-[minmax(320px,0.8fr)_minmax(420px,1.2fr)]">
+      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 overflow-auto p-6">
+        {showContextPanel && <ConsoleContextPanel onDismiss={contextPanel.dismiss} />}
+        <div className="grid flex-1 gap-6 lg:grid-cols-[minmax(320px,0.8fr)_minmax(420px,1.2fr)]">
         <section className="rounded-xl border border-border-strong bg-panel p-6 shadow-2xl">
           <p className="mb-2 text-xs uppercase tracking-[0.2em] text-accent">01 / Audit scope</p>
           <h1 className="text-2xl font-semibold tracking-tight">Start with the management unit.</h1>
@@ -197,6 +209,7 @@ export function AuditStart({ onReady, overlay = false, onClose }: { onReady: (sc
             </div>
           )}
         </section>
+        </div>
       </main>
     </div>
   )
