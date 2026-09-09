@@ -94,6 +94,14 @@ class SelectedScene:
         # evidence pack describes the same pointer as a download reference.
         result["product_download_reference"] = self.product_download_reference
         result["cloud_cover"] = self.cloud_cover_pct
+        if self.collection.lower().replace("_", "-").startswith("sentinel-1"):
+            # A STAC thumbnail is intentionally only a fallback preview.  A
+            # later authenticated RTC/GRD processor can replace its URL while
+            # preserving this scene id, time, and event relationship.
+            result["product"] = "Sentinel-1 GRD"
+            result["polarisation"] = "VV / VH (when available)"
+            result["display_processing"] = "catalogue quicklook fallback; not analytical backscatter"
+            result["preferred_visualization"] = "RTC or terrain-corrected GRD; linear VV/VH → dB; 2–98% percentile stretch"
         return result
 
     def to_evidence_object(self, evidence_id: str) -> dict[str, Any]:

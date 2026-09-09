@@ -214,6 +214,17 @@ def test_event_evidence_separates_real_observed_derived_and_missing_context(clie
         assert item["status"] == expected, f"{item['kind']}: expected {expected}, got {item['status']}"
 
 
+def test_offline_peat_enrichment_is_returned_to_the_drawer(client):
+    event_id = client.get(f"{BASE}?limit=1").get_json()["events"][0]["eventId"]
+
+    body = client.get(f"{BASE}/{event_id}/evidence").get_json()
+
+    peat = [item for item in body["derivedEvidence"] if item["category"] == "peat"]
+    assert peat
+    assert body["availability"][0]["kind"] == "peat"
+    assert body["availability"][0]["status"] == "available"
+
+
 def test_unknown_event_evidence_is_explicitly_not_found(client):
     response = client.get(f"{BASE}/FE-does-not-exist/evidence")
 

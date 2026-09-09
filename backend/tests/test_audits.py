@@ -116,3 +116,24 @@ def test_history_handoff_requires_a_valid_scope_and_keeps_the_same_id(client):
     evidence = client.get(f"/api/audits/{review['audit_id']}/events/{event_id}/evidence")
     assert evidence.status_code == 200
     assert evidence.get_json()["event"]["triageDetail"]["rules"]
+
+
+def test_event_investigation_is_one_ready_bundle_after_history_build(client):
+    review = create_review(client)
+    client.post(f"/api/audits/{review['audit_id']}/scope/upload", json=DEMO_SCOPE)
+    client.post(f"/api/audits/{review['audit_id']}/history/build")
+    event_id = client.get(f"/api/audits/{review['audit_id']}/events?limit=1").get_json()["events"][0]["eventId"]
+
+    bundle = client.get(f"/api/audits/{review['audit_id']}/events/{event_id}/investigation")
+
+    assert bundle.status_code == 200
+    assert bundle.get_json()["event"]["event"]["eventId"] == event_id
+    assert bundle.get_json()["graph"]["selectedEventIds"] == [event_id]
+
+
+def test_evidence_reports_processing_before_history_is_built(client):
+    review = create_review(client)
+    response = client.get(f"/api/audits/{review['audit_id']}/events/FE-any/evidence")
+
+    assert response.status_code == 202
+    assert response.get_json()["status"] == "processing"

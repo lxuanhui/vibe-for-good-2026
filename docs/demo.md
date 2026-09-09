@@ -31,3 +31,25 @@ Validation smoke record (2026-09-09, local Flask run): the complete
 scope-to-report path returned a 293.21 ms cached build handoff. The timing is
 machine- and cache-state-specific; it is recorded for demo repeatability, not
 as a whole-audit benchmark.
+
+## Audit state and environmental context
+
+Deployed audit scope and evidence-pack state is stored in the API's DynamoDB
+audit-state table. This matters because later register, graph, and evidence
+requests can reach a different Lambda instance from the create/scope request.
+Local development intentionally uses an in-memory adapter.
+
+The optional offline peat enrichment uses the cached Indonesia crop of the
+Greifswald Mire Centre Global Peatland Map 2.0. Run
+`python -m data_pipeline.enrich_peat_audit_events --finalize` to attach
+geometric intersection, nearest-distance, and provenance EvidenceObjects to
+the committed detail artifact. It does not change FIRMS observations,
+FireEvent IDs, or clustering, and peat remains environmental context rather
+than evidence of cause.
+
+Sentinel-1 previews retain raw scene provenance. When RTC or terrain-corrected
+GRD arrays are available, `sentinel1_visualization.py` deterministically
+converts linear VV/VH to dB and applies a 2–98% percentile stretch for
+display; it does not use generative enhancement or super-resolution.
+Catalogue quicklooks remain explicitly labelled fallback previews until a
+processed product is available.

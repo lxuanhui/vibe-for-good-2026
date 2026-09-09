@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { AuditScope } from './api/types'
 import { AuditStart } from './components/scope/AuditStart'
+import { AuditLanding } from './components/scope/AuditLanding'
 import { ScopedMapLanding } from './components/scope/ScopedMapLanding'
 import { HistoricalInvestigation } from './components/audit/HistoricalInvestigation'
 import { useAppStore } from './store/useAppStore'
@@ -21,7 +22,20 @@ export default function App() {
     if (scope) setAuditSession(scope.audit_id)
   }, [scope, setAuditSession])
 
-  if (!scope) return <AuditStart onReady={setScope} />
+  if (!scope) return (
+    <div className="relative h-screen overflow-hidden">
+      <AuditLanding onStartAudit={() => setScopePanelOpen(true)} />
+      {scopePanelOpen && (
+        <div className="absolute inset-3 z-30">
+          <AuditStart
+            onReady={(next) => { setScope(next); setViewMode('table'); setScopePanelOpen(false) }}
+            overlay
+            onClose={() => setScopePanelOpen(false)}
+          />
+        </div>
+      )}
+    </div>
+  )
 
   return (
     <div className="relative h-screen overflow-hidden bg-bg text-text">

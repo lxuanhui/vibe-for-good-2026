@@ -432,6 +432,9 @@ def compute_imagery_evidence(conn: sqlite3.Connection, event: dict[str, Any]) ->
         # evidence drawer and evidence_for_event()'s availability check both
         # use "imagery" -- align here rather than touch either shipped call site.
         evidence["category"] = "imagery"
+        # The raw scene remains authoritative.  Preview metadata makes the
+        # fallback explicit, so the UI never presents a catalogue JPEG as
+        # analysis-ready SAR or silently applies generative enhancement.
         objects.append(evidence)
     return objects
 

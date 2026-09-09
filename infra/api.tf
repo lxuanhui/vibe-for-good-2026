@@ -44,6 +44,32 @@ resource "aws_iam_role_policy_attachment" "api_logs" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
+# Audit ids are followed by later register, graph, evidence, and pack calls.
+# Process-local dictionaries therefore fail whenever Lambda serves those calls
+# from a different warm container.  This small TTL-backed table persists only
+# anonymous audit scope/session state; the regional FIRMS artifact remains
+# packaged and immutable.
+resource "aws_dynamodb_table" "audit_state" {
+  name         = "${local.name}-audit-state"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "audit_id"
+
+  attribute { name = "audit_id" type = "S" }
+}
+
+data "aws_iam_policy_document" "audit_state" {
+  statement {
+    actions   = ["dynamodb:GetItem", "dynamodb:PutItem"]
+    resources = [aws_dynamodb_table.audit_state.arn]
+  }
+}
+
+resource "aws_iam_role_policy" "audit_state" {
+  name   = "${local.name}-audit-state"
+  role   = aws_iam_role.api.id
+  policy = data.aws_iam_policy_document.audit_state.json
+}
+
 # Declared explicitly so retention is enforced and the group is destroyed
 # with the stack. Lambda would otherwise create it on first invocation with
 # never-expire retention, outliving `terraform destroy`.
@@ -75,11 +101,13 @@ resource "aws_lambda_function" "api" {
     variables = {
       SECRET_KEY   = var.flask_secret_key
       CORS_ORIGINS = var.cors_origins
+      AUDIT_STATE_TABLE = aws_dynamodb_table.audit_state.name
     }
   }
 
   depends_on = [
     aws_iam_role_policy_attachment.api_logs,
+    aws_iam_role_policy.audit_state,
     aws_cloudwatch_log_group.api,
   ]
 }

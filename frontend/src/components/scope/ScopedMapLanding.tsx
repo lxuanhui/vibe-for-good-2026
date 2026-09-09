@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Layer, Map, Source, type MapLayerMouseEvent } from 'react-map-gl/maplibre'
 import type { Feature, FeatureCollection, GeoJsonProperties, Geometry, LineString, Point } from 'geojson'
 import type { AuditEventSummary, AuditScope, EventEvidenceResponse, InvestigationMap } from '../../api/types'
-import { fetchAuditEventEvidence, fetchAuditRegister, fetchInvestigationMap } from '../../api/client'
+import { fetchAuditRegister, fetchInvestigationBundle, fetchInvestigationMap } from '../../api/client'
 import { useFirms } from '../../api/hooks'
 import { AUDIT_EVENT_COLORS, AUDIT_SCOPE_BOUNDARY_COLOR, AUDIT_SCOPE_BUFFER_COLOR, LAYER_COLORS } from '../../lib/layerColors'
 import { useAppStore } from '../../store/useAppStore'
@@ -92,7 +92,13 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister }: { scope
   const [graph, setGraph] = useState<InvestigationMap>()
   const [graphError, setGraphError] = useState('')
   useEffect(() => {
-    if (!focusEventIds.length) { setGraph(undefined); setGraphError(''); return }
+    // A one-event selection receives this graph with its evidence in the
+    // investigation bundle below. Multi-select remains a graph-only action.
+    if (focusEventIds.length <= 1) {
+      if (!focusEventIds.length) setGraph(undefined)
+      setGraphError('')
+      return
+    }
     let active = true
     setGraphError('')
     fetchInvestigationMap(scope.audit_id, focusEventIds)
@@ -101,9 +107,9 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister }: { scope
     return () => { active = false }
   }, [scope.audit_id, focusEventIds])
 
-  // Owned here, not by EvidenceDrawer -- the same fetch also supplies the
-  // "connecting FIRMS observations" map layer below, so one request serves
-  // both the drawer and the map instead of each fetching it separately.
+  // A single bundled request supplies the drawer, its graph, and the raw
+  // observations layer. This avoids a click producing two independent 404
+  // opportunities against a just-created audit.
   const drawerEventId = focusEventIds.length === 1 ? focusEventIds[0] : undefined
   const [evidence, setEvidence] = useState<EventEvidenceResponse>()
   const [evidenceLoading, setEvidenceLoading] = useState(false)
@@ -116,8 +122,12 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister }: { scope
     let active = true
     setEvidenceLoading(true)
     setEvidenceError('')
-    fetchAuditEventEvidence(scope.audit_id, drawerEventId)
-      .then((result) => { if (active) setEvidence(result) })
+    fetchInvestigationBundle(scope.audit_id, drawerEventId)
+      .then((result) => {
+        if (!active) return
+        setEvidence(result.event)
+        setGraph(result.graph ?? undefined)
+      })
       .catch((reason) => { if (active) setEvidenceError(reason instanceof Error ? reason.message : 'Evidence could not be loaded.') })
       .finally(() => { if (active) setEvidenceLoading(false) })
     return () => { active = false }

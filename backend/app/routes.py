@@ -147,8 +147,27 @@ def get_audit_event_evidence(audit_id: str, event_id: str):
     evidence = audit_events.evidence_for_event(audit_id, event_id)
     if evidence is None:
         status = audit_events.history_status(audit_id)
+        if status == "PENDING_RECONSTRUCTION":
+            return jsonify(status="processing", retryAfterSeconds=1), 202
         return jsonify(error=f"No evidence for event {event_id} in audit {audit_id}", status=status), 404
     return jsonify(evidence)
+
+
+@api.get("/audits/<audit_id>/events/<event_id>/investigation")
+def get_audit_event_investigation(audit_id: str, event_id: str):
+    """First-drawer bundle: evidence and its one-event relationship graph.
+
+    It replaces the fragile pair of dependent requests made on every map
+    click. Optional imagery/weather remain fields of the evidence response,
+    so a failure in one does not blank the event summary.
+    """
+    evidence = audit_events.evidence_for_event(audit_id, event_id)
+    if evidence is None:
+        status = audit_events.history_status(audit_id)
+        if status == "PENDING_RECONSTRUCTION":
+            return jsonify(status="processing", retryAfterSeconds=1), 202
+        return jsonify(error=f"No evidence for event {event_id} in audit {audit_id}", status=status), 404
+    return jsonify(event=evidence, graph=audit_events.investigation_map(audit_id, [event_id]))
 
 
 @api.get("/audits/<audit_id>/graph")
@@ -159,6 +178,8 @@ def get_audit_graph(audit_id: str):
         return jsonify(error="event_ids must contain at least one FireEvent ID"), 400
     result = audit_events.investigation_map(audit_id, event_ids)
     if result is None:
+        if audit_events.history_status(audit_id) == "PENDING_RECONSTRUCTION":
+            return jsonify(status="processing", retryAfterSeconds=1), 202
         return jsonify(error=f"No reconstructed history or event selection for audit {audit_id}"), 404
     return jsonify(result)
 

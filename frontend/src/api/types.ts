@@ -279,6 +279,11 @@ export interface EventEvidenceResponse {
   provenance: { source: Record<string, unknown>; algorithmVersions: string[] }
 }
 
+export interface InvestigationBundle {
+  event: EventEvidenceResponse
+  graph: InvestigationMap | null
+}
+
 // The committed real dataset, described without building an audit. Narrower
 // than the `source` blob the events endpoint returns -- only the fields the
 // first-load context panel states as fact are typed here, so a change to the
