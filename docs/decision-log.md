@@ -27,7 +27,7 @@ apply an older decision without checking the entries above it.
 
 ## 2026-09-10 - Analysis runs as an async job on a second Lambda
 
-**Status:** done · PR #144 · Closes #143
+**Status:** done · PR #148 · Closes #143
 
 The measurement in the entry below left one conclusion: a two-round
 Investigator/Skeptic assessment (51.1s) cannot be delivered inside API
