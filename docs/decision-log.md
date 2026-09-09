@@ -15,6 +15,7 @@ when changing that subsystem.
 | Investigation | Scores, review routing, graph edges, and propagation are separate deterministic evidence outputs; none establishes causation. | 2026-09-09, graph; review routing; 2026-09-08, triage / graph / surface growth |
 | Map and imagery | Camera fitting is bounds-driven; map context is not an unscoped fire browser. Satellite display processing is deterministic and provenance-preserving. | 2026-09-09, audit session / landing; 2026-09-08, Copernicus scenes |
 | Infrastructure | Flask runs on Lambda behind API Gateway; Terraform owns the deployed configuration; CORS is Flask-owned. | 2026-09-09, Amplify; 2026-09-07, Lambda / CORS |
+| Service selection | DynamoDB and S3 are authorised without a fresh argument each time; every service switched on gets a cost row in `docs/infra.md` in the same PR. | 2026-09-09, DynamoDB and S3 are authorised |
 
 **Use this log:** entries retain the original diagnosis, rejected alternatives,
 and historical context. A later entry can supersede an earlier one; do not
@@ -73,6 +74,52 @@ argument already accepted for clustering.
 **Left alone.** Peatland-corridor uncertainty
 (`peat_fraction_along_corridor`, numpy + Pillow + a raster) is a separable,
 heavier piece not needed for spread *direction* and not attempted here.
+
+---
+
+## 2026-09-09 - DynamoDB and S3 are authorised; every service switched on gets a cost row
+
+**Status:** done - PR #137
+
+**Decision.** DynamoDB and S3 are approved for use without a fresh
+service-selection argument each time (owner's call). In exchange, every AWS
+service this project switches on is recorded in
+[`docs/infra.md`](infra.md) with what it is for and what it costs, updated in
+the pull request that adds it.
+
+**Why the trade.** The reason the persistence roles were left unchosen was
+never that DynamoDB was suspect - it was that nobody wanted a service quietly
+appearing in the stack because one agent found it convenient. A cost table
+that has to be updated in the same PR solves that directly and cheaply,
+without making each new table an architecture debate.
+
+**What the numbers actually are.** The whole project costs about **$0.03 a
+month** at demo traffic - Lambda, API Gateway, DynamoDB and CloudWatch all sit
+inside free tiers or round to zero, and most of the three cents is Amplify
+build minutes for PR previews. Lambda's monthly free allowance is perpetual
+rather than a 12-month trial, so this does not change when the account's first
+year ends.
+
+**The account bill is dominated by something else.** August's account total
+was **$6.18**, of which this project was roughly a cent. The rest is
+`i-03d53840a3553a537` (`anvil-api`, a `t4g.small` running since 2026-07-23)
+and its attached public IPv4 address and 16 GB gp3 volume - about $4.90/month
+between them. It predates this project, is in neither Terraform stack, and is
+somebody else's workload. Recorded so that nobody reads a bill, concludes the
+console is expensive, and starts deleting things to find out which part.
+
+**Enforced by a skill, not by memory.** `.claude/skills/decision-log/` is
+loaded when opening a PR or creating an issue. It makes the *check* mandatory
+and the *entry* conditional -- a log with an entry for every typo fix stops
+being read, which defeats the point -- and it carries the test for what earns
+an entry, the format, the rule for annotating a reversal rather than deleting
+it, and the requirement that a new AWS service also gets a cost row here.
+`branch-and-pr` now points at it for the recording step instead of restating
+a shorter version.
+
+**Still true, and not weakened by this:** serverless by default, and anything
+always-on needs justification before it is switched on. The escalation order
+for compute is unchanged: zip, then container image, then EC2.
 
 ---
 

@@ -5,8 +5,8 @@ import { AuditLanding } from './components/scope/AuditLanding'
 import { ConsoleContextModal } from './components/scope/ConsoleContextPanel'
 import { ScopedMapLanding } from './components/scope/ScopedMapLanding'
 import { HistoricalInvestigation } from './components/audit/HistoricalInvestigation'
-import { AuditReportView } from './components/audit/AuditReportView'
 import { useConsoleContextPanel } from './lib/useConsoleContextPanel'
+import { AuditReportView } from './components/audit/AuditReportView'
 import { useAppStore } from './store/useAppStore'
 
 // Canonical spec §5: create audit review -> build fire history -> historical
@@ -54,23 +54,33 @@ export default function App() {
     </div>
   )
 
-  if (viewMode === 'report') return (
-    <div className="relative h-screen overflow-hidden bg-bg text-text">
-      <AuditReportView auditId={scope.audit_id} onBack={() => setViewMode('scoped-map')} />
-    </div>
-  )
+  // The audit-package report is reached from the scoped map (the AI
+  // Investigator/Skeptic loop belongs next to the investigation surface, not
+  // bolted onto the register table) so it renders back into that same map
+  // rather than the register on close.
+  if (viewMode === 'report') {
+    return (
+      <div className="relative h-screen overflow-hidden bg-bg text-text">
+        <AuditReportView auditId={scope.audit_id} onBack={() => setViewMode('scoped-map')} />
+      </div>
+    )
+  }
 
   return (
     <div className="relative h-screen overflow-hidden bg-bg text-text">
       {viewMode === 'scoped-map'
-        ? <ScopedMapLanding scope={scope} onOpenScope={() => setScopePanelOpen(true)} onOpenRegister={() => setViewMode('table')} onViewReport={() => setViewMode('report')} />
+        ? <ScopedMapLanding
+            scope={scope}
+            onOpenScope={() => setScopePanelOpen(true)}
+            onOpenRegister={() => setViewMode('table')}
+            onViewReport={() => setViewMode('report')}
+          />
         : <HistoricalInvestigation scope={scope} onOpenScopedMap={() => setViewMode('scoped-map')} />}
       {scopePanelOpen && (
-        <div className="absolute inset-0 z-30">
+        <div className="absolute inset-3 z-30">
           <AuditStart
             onReady={(next) => { setScope(next); setViewMode('table'); setScopePanelOpen(false) }}
             overlay
-            fullScreen
             onClose={() => setScopePanelOpen(false)}
           />
         </div>
