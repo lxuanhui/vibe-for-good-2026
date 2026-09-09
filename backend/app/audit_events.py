@@ -25,6 +25,7 @@ from typing import Any
 
 from app.audits import get_audit as get_audit_session
 from app.audits import get_scope_geometry
+from app.review_routing import attach_routing, routing_diagnostics
 
 DATA_DIR = Path(__file__).parent / "data"
 EVENTS_PATH = DATA_DIR / "audit_events.json.gz"
@@ -224,7 +225,15 @@ def get_audit(audit_id: str) -> dict[str, Any] | None:
     """The reconstructed history for an audit id, if one has been built."""
     artifact = _load_events()["audits"].get(audit_id)
     if artifact is not None:
-        return artifact
+        events = attach_routing(artifact["events"])
+        return {
+            **artifact,
+            "scope": {
+                **artifact["scope"],
+                "reviewQueueCount": routing_diagnostics(events)["humanReviewCount"],
+            },
+            "events": events,
+        }
     # The current history adapter has one committed real dataset. Once a
     # session completes its build handoff, expose that cached dataset under
     # the anonymised audit id until persistence/reconstruction is replaced.
@@ -235,6 +244,7 @@ def get_audit(audit_id: str) -> dict[str, Any] | None:
     if demo is None:
         return None
     demo_scope = demo["scope"]
+    events = attach_routing(demo["events"])
     return {
         "scope": {
             "id": audit_id,
@@ -242,12 +252,12 @@ def get_audit(audit_id: str) -> dict[str, Any] | None:
             "reviewEnd": session["review_end"],
             "contextBufferKm": session["context_buffer_km"],
             "eventCount": demo_scope["eventCount"],
-            "reviewQueueCount": demo_scope["reviewQueueCount"],
+            "reviewQueueCount": routing_diagnostics(events)["humanReviewCount"],
             "compression": demo_scope["compression"],
             "rawObservations": demo_scope["rawObservations"],
             "qualifiedObservations": demo_scope["qualifiedObservations"],
         },
-        "events": demo["events"],
+        "events": events,
     }
 
 
@@ -290,11 +300,13 @@ def progression(audit_id: str) -> dict[str, Any] | None:
     observations_to_events = round(qualified / fire_events, 2) if fire_events else None
     scope_compression = round(fire_events / in_scope, 2) if in_scope else None
     pack = AUDIT_PACKS.get(audit_id, {})
+    route_summary = routing_diagnostics(audit["events"])
     return {
         "rawObservations": source.get("rawObservations", source.get("observationsUsed")),
         "qualifiedObservations": qualified,
         "fireEvents": fire_events,
-        "requiringHumanReview": scope.get("reviewQueueCount", 0),
+        "requiringHumanReview": route_summary["humanReviewCount"],
+        "routingDiagnostics": route_summary,
         "selected": len(pack),
         "selectedEventIds": sorted(pack),
         "compression": scope_compression,
@@ -511,6 +523,7 @@ def evidence_for_event(audit_id: str, event_id: str) -> dict[str, Any] | None:
         "peat_involvement", "land_change_indicators", "propagation_uncertainty",
     ]
     unavailable = "This current audit artifact has no completed enrichment output for this component."
+    routing = event["reviewRouting"]
     for name in complexity_names:
         derived.append(_evidence_object(
             f"DERIVED_COMPLEXITY_{event_id}_{name}", "fire-complexity", name,
@@ -520,12 +533,22 @@ def evidence_for_event(audit_id: str, event_id: str) -> dict[str, Any] | None:
             algorithm_version="fire-complexity-evidence-v1", raw_reference=event_id,
         ))
     for name in priority_names:
+        if name in {"event_validity", "evidence_sufficiency"}:
+            component = next(item for item in routing["components"] if item["factor"] == name)
+            derived.append(_evidence_object(
+                f"DERIVED_PRIORITY_{event_id}_{name}", "investigation-priority", name,
+                component["reason"], "Deterministic review routing", window,
+                value=component["value"], quality=1.0,
+                limitations=["Priority is a review-routing aid, not culpability or responsibility."],
+                algorithm_version=routing["priorityAlgorithmVersion"], raw_reference=event_id,
+            ))
+            continue
         derived.append(_evidence_object(
             f"DERIVED_PRIORITY_{event_id}_{name}", "investigation-priority", name,
             f"Not evaluated: {unavailable}", "Investigation Priority pipeline",
             window, value=None, quality=0.0,
             limitations=[unavailable, "Priority is a review-routing aid, not culpability or responsibility."],
-            algorithm_version="investigation-priority-v1", raw_reference=event_id,
+            algorithm_version=routing["priorityAlgorithmVersion"], raw_reference=event_id,
         ))
 
     return {
@@ -540,13 +563,16 @@ def evidence_for_event(audit_id: str, event_id: str) -> dict[str, Any] | None:
             {"kind": "imagery", "status": "unavailable", "reason": "No imagery acquisition or scene-selection result is present for this audit artifact."},
         ],
         "evidenceSufficiency": {
-            "value": "PARTIAL",
+            "value": routing["evidenceSufficiency"],
             "reason": "FIRMS observations and Stage-1 derivations are available; optional environmental enrichment is missing.",
             "algorithmVersion": "evidence-sufficiency-v1",
         },
+        "investigationPriority": routing["investigationPriority"],
+        "reviewState": routing["reviewState"],
+        "reviewRouting": routing,
         "provenance": {
             "source": source_provenance(),
-            "algorithmVersions": ["stage1-rules-v1", "audit-scope-relation-v1", "fire-complexity-evidence-v1", "investigation-priority-v1"],
+            "algorithmVersions": ["stage1-rules-v1", "audit-scope-relation-v1", "fire-complexity-evidence-v1", routing["priorityAlgorithmVersion"], routing["algorithmVersion"]],
         },
     }
 

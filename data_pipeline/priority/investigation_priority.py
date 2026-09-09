@@ -31,7 +31,7 @@ from data_pipeline.propagation.surface_fire import (
 )
 from data_pipeline.triage.stage1 import Stage1State, Stage1TriageResult
 
-ALGORITHM_VERSION = "investigation-priority-v1"
+ALGORITHM_VERSION = "investigation-priority-v2"
 
 
 class PriorityFactor(StrEnum):
@@ -615,11 +615,16 @@ def compute_investigation_priority(
 
 
 def _priority_for_score(score: float) -> InvestigationPriority:
-    if score >= 75:
+    # These bands are calibrated for the current sparse-evidence workflow.
+    # A score is the weighted contribution of evidence that is actually
+    # available, so the old 25/50/75 bands made a likely-fire signal plus
+    # partial evidence look LOW even when it was the strongest event in the
+    # register. They are routing bands, not probabilities or quotas.
+    if score >= 60:
         return InvestigationPriority.URGENT
-    if score >= 50:
+    if score >= 20:
         return InvestigationPriority.HIGH
-    if score >= 25:
+    if score >= 12:
         return InvestigationPriority.MEDIUM
     return InvestigationPriority.LOW
 

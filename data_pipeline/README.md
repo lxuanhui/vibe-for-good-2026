@@ -286,8 +286,11 @@ visible in the contribution instead of turning it into a false certainty.
 The scorer can consume existing Stage-1, Fire Complexity, FireEventGraph,
 peat, and surface-compatibility results. Missing context is
 `NOT_EVALUATED`, never silently treated as reassuring evidence. The weights
-are a transparent routing policy rather than calibrated probabilities, and
-the scorer rejects company identity/reputation, previous misconduct, guilt,
+are a transparent routing policy rather than calibrated probabilities. The v2
+score bands are LOW below 12, MEDIUM at 12, HIGH at 20, and URGENT at 60;
+they are routing bands, not quotas. The separate review-routing layer
+escalates only HIGH/URGENT results, while preserving ambiguous events as
+review-recommended. The scorer rejects company identity/reputation, previous misconduct, guilt,
 intent, culpability, responsibility, and legal fields entirely. A priority
 result is therefore a queueing aid for human investigation, not a finding
 about who caused an event or who is responsible for it.

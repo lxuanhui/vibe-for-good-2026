@@ -6,6 +6,31 @@ more valuable half.
 
 ---
 
+## 2026-09-09 - Review routing is calibrated separately from priority and sufficiency
+
+**Status:** implemented · issue #85
+
+**Decision.** FireEvents now expose three independent deterministic outputs:
+evidence sufficiency, investigation priority, and human workflow state. The
+priority score uses calibrated bands (LOW < 12, MEDIUM >= 12, HIGH >= 20,
+URGENT >= 60). Only HIGH/URGENT routes enter `HUMAN_REVIEW`; ambiguous events
+remain visible as `REVIEW_RECOMMENDED` rather than being sent to the human
+queue by a conservative Stage-1 default.
+
+**Why.** The 2019 FIRMS-only artifact has 396 `LIKELY_FIRE` and 3,214
+`AMBIGUOUS` events. Treating both Stage-1 states as human review erased the
+meaning of prioritisation. Under this routing policy, 396 events enter human
+review and the other 3,214 remain inspectable with explicit priority and
+sufficiency states.
+
+**What was rejected.** Fixed quotas, event-ID exceptions, geography-based
+responsibility signals, and changes to clustering or scientific feature
+calculations. Every escalation carries component evidence IDs and a reason
+code; diagnostics report counts and percentages for priority, workflow, and
+escalation reasons.
+
+---
+
 ## 2026-09-09 — Terraform creates the Amplify app; a human connects the repo
 
 **Status:** done · issue #96
