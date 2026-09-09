@@ -7,9 +7,11 @@ from data_pipeline.enrichment.peat_context import PeatContext
 from data_pipeline.graph import build_fire_event_graph
 from data_pipeline.priority import (
     FACTOR_NAMES,
+    HumanReviewState,
     InvestigationPriority,
     PriorityEvidenceStatus,
     compute_investigation_priority,
+    route_for_human_review,
 )
 from data_pipeline.propagation.surface_fire import SurfaceFireCompatibility
 from data_pipeline.triage.stage1 import Stage1State, Stage1TriageResult
@@ -83,6 +85,55 @@ def test_company_and_legal_fields_are_rejected_before_scoring():
 def test_direct_numeric_signals_are_bounded():
     with pytest.raises(ValueError, match="between 0 and 1"):
         compute_investigation_priority("FE-BOUNDED", {"event_validity": 1.1})
+
+
+@pytest.mark.parametrize(
+    ("score", "expected"),
+    [(11.99, InvestigationPriority.LOW), (12.0, InvestigationPriority.MEDIUM),
+     (19.99, InvestigationPriority.MEDIUM), (20.0, InvestigationPriority.HIGH),
+     (59.99, InvestigationPriority.HIGH), (60.0, InvestigationPriority.URGENT)],
+)
+def test_calibrated_priority_bands_have_explicit_boundaries(score, expected):
+    # One direct factor makes the score equal to the boundary under test.
+    from data_pipeline.priority.investigation_priority import _priority_for_score
+
+    assert _priority_for_score(score) == expected
+
+
+def test_review_routing_keeps_ambiguity_out_of_human_queue_but_visible():
+    result = route_for_human_review("FE-AMBIGUOUS", "AMBIGUOUS", "PARTIAL")
+
+    assert result.priority == InvestigationPriority.MEDIUM
+    assert result.review_state == HumanReviewState.REVIEW_RECOMMENDED
+    assert not result.escalated
+    assert result.priority_result.components[0].evidence_ids
+
+
+def test_review_routing_escalates_high_priority_with_reason_code():
+    result = route_for_human_review("FE-FIRE", "LIKELY_FIRE", "PARTIAL")
+
+    assert result.priority == InvestigationPriority.HIGH
+    assert result.review_state == HumanReviewState.HUMAN_REVIEW
+    assert result.escalation_reason_codes == ("PRIORITY_HIGH",)
+
+
+@pytest.mark.parametrize(
+    ("triage", "sufficiency", "expected_priority", "expected_state"),
+    [
+        ("AMBIGUOUS", "PARTIAL", InvestigationPriority.MEDIUM, HumanReviewState.REVIEW_RECOMMENDED),
+        ("LIKELY_FIRE", "SUFFICIENT", InvestigationPriority.MEDIUM, HumanReviewState.SCREENED),
+        ("LIKELY_FIRE", "PARTIAL", InvestigationPriority.HIGH, HumanReviewState.HUMAN_REVIEW),
+        ("LIKELY_FIRE", "INSUFFICIENT", InvestigationPriority.HIGH, HumanReviewState.HUMAN_REVIEW),
+    ],
+)
+def test_review_routing_boundaries_keep_states_independent(
+    triage, sufficiency, expected_priority, expected_state
+):
+    result = route_for_human_review("FE-BOUNDARY", triage, sufficiency)
+
+    assert result.priority == expected_priority
+    assert result.review_state == expected_state
+    assert result.evidence_sufficiency == sufficiency
 
 
 def _event(event_id: str, lat: float, lon: float, extent_km: float = 0.0) -> FireEvent:

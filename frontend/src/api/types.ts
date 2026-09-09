@@ -205,6 +205,10 @@ export interface AuditEventSummary {
   maxFrp: number | null
   meanFrp: number | null
   triage: { state: 'LIKELY_FIRE' | 'LIKELY_NON_FIRE' | 'AMBIGUOUS'; deeperInvestigationEligible: boolean }
+  evidenceSufficiency: 'SUFFICIENT' | 'PARTIAL' | 'INSUFFICIENT'
+  investigationPriority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'
+  reviewState: 'SCREENED' | 'REVIEW_RECOMMENDED' | 'HUMAN_REVIEW'
+  reviewRouting: { priorityScore: number; escalationReasonCodes: string[]; components: { factor: string; value: number | null; weight: number; contribution: number; status: 'EVALUATED' | 'NOT_EVALUATED'; evidenceIds: string[]; reason: string }[] }
 }
 
 export interface InvestigationMapNode extends AuditEventSummary {
@@ -238,6 +242,9 @@ export interface EventEvidenceResponse {
   derivedEvidence: EvidenceObject[]
   availability: { kind: 'peat' | 'weather' | 'imagery'; status: 'unavailable' | 'no_suitable_pass' | 'available'; reason: string }[]
   evidenceSufficiency: { value: 'SUFFICIENT' | 'PARTIAL' | 'INSUFFICIENT'; reason: string; algorithmVersion: string }
+  investigationPriority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'
+  reviewState: 'SCREENED' | 'REVIEW_RECOMMENDED' | 'HUMAN_REVIEW'
+  reviewRouting: Record<string, unknown>
   provenance: { source: Record<string, unknown>; algorithmVersions: string[] }
 }
 
@@ -253,6 +260,15 @@ export interface AuditProgression {
   inScopeAndBuffer: number | null
   scopeBoundaryAvailable: boolean
   scopeCompression: number | null
+  routingDiagnostics: {
+    humanReviewCount: number
+    humanReviewPercentage: number
+    priorityDistribution: Record<string, { count: number; percentage: number }>
+    reviewStateDistribution: Record<string, { count: number; percentage: number }>
+    evidenceSufficiencyDistribution: Record<string, { count: number; percentage: number }>
+    escalationReasonCodes: Record<string, { count: number; percentage: number }>
+    componentContributionDistribution: Record<string, { evaluatedCount: number; totalContribution: number; percentageOfContribution: number }>
+  }
 }
 
 export interface AuditPackReview { eventId: string; note: string; disposition: string; addedAt: string }
