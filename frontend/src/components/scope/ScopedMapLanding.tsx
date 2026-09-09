@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Layer, Map, Source, type MapLayerMouseEvent } from 'react-map-gl/maplibre'
 import type { Feature, FeatureCollection, Geometry, LineString, Point } from 'geojson'
-import type { AuditEventSummary, AuditScope, EventEvidenceResponse, InvestigationMap } from '../../api/types'
-import { fetchAuditRegister, fetchInvestigationBundle, fetchInvestigationMap } from '../../api/client'
+import type { AuditEventSummary, AuditScope, EventEvidenceResponse, InvestigationMap, InvestigationMapNode } from '../../api/types'
+import { addToAuditPack, fetchAuditRegister, fetchInvestigationBundle, fetchInvestigationMap, removeFromAuditPack } from '../../api/client'
 import { AUDIT_EVENT_COLORS, AUDIT_SCOPE_BOUNDARY_COLOR, AUDIT_SCOPE_BUFFER_COLOR } from '../../lib/layerColors'
 import { useAppStore } from '../../store/useAppStore'
 import { Button } from '../ui/Button'
@@ -11,6 +11,15 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 
 const GRAPH_LINE_COLOR = '#f97316'
 const OBSERVATION_COLOR = '#fbbf24'
+
+// The correlation graph is one rolled-together view now, not two flows that
+// silently replace each other: `origin` distinguishes an edge that touches
+// the FireEvent currently open in the evidence drawer ("focus") from one that
+// only belongs to the wider Fire Register selection ("selection"). Same hue,
+// different weight -- "colour them slightly differently" rather than
+// introducing a second unrelated color to an already-busy legend.
+type GraphEdgeOrigin = 'focus' | 'selection'
+type TaggedGraphEdge = InvestigationMap['edges'][number] & { origin: GraphEdgeOrigin }
 
 function observationPoints(evidence: EventEvidenceResponse | undefined): FeatureCollection<Point> {
   const observations = evidence?.event.triageDetail?.observations ?? []
@@ -24,7 +33,7 @@ function observationPoints(evidence: EventEvidenceResponse | undefined): Feature
 // fetch pulled in as neighbours -- a related event can sit outside the
 // buffer bbox and still be worth drawing (spec §13: relevant graph
 // neighbours, not the whole regional archive).
-function mapPoints(events: AuditEventSummary[], graph: InvestigationMap | undefined): FeatureCollection<Point> {
+function mapPoints(events: AuditEventSummary[], graphNodes: InvestigationMapNode[]): FeatureCollection<Point> {
   // A plain object, not a Map instance -- `Map` in this file's scope is the
   // react-map-gl component import, and `new Map(...)` here would construct
   // that instead of the global collection type.
@@ -32,7 +41,7 @@ function mapPoints(events: AuditEventSummary[], graph: InvestigationMap | undefi
   for (const event of events) {
     byId[event.eventId] = { lon: event.centroid.lon, lat: event.centroid.lat, state: event.triage.state, focus: '' }
   }
-  for (const node of graph?.nodes ?? []) {
+  for (const node of graphNodes) {
     byId[node.eventId] = { lon: node.centroid.lon, lat: node.centroid.lat, state: node.triage.state, focus: node.mapRole }
   }
   return {
@@ -45,15 +54,17 @@ function mapPoints(events: AuditEventSummary[], graph: InvestigationMap | undefi
   }
 }
 
-function graphEdges(graph: InvestigationMap | undefined): FeatureCollection<LineString> {
-  if (!graph) return { type: 'FeatureCollection', features: [] }
+function graphEdges(graphNodes: InvestigationMapNode[], edges: TaggedGraphEdge[]): FeatureCollection<LineString> {
+  // A plain object, not a Map instance -- see the note on `mapPoints` above.
+  const nodeById: Record<string, InvestigationMapNode> = {}
+  for (const node of graphNodes) nodeById[node.eventId] = node
   return {
     type: 'FeatureCollection',
-    features: graph.edges.flatMap((edge) => {
-      const from = graph.nodes.find((node) => node.eventId === edge.sourceEventId)
-      const to = graph.nodes.find((node) => node.eventId === edge.targetEventId)
+    features: edges.flatMap((edge) => {
+      const from = nodeById[edge.sourceEventId]
+      const to = nodeById[edge.targetEventId]
       return from && to
-        ? [{ type: 'Feature' as const, geometry: { type: 'LineString' as const, coordinates: [[from.centroid.lon, from.centroid.lat], [to.centroid.lon, to.centroid.lat]] }, properties: {} }]
+        ? [{ type: 'Feature' as const, geometry: { type: 'LineString' as const, coordinates: [[from.centroid.lon, from.centroid.lat], [to.centroid.lon, to.centroid.lat]] }, properties: { origin: edge.origin } }]
         : []
     }),
   }
@@ -63,8 +74,10 @@ function scopeFeature(geometry: unknown): Feature<Geometry> | null {
   return geometry ? { type: 'Feature', geometry: geometry as Geometry, properties: {} } : null
 }
 
-export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister }: { scope: AuditScope; onOpenScope: () => void; onOpenRegister: () => void }) {
+export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewReport }: { scope: AuditScope; onOpenScope: () => void; onOpenRegister: () => void; onViewReport: () => void }) {
   const [events, setEvents] = useState<AuditEventSummary[]>([])
+  const [packed, setPacked] = useState<string[]>([])
+  const [packError, setPackError] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const positionedForAudit = useRef('')
@@ -73,77 +86,126 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister }: { scope
 
   // Table multi-select ("INVESTIGATE ON MAP") hands off through this store
   // field rather than a prop -- App.tsx just flips viewMode, it does not
-  // know about event selection. Seeded once per audit on arrival; further
-  // focus changes come from clicking the map itself, not from the table
-  // selection continuing to change underneath.
+  // know about event selection.
   const registerSelection = useAppStore((state) => state.registerSelection)
-  const [focusEventIds, setFocusEventIds] = useState<string[]>([])
+
+  // The wider correlation graph, seeded by every FireEvent checked in the
+  // Fire Register. This used to live in the same state as "which event's
+  // drawer is open" -- clicking one dot on the map replaced it outright, so
+  // the richer multi-select correlations silently vanished the moment you
+  // inspected one of them. It is now independent: checking rows in the
+  // register is what grows or shrinks this graph, not clicking the map.
+  const [selectionGraph, setSelectionGraph] = useState<InvestigationMap>()
+  const [selectionGraphError, setSelectionGraphError] = useState('')
+  useEffect(() => {
+    if (registerSelection.length <= 1) { setSelectionGraph(undefined); setSelectionGraphError(''); return }
+    let active = true
+    setSelectionGraphError('')
+    fetchInvestigationMap(scope.audit_id, registerSelection)
+      .then((result) => { if (active) setSelectionGraph(result) })
+      .catch((reason) => { if (active) setSelectionGraphError(reason instanceof Error ? reason.message : 'Related FireEvents could not be loaded.') })
+    return () => { active = false }
+  }, [scope.audit_id, registerSelection])
+
+  // The ONE FireEvent whose evidence drawer is open -- from a map click, or
+  // seeded once on arrival when the register selection was itself a single
+  // row. Deliberately not the same state as the register selection above.
+  const [focusedEventId, setFocusedEventId] = useState<string>()
   const seededFocusForAudit = useRef('')
   useEffect(() => {
     if (seededFocusForAudit.current === scope.audit_id) return
     seededFocusForAudit.current = scope.audit_id
-    if (registerSelection.length) setFocusEventIds(registerSelection)
+    if (registerSelection.length === 1) setFocusedEventId(registerSelection[0])
   }, [scope.audit_id, registerSelection])
 
-  const [graph, setGraph] = useState<InvestigationMap>()
-  const [graphError, setGraphError] = useState('')
-  useEffect(() => {
-    // A one-event selection receives this graph with its evidence in the
-    // investigation bundle below. Multi-select remains a graph-only action.
-    if (focusEventIds.length <= 1) {
-      if (!focusEventIds.length) setGraph(undefined)
-      setGraphError('')
-      return
-    }
-    let active = true
-    setGraphError('')
-    fetchInvestigationMap(scope.audit_id, focusEventIds)
-      .then((result) => { if (active) setGraph(result) })
-      .catch((reason) => { if (active) setGraphError(reason instanceof Error ? reason.message : 'Related FireEvents could not be loaded.') })
-    return () => { active = false }
-  }, [scope.audit_id, focusEventIds])
-
-  // A single bundled request supplies the drawer, its graph, and the raw
-  // observations layer. This avoids a click producing two independent 404
-  // opportunities against a just-created audit.
-  const drawerEventId = focusEventIds.length === 1 ? focusEventIds[0] : undefined
+  // A single bundled request supplies the drawer, its own one-event graph,
+  // and the raw observations layer. This avoids a click producing two
+  // independent 404 opportunities against a just-created audit.
+  const drawerEventId = focusedEventId
   const [evidence, setEvidence] = useState<EventEvidenceResponse>()
   const [evidenceLoading, setEvidenceLoading] = useState(false)
   const [evidenceError, setEvidenceError] = useState('')
+  const [focusGraph, setFocusGraph] = useState<InvestigationMap>()
+  const [focusGraphError, setFocusGraphError] = useState('')
   const [showObservations, setShowObservations] = useState(true)
   const [showPeatland, setShowPeatland] = useState(false)
   const [evidenceReloadToken, setEvidenceReloadToken] = useState(0)
   useEffect(() => {
-    if (!drawerEventId) { setEvidence(undefined); setEvidenceError(''); return }
+    if (!drawerEventId) { setEvidence(undefined); setEvidenceError(''); setFocusGraph(undefined); setFocusGraphError(''); return }
     setShowObservations(true)
     let active = true
     setEvidenceLoading(true)
     setEvidenceError('')
+    setFocusGraphError('')
     fetchInvestigationBundle(scope.audit_id, drawerEventId)
       .then((result) => {
         if (!active) return
         setEvidence(result.event)
-        setGraph(result.graph ?? undefined)
+        setFocusGraph(result.graph ?? undefined)
       })
-      .catch((reason) => { if (active) setEvidenceError(reason instanceof Error ? reason.message : 'Evidence could not be loaded.') })
+      .catch((reason) => {
+        if (!active) return
+        const message = reason instanceof Error ? reason.message : 'Evidence could not be loaded.'
+        setEvidenceError(message)
+        setFocusGraphError(message)
+      })
       .finally(() => { if (active) setEvidenceLoading(false) })
     return () => { active = false }
   }, [scope.audit_id, drawerEventId, evidenceReloadToken])
   const observations = useMemo(() => observationPoints(evidence), [evidence])
+
+  // One rolled-together graph for the map: every node either source contains,
+  // and every edge tagged by which source it came from so the paint
+  // expression below can colour the two "slightly differently" instead of
+  // one flow's correlations silently overwriting the other's.
+  const graphNodes = useMemo(() => {
+    // A plain object, not a Map instance -- see the note on `mapPoints` above.
+    const byId: Record<string, InvestigationMapNode> = {}
+    for (const node of selectionGraph?.nodes ?? []) byId[node.eventId] = node
+    for (const node of focusGraph?.nodes ?? []) byId[node.eventId] = node
+    return Object.values(byId)
+  }, [selectionGraph, focusGraph])
+  const taggedEdges = useMemo<TaggedGraphEdge[]>(() => {
+    const edgeKey = (edge: { sourceEventId: string; targetEventId: string }) => `${edge.sourceEventId} ${edge.targetEventId}`
+    const focusKeys = new Set((focusGraph?.edges ?? []).map(edgeKey))
+    return [
+      ...(focusGraph?.edges ?? []).map((edge) => ({ ...edge, origin: 'focus' as const })),
+      ...(selectionGraph?.edges ?? [])
+        .filter((edge) => !focusKeys.has(edgeKey(edge)))
+        .map((edge) => ({ ...edge, origin: 'selection' as const })),
+    ]
+  }, [selectionGraph, focusGraph])
 
   useEffect(() => {
     let active = true
     setLoading(true)
     setError('')
     fetchAuditRegister(scope.audit_id, { since: scope.review_start, until: scope.review_end, bbox: scope.buffer_bbox ?? undefined })
-      .then((result) => { if (active) setEvents(result.events) })
+      .then((result) => { if (active) { setEvents(result.events); setPacked(result.progression.selectedEventIds) } })
       .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : 'FireEvents could not be loaded.') })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [scope.audit_id, scope.review_start, scope.review_end, scope.buffer_bbox])
 
-  const points = useMemo(() => mapPoints(events, graph), [events, graph])
-  const edges = useMemo(() => graphEdges(graph), [graph])
+  // Register-selection is who the sidebar offers as pack candidates: it is
+  // "what he selected in the Fire Register", not the map's own click-to-focus
+  // state, which can diverge from it (issue #101 -- investigation focus and
+  // evidence-pack inclusion are deliberately kept distinct, not conflated).
+  async function addToPack(eventId: string) {
+    try {
+      await addToAuditPack(scope.audit_id, eventId)
+      setPacked((ids) => ids.includes(eventId) ? ids : [...ids, eventId])
+    } catch (reason) { setPackError(reason instanceof Error ? reason.message : 'Could not add event to pack.') }
+  }
+  async function removeFromPack(eventId: string) {
+    try {
+      await removeFromAuditPack(scope.audit_id, eventId)
+      setPacked((ids) => ids.filter((id) => id !== eventId))
+    } catch (reason) { setPackError(reason instanceof Error ? reason.message : 'Could not remove event from pack.') }
+  }
+
+  const points = useMemo(() => mapPoints(events, graphNodes), [events, graphNodes])
+  const edges = useMemo(() => graphEdges(graphNodes, taggedEdges), [graphNodes, taggedEdges])
   const center = useMemo<[number, number]>(() => scope.centroid ?? [116.25, -3.8], [scope.centroid])
 
   // Carto's basemap tiles now require a key on every request. The style JSON
@@ -178,13 +240,13 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister }: { scope
   function handleMapClick(event: MapLayerMouseEvent) {
     const feature = event.features?.[0]
     const id = feature?.properties?.id as string | undefined
-    setFocusEventIds(id ? [id] : [])
+    setFocusedEventId(id)
   }
 
   return <div className="relative flex h-full w-full flex-col bg-bg text-text">
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-border-strong bg-panel px-5">
       <div><div className="text-sm font-semibold tracking-wide">Environmental Assurance Console</div><div className="text-[10px] uppercase tracking-[0.2em] text-text-faint">Scoped FireEvent review · {scope.review_start} → {scope.review_end}</div></div>
-      <div className="flex items-center gap-2"><span className="rounded border border-status-good/50 px-2 py-1 text-[10px] uppercase tracking-wider text-status-good">Real derived events</span><Button onClick={onOpenScope}>EDIT SCOPE</Button></div>
+      <div className="flex items-center gap-2"><Button onClick={onOpenScope}>EDIT SCOPE</Button></div>
     </header>
     <div className="relative flex min-h-0 flex-1">
       <div className="relative min-w-0 flex-1">
@@ -216,7 +278,7 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister }: { scope
           {buffer && <Source id="audit-context-buffer" type="geojson" data={buffer}><Layer id="audit-context-buffer-line" type="line" paint={{ 'line-color': AUDIT_SCOPE_BUFFER_COLOR, 'line-width': 1.5, 'line-dasharray': [2, 2], 'line-opacity': 0.9 }} /></Source>}
           {boundary && <Source id="audit-scope-boundary" type="geojson" data={boundary}><Layer id="audit-scope-fill" type="fill" paint={{ 'fill-color': AUDIT_SCOPE_BOUNDARY_COLOR, 'fill-opacity': 0.08 }} /><Layer id="audit-scope-line" type="line" paint={{ 'line-color': AUDIT_SCOPE_BOUNDARY_COLOR, 'line-width': 2 }} /></Source>}
           {showPeatland && <Source id="peatland-context" type="geojson" data="/peatland-indonesia.geojson"><Layer id="peatland-context-fill" type="fill" paint={{ 'fill-color': '#a855f7', 'fill-opacity': 0.22 }} /><Layer id="peatland-context-line" type="line" paint={{ 'line-color': '#c084fc', 'line-width': 0.7, 'line-opacity': 0.7 }} /></Source>}
-          {edges.features.length > 0 && <Source id="fireevent-graph" type="geojson" data={edges}><Layer id="fireevent-graph-line" type="line" paint={{ 'line-color': GRAPH_LINE_COLOR, 'line-width': 2, 'line-dasharray': [1, 1] }} layout={{ 'line-cap': 'round' }} /></Source>}
+          {edges.features.length > 0 && <Source id="fireevent-graph" type="geojson" data={edges}><Layer id="fireevent-graph-line" type="line" paint={{ 'line-color': GRAPH_LINE_COLOR, 'line-width': ['match', ['get', 'origin'], 'focus', 2, 1.2], 'line-opacity': ['match', ['get', 'origin'], 'focus', 0.9, 0.4], 'line-dasharray': [1, 1] }} layout={{ 'line-cap': 'round' }} /></Source>}
           {showObservations && observations.features.length > 0 && <Source id="fireevent-observations" type="geojson" data={observations}><Layer id="fireevent-observations-points" type="circle" paint={{ 'circle-radius': 3, 'circle-color': OBSERVATION_COLOR, 'circle-opacity': 0.85, 'circle-stroke-color': '#0a0d12', 'circle-stroke-width': 1 }} /></Source>}
           <Source id="audit-events" type="geojson" data={points}>
             <Layer
@@ -238,14 +300,39 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister }: { scope
           <div className="text-xs uppercase tracking-[0.16em] text-accent">Audit scope map</div>
           <h1 className="mt-1 text-sm font-semibold">FireEvents in scope + context</h1>
           <p className="mt-2 text-xs leading-5 text-text-muted">Review scoped FireEvents and optional peat context.</p>
-          <div className="mt-3 grid grid-cols-2 gap-2 text-xs"><div className="rounded border border-border bg-bg p-2"><div className="text-text-faint">EVENTS SHOWN</div><div className="mt-1 text-lg font-semibold text-accent">{loading ? '…' : events.length.toLocaleString()}</div></div><div className="rounded border border-border bg-bg p-2"><div className="text-text-faint">SOURCE</div><div className="mt-1 text-status-good">API artifact</div></div></div>
+          <div className="mt-3 rounded border border-border bg-bg p-2 text-xs"><div className="text-text-faint">EVENTS SHOWN</div><div className="mt-1 text-lg font-semibold text-accent">{loading ? '…' : events.length.toLocaleString()}</div></div>
           <p className="mt-3 text-[10px] leading-4 text-text-faint">Peat is environmental context, not cause. Compare it with selected-event evidence and candidate links.</p>
+          {taggedEdges.length > 0 && <p className="mt-2 text-[10px] leading-4 text-text-faint"><span className="text-accent">Bright lines</span> are the open FireEvent's own candidates; <span className="opacity-60">faint lines</span> belong to other FireEvents selected in the Fire Register.</p>}
           {error && <div role="alert" className="mt-3 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-xs text-red-200">{error}</div>}
-          {graphError && <div role="alert" className="mt-3 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-xs text-red-200">{graphError}</div>}
+          {selectionGraphError && <div role="alert" className="mt-3 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-xs text-red-200">{selectionGraphError}</div>}
           {loading && <div role="status" className="mt-3 text-xs text-text-muted">Loading real audit FireEvents…</div>}
           {!loading && !error && events.length === 0 && <div className="mt-3 text-xs text-text-muted">No events intersect this audit scope and buffer.</div>}
           <Button variant="primary" className="mt-4 w-full" onClick={onOpenRegister}>OPEN FIRE REGISTER</Button>
           <Button className="mt-2 w-full" onClick={() => setShowPeatland((shown) => !shown)}>{showPeatland ? 'HIDE PEATLAND' : 'SHOW PEATLAND'}</Button>
+        </div>
+        <div className="p-4">
+          <div className="flex items-center justify-between">
+            <div className="text-xs uppercase tracking-[0.16em] text-accent">Audit package</div>
+            <span className="rounded border border-border px-1.5 py-0.5 text-[10px] text-text-muted">{packed.length} PACKED</span>
+          </div>
+          <p className="mt-2 text-xs leading-5 text-text-muted">FireEvents selected in the Fire Register are candidates here -- add the ones that belong in the engagement report.</p>
+          {packError && <div role="alert" className="mt-2 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-xs text-red-200">{packError}</div>}
+          {registerSelection.length === 0 ? (
+            <p className="mt-3 text-[11px] text-text-faint">No FireEvents selected. Open the Fire Register and select rows to add candidates here.</p>
+          ) : (
+            <ul className="mt-3 space-y-1.5">
+              {registerSelection.map((id) => {
+                const inPack = packed.includes(id)
+                return (
+                  <li key={id} className="flex items-center justify-between gap-2 rounded border border-border bg-bg px-2 py-1.5 text-[11px]">
+                    <span className="truncate font-mono text-text-muted">{id}</span>
+                    <Button className="shrink-0 whitespace-nowrap text-[10px]" onClick={() => void (inPack ? removeFromPack(id) : addToPack(id))}>{inPack ? 'REMOVE' : 'ADD'}</Button>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+          <Button variant="primary" className="mt-3 w-full" onClick={onViewReport}>{`VIEW AUDIT PACKAGE (${packed.length})`}</Button>
         </div>
       </aside>
       {drawerEventId && (
@@ -254,14 +341,14 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister }: { scope
           loading={evidenceLoading}
           error={evidenceError || undefined}
           data={evidence}
-          graph={graph}
-          graphError={graphError || undefined}
+          graph={focusGraph}
+          graphError={focusGraphError || undefined}
           reviewStart={scope.review_start}
           reviewEnd={scope.review_end}
           showObservations={showObservations}
           onToggleObservations={() => setShowObservations((value) => !value)}
           observationCount={observations.features.length || undefined}
-          onClose={() => setFocusEventIds([])}
+          onClose={() => setFocusedEventId(undefined)}
           onRetry={() => setEvidenceReloadToken((value) => value + 1)}
         />
       )}
