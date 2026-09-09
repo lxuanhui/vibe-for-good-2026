@@ -66,13 +66,39 @@ which is why `lambda_timeout_seconds` is 29. So no arrangement of rounds fits:
 parallelism halves the cost of a round but the slowest single provider call
 already exceeds the cap on its own.
 
+**A different model does not fix this, and it was measured, not assumed.** One
+round against the real pack, each output run through the pipeline's own
+validation:
+
+| Model | Region | One round | Outcome |
+|---|---|---|---|
+| `google.gemma-3-27b-it` | us-east-1 | 92.6s | Failed: output was not a structured mapping |
+| `us.google.gemma-3-27b-it` | us-east-1 | - | Failed: no such model identifier |
+| `global.anthropic.claude-sonnet-4-5-20250929-v1:0` | ap-southeast-1 | 44.3s | Failed: unresolved question carried no evidence ID |
+| `global.anthropic.claude-haiku-4-5-20251001-v1:0` | ap-southeast-1 | 29.6s | Passed, six findings |
+
+Haiku 4.5 is not a downgrade accepted for speed; it is both the fastest and
+the only candidate that produced schema-valid output. Two results are worth
+keeping: a small open model is cheap per token but *slower* per request and
+markedly worse at emitting strict JSON with exact evidence IDs (Gemma 3 27B is
+the largest Gemma on Bedrock -- there is no Gemma 4 -- and it is us-east-1
+only); and Sonnet 4.5 was rejected by the evidence-ID guard, so a larger model
+is not automatically a safer one here.
+
 **Rejected:** cutting to one round (29.9s leaves no margin for cold start and
 evidence assembly, and discards the rebuttal round that makes the loop
 adversarial); trimming the hypothesis set or asking for terser findings
 (competing hypotheses and explicit evidence sufficiency are the product's
 safety substance, not padding, and must not be traded for latency); a larger
-model (Sonnet 4.5 is ~2x slower, so strictly worse against the binding
-constraint).
+or smaller model (see the table above -- every alternative was slower, and
+both failed validation).
+
+**EC2 was also rejected**, though it would genuinely remove the cap: the 30s
+limit belongs to API Gateway, not to Lambda, whose own budget is 900s. Moving
+to an always-on instance to escape a limit that an asynchronous job escapes
+for free would take the project from ~$0.03/month to ~$15/month permanently,
+and require a VPC, TLS, a deploy path and a second CI target. Serverless by
+default stands; the delivery model is what needs to change, not the compute.
 
 **Consequence:** analysis has to become an asynchronous job -- accept, work
 past the API Gateway cap in the Lambda's own 900s budget, persist to the
