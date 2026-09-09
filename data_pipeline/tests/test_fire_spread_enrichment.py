@@ -105,7 +105,7 @@ def test_envelope_dict_caps_a_pair_that_would_otherwise_blanket_the_map():
     assert result["semiMajorKm"] < 151.4
     # The polygon's own farthest point from the origin must respect the cap
     # too, not just the stored semi-axis numbers.
-    origin_lat, origin_lon = -3.78, 116.25
+    origin_lat = -3.78
     farthest_km = max(
         math.radians(lat - origin_lat) * 6371.0088
         for lon, lat in result["polygon"]

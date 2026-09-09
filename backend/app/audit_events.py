@@ -152,8 +152,8 @@ def _edge_from_real(real: dict[str, Any], subject_id: str, candidate_id: str) ->
     evidence_id = f"GRAPH_{real['source_event_id']}_{real['target_event_id']}_fire_event_graph"
     limitations = [
         "A candidate edge is a relationship for review, not evidence of a shared cause or responsibility.",
-        "First-order surface-spread compatibility screen: homogeneous fuel approximation, historical wind "
-        "treated as representative, does not model underground peat propagation.",
+        ("First-order surface-spread compatibility screen: homogeneous fuel approximation, historical wind "
+         "treated as representative, does not model underground peat propagation."),
     ]
     return {
         "sourceEventId": real["source_event_id"],
@@ -243,8 +243,8 @@ def investigation_map(audit_id: str, event_ids: list[str]) -> dict[str, Any] | N
                 "quality": 1.0,
                 "limitations": [
                     "A candidate edge is a relationship for review, not evidence of a shared cause or responsibility.",
-                    "This pair falls outside the precomputed FireEventGraph scope (demo in-scope+buffer FireEvents "
-                    "with real historical wind); distance is the only signal available for it.",
+                    ("This pair falls outside the precomputed FireEventGraph scope (demo in-scope+buffer FireEvents "
+                     "with real historical wind); distance is the only signal available for it."),
                 ],
                 "algorithm_version": "fire-event-graph-v1",
                 "raw_reference": f"{subject['eventId']}->{candidate['eventId']}",
