@@ -44,7 +44,10 @@ The real demo path uses the audit-scoped Flask endpoints:
 `POST /api/audits`, `POST /api/audits/{id}/scope/upload`,
 `POST /api/audits/{id}/history/build`, `GET /api/audits/{id}/events`,
 `GET /api/audits/{id}/events/{event_id}/evidence`, the graph endpoint, pack
-actions, and `GET /api/audits/{id}/report`. These serve the committed cached
+actions, explicit `POST /api/audits/{id}/events/{event_id}/analyse`, and
+`GET /api/audits/{id}/report`. Analysis sends only bounded EvidenceObjects
+and FireEvent relationship summaries to Claude through Amazon Bedrock; it is
+never generated on event selection. These serve the committed cached
 real historical artifact described in [`docs/demo.md`](docs/demo.md).
 
 `GET /api/events` and `GET /api/events/{id}`, plus the older event investigation
@@ -116,6 +119,7 @@ For CI, one repository variable is required:
 | Variable | `AWS_ROLE_ARN` | yes | IAM role GitHub assumes over OIDC. Already set. |
 | Variable | `CORS_ORIGINS` | no | Origin the deployed console is served from; defaults to `*`. |
 | Secret | `FLASK_SECRET_KEY` | no | Lambda's `SECRET_KEY`; defaults to `dev`. |
+| Terraform variable | `bedrock_model_id` | no | Bedrock model/profile for the explicit Claude Investigator/Skeptic action. |
 
 There are deliberately **no AWS access keys** in this repo — GitHub
 authenticates to AWS over OIDC and assumes a role scoped to this repository.

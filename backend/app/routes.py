@@ -1,9 +1,10 @@
 import json
 from time import perf_counter
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 
 from app import audit_events
+from app.analysis_provider import AnalysisProviderUnavailable
 from app.audits import AuditValidationError, build_history, create_audit, upload_scope
 from app.events import (
     FilterError,
@@ -167,7 +168,36 @@ def get_audit_event_investigation(audit_id: str, event_id: str):
         if status == "PENDING_RECONSTRUCTION":
             return jsonify(status="processing", retryAfterSeconds=1), 202
         return jsonify(error=f"No evidence for event {event_id} in audit {audit_id}", status=status), 404
-    return jsonify(event=evidence, graph=audit_events.investigation_map(audit_id, [event_id]))
+    return jsonify(
+        event=evidence,
+        graph=audit_events.investigation_map(audit_id, [event_id]),
+        analysis=audit_events.analysis_for_event(audit_id, event_id),
+    )
+
+
+@api.route("/audits/<audit_id>/events/<event_id>/analyse", methods=["GET", "POST"])
+def analyse_audit_event(audit_id: str, event_id: str):
+    """Read or explicitly generate bounded Investigator/Skeptic analysis."""
+    if request.method == "GET":
+        if audit_events.find_event(audit_id, event_id) is None:
+            return jsonify(error=f"No event with id {event_id} in audit {audit_id}"), 404
+        analysis = audit_events.analysis_for_event(audit_id, event_id)
+        return jsonify(status="not_run", eventId=event_id) if analysis is None else jsonify(analysis)
+    try:
+        provider = current_app.config.get("ANALYSIS_PROVIDER")
+        analysis = audit_events.analyse_event(
+            audit_id, event_id, investigator=provider, skeptic=provider
+        )
+    except AnalysisProviderUnavailable as exc:
+        return jsonify(error=str(exc), status="provider_unavailable"), 503
+    except (TypeError, ValueError) as exc:
+        # The pipeline rejected malformed provider output or unsupported
+        # evidence references. Do not retain a partial analysis.
+        return jsonify(error=f"Structured analysis was rejected: {exc}", status="invalid_output"), 502
+    if analysis is None:
+        status = audit_events.history_status(audit_id)
+        return jsonify(error=f"No evidence for event {event_id} in audit {audit_id}", status=status), 404
+    return jsonify(analysis), 201
 
 
 @api.get("/audits/<audit_id>/graph")

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import type { EventEvidenceResponse, EvidenceObject, InvestigationMap } from '../../api/types'
+import type { EventEvidenceResponse, EvidenceObject, InvestigationMap, StructuredAnalysis, StructuredAnalysisAssessment } from '../../api/types'
 import { Button } from '../ui/Button'
 import { Toggle } from '../ui/Toggle'
 
@@ -263,6 +263,25 @@ function RelatedFireEvents({ graph, error, eventId }: { graph: InvestigationMap 
   </Section>
 }
 
+function AnalysisAssessmentSummary({ assessment }: { assessment: StructuredAnalysisAssessment }) {
+  return <div className="space-y-2 rounded border border-border bg-bg/60 p-2 text-[11px]">
+    <div className="font-semibold text-accent">{assessment.role}</div>
+    {assessment.findings.map((finding) => <article key={finding.hypothesis_id} className="border-t border-border/60 pt-2 first:border-0 first:pt-0">
+      <div className="flex justify-between gap-2"><span className="font-mono">{finding.hypothesis_id}</span><span>{finding.support_score}/100 · {finding.evidence_sufficiency}</span></div>
+      <p className="mt-1 text-text-muted">{finding.summary}</p>
+      <p className="mt-1 text-[10px] text-text-faint">Supports: {finding.supporting_evidence_ids.join(', ') || '—'} · Contradicts: {finding.contradicting_evidence_ids.join(', ') || '—'}</p>
+    </article>)}
+  </div>
+}
+
+function StructuredAnalysisSection({ analysis, loading, error, onGenerate }: { analysis?: StructuredAnalysis; loading: boolean; error?: string; onGenerate: () => void }) {
+  return <Section title="AI interpretation — Investigator / Skeptic">
+    {!analysis && <><p className="text-[11px] leading-4 text-text-muted">No structured analysis has been run for this FireEvent. Generation uses only the EvidenceObjects and relationship summaries shown in this audit.</p><Button variant="primary" className="mt-3 w-full text-[10px]" disabled={loading} onClick={onGenerate}>{loading ? 'GENERATING INVESTIGATION ANALYSIS…' : 'GENERATE INVESTIGATION ANALYSIS'}</Button></>}
+    {error && <div role="alert" className="mt-3 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-[11px] text-red-200">{error}</div>}
+    {analysis && <><p className="mb-2 text-[11px] leading-4 text-text-muted">Final structured assessments are evidence-linked interpretations, separate from deterministic evidence and human review. They do not establish cause or responsibility.</p><div className="grid gap-2 lg:grid-cols-2"><AnalysisAssessmentSummary assessment={analysis.final_assessment.investigator} /><AnalysisAssessmentSummary assessment={analysis.final_assessment.skeptic} /></div><div className="mt-3 rounded border border-border bg-bg/60 p-2 text-[11px]"><div className="font-semibold">Unresolved disagreement / verification</div>{analysis.unresolved_questions.length ? <ul className="mt-1 space-y-1 text-text-muted">{analysis.unresolved_questions.map((question, index) => <li key={`${question.question}-${index}`}>• {question.question} <span className="font-mono text-text-faint">({question.evidence_ids.join(', ')})</span></li>)}</ul> : <p className="mt-1 text-text-faint">No final disagreement was retained.</p>}</div><p className="mt-2 text-[10px] text-text-faint">Model/pipeline: {analysis.algorithm_version}. Evidence IDs are shown above; no private reasoning transcript is stored or displayed.</p></>}
+  </Section>
+}
+
 export function EvidenceDrawer({
   eventId,
   loading,
@@ -277,6 +296,10 @@ export function EvidenceDrawer({
   observationCount,
   onClose,
   onRetry,
+  analysis,
+  analysisLoading,
+  analysisError,
+  onGenerateAnalysis,
 }: {
   eventId: string
   loading: boolean
@@ -291,6 +314,10 @@ export function EvidenceDrawer({
   observationCount?: number
   onClose: () => void
   onRetry: () => void
+  analysis?: StructuredAnalysis
+  analysisLoading: boolean
+  analysisError?: string
+  onGenerateAnalysis: () => void
 }) {
   const grouped = useMemo(() => {
     const items = data?.derivedEvidence ?? []
@@ -344,6 +371,7 @@ export function EvidenceDrawer({
       </Section>
       <RelatedFireEvents graph={graph} error={graphError} eventId={eventId} />
       <DerivedSummary complexity={grouped.complexity} priority={grouped.priority} />
+      <StructuredAnalysisSection analysis={analysis} loading={analysisLoading} error={analysisError} onGenerate={onGenerateAnalysis} />
       <MetricSection title="Peat / event-buffer intersection" note="The drawer shows the event footprint or buffer intersection only when a peat EvidenceObject is available. Peat overlap is environmental context and does not establish an underground path, cause, or responsibility." items={grouped.peat} />
       <Section title="Weather time window"><p className="mb-2 text-[11px] leading-4 text-text-muted">Every Open-Meteo/ERA5 hourly variable, during the event and the 7 days before it. Historical values, not a forecast; missing weather is not negative evidence.</p><WeatherSummary items={grouped.weather} /></Section>
       <MetricSection title="Surface compatibility" note="Any ellipse/envelope comparison is first-order surface-fire compatibility only; it does not model underground peat propagation." items={grouped.surface} />

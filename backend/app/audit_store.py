@@ -59,3 +59,15 @@ def update_pack(audit_id: str, pack: dict[str, dict[str, Any]]) -> None:
 
 def pack(audit_id: str) -> dict[str, dict[str, Any]]:
     return dict((get(audit_id) or {}).get("_pack", {}))
+
+
+def update_analysis(audit_id: str, analyses: dict[str, dict[str, Any]]) -> None:
+    session = get(audit_id)
+    if session is None:
+        return
+    session["_analysis"] = analyses
+    put(session)
+
+
+def analyses(audit_id: str) -> dict[str, dict[str, Any]]:
+    return dict((get(audit_id) or {}).get("_analysis", {}))

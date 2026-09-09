@@ -1,5 +1,5 @@
 import type { FeatureCollection } from './geojson'
-import type { AuditEventSummary, AuditPackReview, AuditProgression, AuditReport, AuditScope, BBox, DemoDatasetSummary, EventEvidenceResponse, EventStatus, FireEvent, InvestigationBundle, InvestigationMap, InvestigationReport, OverlayLayerId } from './types'
+import type { AuditEventSummary, AuditPackReview, AuditProgression, AuditReport, AuditScope, BBox, DemoDatasetSummary, EventEvidenceResponse, EventStatus, FireEvent, InvestigationBundle, InvestigationMap, InvestigationReport, OverlayLayerId, StructuredAnalysis } from './types'
 import { getOverlay, isLayerAvailable } from './fixtures/overlays'
 import { REPORTS } from './fixtures/reports'
 
@@ -138,6 +138,10 @@ export async function fetchAuditEventEvidence(auditId: string, eventId: string):
 
 export async function fetchInvestigationBundle(auditId: string, eventId: string): Promise<InvestigationBundle> {
   return apiGet<InvestigationBundle>(`/audits/${encodeURIComponent(auditId)}/events/${encodeURIComponent(eventId)}/investigation`)
+}
+
+export async function generateInvestigationAnalysis(auditId: string, eventId: string): Promise<StructuredAnalysis> {
+  return apiPost<StructuredAnalysis>(`/audits/${encodeURIComponent(auditId)}/events/${encodeURIComponent(eventId)}/analyse`, '')
 }
 
 export async function addToAuditPack(auditId: string, eventId: string, review: Partial<Pick<AuditPackReview, 'note' | 'disposition'>> = {}): Promise<AuditPackReview> {

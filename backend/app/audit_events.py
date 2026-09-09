@@ -23,7 +23,10 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from data_pipeline.analysis.investigator_skeptic import run_structured_analysis
+
 from app import audit_store
+from app.analysis_provider import bedrock_runner
 from app.audits import get_audit as get_audit_session
 from app.audits import get_scope_geometry
 from app.review_routing import attach_routing, routing_diagnostics
@@ -47,6 +50,16 @@ MAX_LIMIT = 2000
 # event IDs plus human review fields; report assembly always re-reads the
 # current structured evidence artifact.
 AUDIT_PACKS: dict[str, dict[str, dict[str, Any]]] = {}
+AUDIT_ANALYSES: dict[str, dict[str, dict[str, Any]]] = {}
+
+ANALYSIS_HYPOTHESES = (
+    {"hypothesis_id": "H1", "label": "Independent local ignition."},
+    {"hypothesis_id": "H2", "label": "Neighbouring surface propagation."},
+    {"hypothesis_id": "H3", "label": "Peat-mediated persistence or propagation."},
+    {"hypothesis_id": "H4", "label": "Multiple related land-management ignitions."},
+    {"hypothesis_id": "H5", "label": "Regional independent events under shared conditions."},
+    {"hypothesis_id": "H6", "label": "Other mechanism not resolved by the supplied evidence."},
+)
 
 
 def _point_in_ring(lon: float, lat: float, ring: list[list[float]]) -> bool:
@@ -683,6 +696,73 @@ def evidence_for_event(audit_id: str, event_id: str) -> dict[str, Any] | None:
     }
 
 
+def _analysis_store(audit_id: str) -> dict[str, dict[str, Any]] | None:
+    if get_audit(audit_id) is None:
+        return None
+    if get_audit_session(audit_id):
+        return audit_store.analyses(audit_id)
+    return AUDIT_ANALYSES.setdefault(audit_id, {})
+
+
+def _save_analysis(audit_id: str, event_id: str, analysis: dict[str, Any]) -> None:
+    store = _analysis_store(audit_id)
+    if store is None:
+        return
+    store[event_id] = analysis
+    if get_audit_session(audit_id):
+        audit_store.update_analysis(audit_id, store)
+
+
+def analysis_for_event(audit_id: str, event_id: str) -> dict[str, Any] | None:
+    store = _analysis_store(audit_id)
+    return dict(store[event_id]) if store and event_id in store else None
+
+
+def _analysis_evidence(audit_id: str, event_id: str) -> list[dict[str, Any]] | None:
+    """Assemble the bounded, provenance-bearing input for one event analysis."""
+    evidence = evidence_for_event(audit_id, event_id)
+    graph = investigation_map(audit_id, [event_id])
+    if evidence is None or graph is None:
+        return None
+    items = [*evidence["observedEvidence"], *evidence["derivedEvidence"]]
+    for edge in graph["edges"]:
+        items.extend(edge.get("evidence", []))
+    # Un-evaluated placeholders carry a valid evidence ID, but they are an
+    # availability notice rather than a positive or negative physical metric.
+    # The provider receives the limitation through the other concrete evidence
+    # and is not invited to turn missing data into a spurious conclusion.
+    concrete = [item for item in items if item.get("value") is not None]
+    by_id: dict[str, dict[str, Any]] = {}
+    for item in concrete:
+        evidence_id = item.get("evidence_id")
+        if isinstance(evidence_id, str) and evidence_id:
+            by_id.setdefault(evidence_id, item)
+    return list(by_id.values())
+
+
+def analyse_event(audit_id: str, event_id: str, *, investigator=None, skeptic=None) -> dict[str, Any] | None:
+    """Run and persist explicit, schema-checked structured analysis.
+
+    This function is deliberately called only by the POST route. Fetching an
+    event, graph, drawer, or engagement report never spends provider tokens.
+    """
+    evidence = _analysis_evidence(audit_id, event_id)
+    if evidence is None:
+        return None
+    investigator = investigator or bedrock_runner
+    skeptic = skeptic or bedrock_runner
+    result = run_structured_analysis(
+        event_id,
+        evidence,
+        ANALYSIS_HYPOTHESES,
+        investigator,
+        skeptic,
+        max_rounds=2,
+    ).to_dict()
+    _save_analysis(audit_id, event_id, result)
+    return result
+
+
 def _pack(audit_id: str) -> dict[str, dict[str, Any]] | None:
     if get_audit(audit_id) is None:
         return None
@@ -746,13 +826,35 @@ def audit_report(audit_id: str) -> dict[str, Any] | None:
     }
     source = source_provenance()
     scope = audit["scope"]
+    analyses = [
+        {"eventId": event["eventId"], "analysis": analysis}
+        for event in selected
+        if (analysis := analysis_for_event(audit_id, event["eventId"])) is not None
+    ]
+    analysed_ids = {item["eventId"] for item in analyses}
+    not_run_ids = [event["eventId"] for event in selected if event["eventId"] not in analysed_ids]
+    unresolved_questions = [
+        {"eventId": item["eventId"], **question}
+        for item in analyses
+        for question in item["analysis"].get("unresolved_questions", [])
+    ]
+    verification_recommendations = [
+        {"eventId": item["eventId"], **question}
+        for item in analyses
+        for assessment in item["analysis"].get("final_assessment", {}).values()
+        for finding in assessment.get("findings", [])
+        for question in finding.get("verification_questions", [])
+    ]
     return {
         "auditId": audit_id,
         "auditScope": {"reviewStart": scope["reviewStart"], "reviewEnd": scope["reviewEnd"], "scope": scope},
         "sourceMethodSummary": {
             "observed": "NASA FIRMS thermal detections clustered into FireEvents",
             "derived": "Stage-1 deterministic triage and audit-scope relation",
-            "ai": "No AI analysis is available in the current FIRMS audit artifact.",
+            "ai": (
+                f"Structured Investigator/Skeptic analysis has been explicitly generated for {len(analyses)} selected FireEvent(s)."
+                if analyses else "No Investigator/Skeptic analysis has been run for the selected FireEvents."
+            ),
             "source": source,
         },
         "compressionSummary": {**(scope.get("compression", {}) if isinstance(scope.get("compression"), dict) else {}), **(progression(audit_id) or {})},
@@ -762,10 +864,15 @@ def audit_report(audit_id: str) -> dict[str, Any] | None:
         "chronology": sorted([{"eventId": event["eventId"], "firstDetection": event["firstDetection"], "lastDetection": event["lastDetection"]} for event in selected], key=lambda item: item["firstDetection"]),
         "deterministicEvidence": [{"eventId": item["event"]["eventId"], "observed": item["observedEvidence"], "derived": item["derivedEvidence"]} for item in evidence],
         "graphRelationships": graph["edges"],
-        "aiAnalysis": [],
-        "unresolvedQuestions": [],
-        "verificationRecommendations": [],
-        "limitations": ["The current artifact contains FIRMS clustering and Stage-1 output only; peat, weather, imagery and adversarial analysis are unavailable.", "Selected events are evidence for human review, not conclusions about cause or responsibility."],
+        "aiAnalysis": analyses,
+        "analysisNotRunEventIds": not_run_ids,
+        "unresolvedQuestions": unresolved_questions,
+        "verificationRecommendations": verification_recommendations,
+        "limitations": [
+            "Structured analysis is an evidence-linked interpretation, not a conclusion about cause, responsibility, or legal status.",
+            "Events without an explicit generated analysis remain not-run; the report does not fabricate an AI assessment for them.",
+            "Selected events are evidence for human review, not conclusions about cause or responsibility.",
+        ],
         "provenance": {"source": source, "algorithmVersions": sorted({version for item in evidence for version in item["provenance"]["algorithmVersions"]})},
         "humanNotes": [{"eventId": entry["eventId"], "note": entry["note"], "disposition": entry["disposition"]} for entry in entries],
         "disclaimer": "This report is an investigative-support product. It does not establish legal responsibility, intent, culpability, ownership liability, or criminal wrongdoing. Findings require human verification.",

@@ -319,3 +319,26 @@ def test_auditor_can_add_update_remove_and_report_selected_event(client):
     assert updated.get_json()["note"] == "Updated"
     assert client.delete(f"/api/audits/{AUDIT}/events/{event_id}/add-to-pack").status_code == 200
     assert client.get(f"/api/audits/{AUDIT}/report").get_json()["counts"]["selected"] == 0
+
+
+def test_new_audit_report_contains_the_events_selected_for_that_audit(client):
+    """The cached regional artifact is reused, but the engagement package is
+    keyed by the new audit ID -- it must never reuse a demo/example selection."""
+    created = client.post(
+        "/api/audits", json={"reviewStart": "2019-09-01", "reviewEnd": "2019-09-05"}
+    ).get_json()
+    audit_id = created["audit_id"]
+    scope = {
+        "type": "Polygon",
+        "coordinates": [[[116.0, -4.05], [116.5, -4.05], [116.5, -3.55], [116.0, -3.55], [116.0, -4.05]]],
+    }
+    assert client.post(f"/api/audits/{audit_id}/scope/upload", json=scope).status_code == 200
+    assert client.post(f"/api/audits/{audit_id}/history/build").status_code == 202
+    event_ids = [event["eventId"] for event in client.get(f"/api/audits/{audit_id}/events?limit=2").get_json()["events"]]
+    assert len(event_ids) == 2 and event_ids[0] != event_ids[1]
+    for event_id in event_ids:
+        assert client.post(f"/api/audits/{audit_id}/events/{event_id}/add-to-pack", json={}).status_code == 200
+
+    report = client.get(f"/api/audits/{audit_id}/report").get_json()
+    assert report["auditId"] == audit_id
+    assert {item["event"]["eventId"] for item in report["selectedFireEvents"]} == set(event_ids)

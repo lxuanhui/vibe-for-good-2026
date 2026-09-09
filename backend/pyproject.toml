@@ -9,6 +9,8 @@ dependencies = [
     "python-dotenv>=1.0.1",
     # Adapts the WSGI app to API Gateway HTTP API payload format 2.0.
     "apig-wsgi>=2.19.0",
+    # Used by the explicit Investigator/Skeptic action through Amazon Bedrock.
+    "boto3>=1.43.0",
 ]
 
 [project.optional-dependencies]

@@ -75,6 +75,22 @@ resource "aws_iam_role_policy" "audit_state" {
   policy = data.aws_iam_policy_document.audit_state.json
 }
 
+# Bedrock Converse authorizes against bedrock:InvokeModel. The model/profile
+# is a Terraform variable because availability differs by account and region;
+# this role receives no other Bedrock permissions.
+data "aws_iam_policy_document" "bedrock_inference" {
+  statement {
+    actions   = ["bedrock:InvokeModel"]
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_role_policy" "bedrock_inference" {
+  name   = "${local.name}-bedrock-inference"
+  role   = aws_iam_role.api.id
+  policy = data.aws_iam_policy_document.bedrock_inference.json
+}
+
 # Declared explicitly so retention is enforced and the group is destroyed
 # with the stack. Lambda would otherwise create it on first invocation with
 # never-expire retention, outliving `terraform destroy`.
@@ -107,12 +123,14 @@ resource "aws_lambda_function" "api" {
       SECRET_KEY        = var.flask_secret_key
       CORS_ORIGINS      = var.cors_origins
       AUDIT_STATE_TABLE = aws_dynamodb_table.audit_state.name
+      BEDROCK_MODEL_ID  = var.bedrock_model_id
     }
   }
 
   depends_on = [
     aws_iam_role_policy_attachment.api_logs,
     aws_iam_role_policy.audit_state,
+    aws_iam_role_policy.bedrock_inference,
     aws_cloudwatch_log_group.api,
   ]
 }
