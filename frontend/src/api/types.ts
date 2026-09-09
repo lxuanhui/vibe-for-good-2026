@@ -59,6 +59,7 @@ export interface EvidenceObject {
   evidence_id?: string
   time_window?: string
   value?: unknown
+  unit?: string | null
   quality?: number | null
   limitations?: string[]
   algorithm_version?: string | null
@@ -276,6 +277,17 @@ export interface EventEvidenceResponse {
   reviewState: 'SCREENED' | 'REVIEW_RECOMMENDED' | 'HUMAN_REVIEW'
   reviewRouting: Record<string, unknown>
   provenance: { source: Record<string, unknown>; algorithmVersions: string[] }
+}
+
+// The committed real dataset, described without building an audit. Narrower
+// than the `source` blob the events endpoint returns -- only the fields the
+// first-load context panel states as fact are typed here, so a change to the
+// artifact's provenance shape cannot silently widen what the UI claims.
+export interface DemoDatasetSummary {
+  dataset: string
+  region: string
+  window: string
+  progression: Pick<AuditProgression, 'rawObservations' | 'qualifiedObservations' | 'fireEvents' | 'requiringHumanReview'>
 }
 
 export interface AuditProgression {

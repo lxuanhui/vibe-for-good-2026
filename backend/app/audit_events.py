@@ -456,6 +456,20 @@ def _evidence_object(
     }
 
 
+ENRICHMENT_CATEGORIES = ("peat", "weather", "imagery")
+
+
+def _sufficiency_reason(has_category: set[str]) -> str:
+    present = [c for c in ENRICHMENT_CATEGORIES if c in has_category]
+    if not present:
+        return "FIRMS observations and Stage-1 derivations are available; optional environmental enrichment is missing."
+    missing = [c for c in ENRICHMENT_CATEGORIES if c not in has_category]
+    base = f"FIRMS observations, Stage-1 derivations, and {', '.join(present)} evidence are available for this event."
+    if not missing:
+        return base
+    return f"{base} {', '.join(missing).capitalize()} evidence is still missing."
+
+
 def evidence_for_event(audit_id: str, event_id: str) -> dict[str, Any] | None:
     """Return the drawer contract from the current audit artifact.
 
@@ -551,6 +565,18 @@ def evidence_for_event(audit_id: str, event_id: str) -> dict[str, Any] | None:
             algorithm_version=routing["priorityAlgorithmVersion"], raw_reference=event_id,
         ))
 
+    # This has to read the same `derived` list it reports on, not assert a
+    # fixed answer -- it was hardcoded "unavailable" for all three before
+    # enrich_audit_events.py existed, and stayed hardcoded after weather and
+    # imagery evidence started actually landing in the artifact, which made
+    # this section contradict the evidence displayed right above it.
+    has_category = {item.get("category") for item in derived}
+
+    def _availability(kind: str, reason_when_missing: str) -> dict[str, Any]:
+        if kind in has_category:
+            return {"kind": kind, "status": "available", "reason": f"{kind.capitalize()} EvidenceObjects are present for this event; see the derived evidence above."}
+        return {"kind": kind, "status": "unavailable", "reason": reason_when_missing}
+
     return {
         "auditId": audit_id,
         "event": event,
@@ -558,13 +584,19 @@ def evidence_for_event(audit_id: str, event_id: str) -> dict[str, Any] | None:
         "observedEvidence": observed,
         "derivedEvidence": derived,
         "availability": [
-            {"kind": "peat", "status": "unavailable", "reason": unavailable},
-            {"kind": "weather", "status": "unavailable", "reason": unavailable},
-            {"kind": "imagery", "status": "unavailable", "reason": "No imagery acquisition or scene-selection result is present for this audit artifact."},
+            _availability("peat", unavailable),
+            _availability("weather", unavailable),
+            _availability("imagery", "No imagery acquisition or scene-selection result is present for this audit artifact."),
         ],
         "evidenceSufficiency": {
             "value": routing["evidenceSufficiency"],
-            "reason": "FIRMS observations and Stage-1 derivations are available; optional environmental enrichment is missing.",
+            # Same bug as `_availability` above, in a second place: this was
+            # a fixed "enrichment is missing" sentence that kept asserting
+            # itself under a Weather/Imagery section that had just shown real
+            # data, once enrich_audit_events.py started landing evidence for
+            # some events. Read from the same has_category set instead of
+            # repeating the claim regardless of what derivedEvidence holds.
+            "reason": _sufficiency_reason(has_category),
             "algorithmVersion": "evidence-sufficiency-v1",
         },
         "investigationPriority": routing["investigationPriority"],

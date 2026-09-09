@@ -1,4 +1,5 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import type { EventEvidenceResponse, EvidenceObject, InvestigationMap } from '../../api/types'
 import { Button } from '../ui/Button'
 import { Toggle } from '../ui/Toggle'
@@ -81,6 +82,168 @@ function DerivedSummary({ complexity, priority }: { complexity: EvidenceObject[]
   </Section>
 }
 
+// Weather is real for the first time now (18 variables x 2 windows = up to
+// 38 items) and the original per-item card treatment made it the new
+// "boatload" the moment it stopped being empty. A compact table -- one row
+// per variable, one column per window -- shows every variable (nothing
+// hidden, per direct instruction that this should be "everything") without
+// 38 expand/collapse cards. Window name is parsed from the observation
+// text ("... during current" / "... during T-7d") since the EvidenceObject
+// schema itself has no separate window field; every template this drawer's
+// own export script writes ends that way, so this is not guessing at
+// someone else's format.
+function windowFromObservation(observation: string): string {
+  const match = /during (\S+)/.exec(observation)
+  return match ? match[1] : 'unknown'
+}
+
+function formatWeatherValue(item: EvidenceObject): string {
+  if (item.value && typeof item.value === 'object' && 'mean' in (item.value as Record<string, unknown>)) {
+    const v = item.value as { mean: number; min: number; max: number }
+    return `${v.mean} (${v.min}–${v.max})`
+  }
+  if (typeof item.value === 'number') return `${item.value}${item.unit ? ` ${item.unit}` : ''}`
+  return valueText(item.value)
+}
+
+function WeatherSummary({ items }: { items: EvidenceObject[] }) {
+  if (!items.length) return <p className="text-[11px] text-text-faint">No EvidenceObjects are available for this metric in the current audit artifact.</p>
+  const byType = new Map<string, Map<string, EvidenceObject>>()
+  const typeOrder: string[] = []
+  const windowOrder: string[] = []
+  for (const item of items) {
+    const window = windowFromObservation(item.observation)
+    if (!byType.has(item.type)) { byType.set(item.type, new Map()); typeOrder.push(item.type) }
+    byType.get(item.type)!.set(window, item)
+    if (!windowOrder.includes(window)) windowOrder.push(window)
+  }
+  return <table className="w-full text-[11px]">
+    <thead><tr className="text-left text-text-faint"><th className="pb-1 font-normal">Variable</th>{windowOrder.map((w) => <th key={w} className="pb-1 pl-2 text-right font-normal">{w}</th>)}</tr></thead>
+    <tbody>{typeOrder.map((type) => <tr key={type} className="border-t border-border/60">
+      <td className="py-1 pr-2 capitalize">{type.replace(/_/g, ' ')}</td>
+      {windowOrder.map((w) => { const item = byType.get(type)?.get(w); return <td key={w} className="py-1 pl-2 text-right">{item ? formatWeatherValue(item) : '—'}</td> })}
+    </tr>)}</tbody>
+  </table>
+}
+
+// Portal to <body>, not rendered inline -- the drawer itself is
+// `absolute` with `overflow-y-auto`, so an inline overlay would be
+// clipped/scrolled with the rest of the panel instead of covering the
+// viewport.
+function ImageLightbox({ url, caption, onClose }: { url: string; caption: string; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={caption}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-6"
+      onClick={onClose}
+    >
+      <button type="button" className="absolute top-4 right-4 text-sm text-white/80 hover:text-white" onClick={onClose}>CLOSE ✕</button>
+      <figure className="max-h-full max-w-full" onClick={(event) => event.stopPropagation()}>
+        {/* Still the catalogue's own quicklook JPEG, just shown at its full
+            size instead of the ~56px list thumbnail -- there is no
+            higher-resolution asset behind it without CDSE product download
+            auth, so this is "as large as this evidence gets", not a zoom
+            into more detail than the source has. */}
+        <img src={url} alt={caption} className="max-h-[85vh] max-w-full rounded object-contain" />
+        <figcaption className="mt-2 text-center text-xs text-white/70">{caption} · catalogue quicklook, not the full-resolution product</figcaption>
+      </figure>
+    </div>,
+    document.body,
+  )
+}
+
+// Same idea for imagery: 4 scenes is not 38, but a compact one-line-each
+// list matches the same pattern rather than 4 full expandable cards for
+// what is, per scene, three facts an auditor actually scans for.
+function ImagerySummary({ items }: { items: EvidenceObject[] }) {
+  const [lightbox, setLightbox] = useState<{ url: string; caption: string } | null>(null)
+  if (!items.length) return <p className="text-[11px] text-text-faint">No EvidenceObjects are available for this metric in the current audit artifact.</p>
+  return <div className="space-y-1.5">{items.map((item) => {
+    const v = (item.value ?? {}) as Record<string, unknown>
+    const sensor = typeof v.sensor === 'string' ? v.sensor : item.type
+    const position = typeof v.position === 'string' ? v.position.replace('_', '-') : ''
+    const cloud = v.cloud_cover
+    const thumbnailUrl = typeof v.thumbnail_url === 'string' ? v.thumbnail_url : undefined
+    const caption = `${sensor} ${position}`.trim()
+    return <div key={item.evidence_id} className="flex gap-2 rounded border border-border bg-bg/60 p-2 text-[11px] print:border-black/20 print:bg-transparent">
+      {/* The catalogue's own quicklook JPEG, not the product -- a glance at
+          cloud/vegetation/burn-scar context beats acquisition metadata alone.
+          Hidden on load failure rather than showing a broken-image icon.
+          Clickable: the list thumbnail is ~56px, too small to actually read
+          for cloud/burn-scar context -- clicking opens the same image larger. */}
+      {thumbnailUrl && <button
+        type="button"
+        onClick={() => setLightbox({ url: thumbnailUrl, caption })}
+        className="shrink-0 print:hidden"
+        aria-label={`Enlarge ${caption} quicklook`}
+      >
+        <img
+          src={thumbnailUrl}
+          alt={`${caption} quicklook`}
+          loading="lazy"
+          className="h-14 w-14 cursor-zoom-in rounded border border-border object-cover hover:border-accent"
+          onError={(event) => { event.currentTarget.style.display = 'none' }}
+        />
+      </button>}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-2"><span className="font-mono text-accent print:text-black">{sensor} {position}</span>{typeof cloud === 'number' && <span className="text-text-muted">{cloud.toFixed(0)}% cloud</span>}</div>
+        <div className="mt-0.5 text-text-muted">{item.time_window}</div>
+      </div>
+    </div>
+  })}
+  {lightbox && <ImageLightbox url={lightbox.url} caption={lightbox.caption} onClose={() => setLightbox(null)} />}
+  </div>
+}
+
+const DRAWER_MIN_WIDTH = 360
+const DRAWER_MAX_WIDTH = 900
+const DRAWER_DEFAULT_WIDTH = 440
+
+// Plain pointerdown/pointermove/pointerup, not a library -- one drag handle,
+// no need for a resize dependency. Width lives in this component only; it
+// does not need to survive a remount or be shared with anything else.
+function useDrawerWidth() {
+  const [width, setWidth] = useState(DRAWER_DEFAULT_WIDTH)
+  const [dragging, setDragging] = useState(false)
+  const dragStart = useRef({ x: 0, width: DRAWER_DEFAULT_WIDTH })
+
+  // Listeners live only while a drag is in progress, added/removed by this
+  // effect rather than by hand in the down/up handlers -- avoids the two
+  // handlers needing to reference each other to clean up after themselves.
+  useEffect(() => {
+    if (!dragging) return
+    const onPointerMove = (event: PointerEvent) => {
+      // Dragging left (toward the map) widens the drawer since it is
+      // anchored to the right edge -- width grows as x - clientX increases.
+      const next = dragStart.current.width + (dragStart.current.x - event.clientX)
+      setWidth(Math.min(DRAWER_MAX_WIDTH, Math.max(DRAWER_MIN_WIDTH, next)))
+    }
+    const onPointerUp = () => setDragging(false)
+    document.addEventListener('pointermove', onPointerMove)
+    document.addEventListener('pointerup', onPointerUp)
+    return () => {
+      document.removeEventListener('pointermove', onPointerMove)
+      document.removeEventListener('pointerup', onPointerUp)
+    }
+  }, [dragging])
+
+  const onPointerDown = useCallback((event: ReactPointerEvent) => {
+    event.preventDefault()
+    dragStart.current = { x: event.clientX, width }
+    setDragging(true)
+  }, [width])
+
+  return { width, onPointerDown }
+}
+
 // The methodology, in one sentence, plus the one metric that actually
 // qualifies a candidate: distance. No nested per-edge evidence cards on
 // screen -- that is what made "related fires" part of the boatload too.
@@ -139,8 +302,18 @@ export function EvidenceDrawer({
       other: items.filter((item) => !['fire-complexity', 'investigation-priority', ...categories].includes(item.category)),
     }
   }, [data])
+  const { width, onPointerDown } = useDrawerWidth()
 
-  return <aside aria-label="FireEvent evidence drawer" className="absolute top-0 right-0 z-20 h-full w-[min(440px,92vw)] overflow-y-auto border-l border-border-strong bg-panel/98 text-text shadow-2xl print:static print:h-auto print:w-full print:overflow-visible print:border-0 print:bg-white print:text-black print:shadow-none">
+  return <aside aria-label="FireEvent evidence drawer" className="absolute top-0 right-0 z-20 h-full overflow-y-auto border-l border-border-strong bg-panel/98 text-text shadow-2xl print:static print:h-auto print:w-full print:overflow-visible print:border-0 print:bg-white print:text-black print:shadow-none" style={{ width: `min(${width}px, 92vw)` }}>
+    {/* Drag left/right to resize -- anchored to the left edge since the
+        drawer itself is pinned to the right side of the screen. */}
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize evidence drawer"
+      onPointerDown={onPointerDown}
+      className="absolute top-0 left-0 z-20 h-full w-1.5 cursor-ew-resize touch-none hover:bg-accent/40 print:hidden"
+    />
     <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border-strong bg-panel px-4 py-3 print:static print:border-black/20 print:bg-white">
       <div><div className="text-sm font-semibold">FireEvent evidence</div><div className="font-mono text-[10px] text-accent print:text-black">{eventId}</div></div>
       <div className="flex items-center gap-3 print:hidden">
@@ -169,9 +342,9 @@ export function EvidenceDrawer({
       <RelatedFireEvents graph={graph} error={graphError} eventId={eventId} />
       <DerivedSummary complexity={grouped.complexity} priority={grouped.priority} />
       <MetricSection title="Peat / event-buffer intersection" note="The drawer shows the event footprint or buffer intersection only when a peat EvidenceObject is available. Peat overlap is environmental context and does not establish an underground path, cause, or responsibility." items={grouped.peat} />
-      <MetricSection title="Weather time window" note="Historical component values and time-series points appear here when weather enrichment is present. Missing weather is not negative evidence." items={grouped.weather} />
+      <Section title="Weather time window"><p className="mb-2 text-[11px] leading-4 text-text-muted">Every Open-Meteo/ERA5 hourly variable, during the event and the 7 days before it. Historical values, not a forecast; missing weather is not negative evidence.</p><WeatherSummary items={grouped.weather} /></Section>
       <MetricSection title="Surface compatibility" note="Any ellipse/envelope comparison is first-order surface-fire compatibility only; it does not model underground peat propagation." items={grouped.surface} />
-      <MetricSection title="Imagery acquisition metadata" note="Only selected product metadata is shown when available: acquisition, sensor/product, cloud/orbit and temporal context. No suitable pass is not replaced with stale imagery." items={grouped.imagery} />
+      <Section title="Imagery acquisition metadata"><p className="mb-2 text-[11px] leading-4 text-text-muted">Closest usable Sentinel-1 (SAR) and Sentinel-2 (optical) scenes before and after the event. Scene-level metadata only -- this does not establish pixel-level usability or change.</p><ImagerySummary items={grouped.imagery} /></Section>
       <Section title="Availability / limitations"><div className="space-y-2">{data.availability.map((item) => <div key={item.kind} className="rounded border border-border bg-bg/60 p-2 text-[11px] print:border-black/20 print:bg-transparent"><div className="flex justify-between"><span className="capitalize">{item.kind}</span><span className="text-status-moderate">{item.status}</span></div><p className="mt-1 text-text-muted">{item.reason}</p></div>)}</div></Section>
 
       {/* Print-only: the full log "EXPORT TO PDF" produces -- every observed-
@@ -182,6 +355,8 @@ export function EvidenceDrawer({
         <Section title="Observed evidence (full)"><EvidenceList items={data.observedEvidence} /></Section>
         <Section title="Fire Complexity — every candidate feature"><EvidenceList items={grouped.complexity} /></Section>
         <Section title="Investigation Priority — every component"><EvidenceList items={grouped.priority} /></Section>
+        <Section title="Weather — every variable/window as full EvidenceObjects"><EvidenceList items={grouped.weather} /></Section>
+        <Section title="Imagery — full scene metadata"><EvidenceList items={grouped.imagery} /></Section>
         {graph && graph.edges.length > 0 && <Section title="Related FireEvents — full relationship evidence">
           <div className="space-y-2">{graph.edges.map((edge) => <article key={`${edge.sourceEventId}-${edge.targetEventId}`} className="rounded border border-black/20 p-2 text-[11px]">
             <div className="flex justify-between gap-2"><span className="font-mono">{edge.sourceEventId} → {edge.targetEventId}</span><span>{edge.distanceKm} km</span></div>

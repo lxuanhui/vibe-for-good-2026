@@ -106,6 +106,21 @@ products can differ over a 90-day accumulation. See the module docstring for
 why NASA POWER is a disagreement check rather than a second primary source,
 and why historical anomaly is computed for rainfall only.
 
+`enrich_audit_events.py` is the batch job that runs this module (plus
+`imagery/scene_selection.py`) against the demo audit geoshape's FireEvents
+(the actual boundary the console shows, not the full committed artifact --
+that artifact's 3,610 events are the whole unscoped regional export) and
+folds the results into `backend/app/data/audit_triage_detail.json.gz` --
+weather and imagery-scene evidence for the console's evidence drawer, not
+just the module demos above. Weather is fetched once per point on a spatial
+grid over the geoshape (batched, at Open-Meteo/ERA5's own native
+resolution) rather than once per event; imagery is two scope-wide STAC
+searches, not one pair per event. It is a human-run, resumable script
+(SQLite checkpoint, safe to Ctrl+C and rerun), not something to run inside
+an agent session -- see its own docstring for usage and
+`docs/decision-log.md` (2026-09-09) for why this stays a local checkpoint
+rather than a new database.
+
 ## Peat intersection and context service
 
 `enrichment/peat_context.py` makes peat a first-class environmental attribute

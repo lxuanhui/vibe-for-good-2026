@@ -61,6 +61,11 @@ class SelectedScene:
     catalogue_reference: str | None
     collection: str
     provenance: dict[str, Any]
+    # A small (few hundred px) preview JPEG the catalogue already generated --
+    # confirmed publicly fetchable with no CDSE auth (a plain GET follows one
+    # redirect to a ~40 KB JPEG). Genuinely more useful at a glance than
+    # acquisition metadata alone; still just a quicklook, not the product.
+    thumbnail_url: str | None = None
     algorithm_version: str = ALGORITHM_VERSION
 
     @property
@@ -301,6 +306,16 @@ def _asset_reference(feature: Mapping[str, Any]) -> str | None:
     return None
 
 
+def _thumbnail_reference(feature: Mapping[str, Any]) -> str | None:
+    assets = feature.get("assets")
+    if isinstance(assets, Mapping):
+        for name in ("thumbnail", "preview", "quicklook"):
+            reference = _href(assets.get(name))
+            if reference:
+                return reference
+    return None
+
+
 def _catalogue_reference(feature: Mapping[str, Any]) -> str | None:
     links = feature.get("links")
     if isinstance(links, Sequence) and not isinstance(links, (str, bytes)):
@@ -385,6 +400,7 @@ def _feature_scene(
         catalogue_reference=catalogue_reference,
         collection=collection,
         provenance=provenance,
+        thumbnail_url=_thumbnail_reference(feature),
     )
 
 

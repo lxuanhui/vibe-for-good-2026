@@ -6,6 +6,139 @@ more valuable half.
 
 ---
 
+## 2026-09-09 - Weather and imagery-scene evidence: spatial grid, local checkpoint, not a new database
+
+**Status:** implemented, `data_pipeline/enrich_audit_events.py`
+
+**Decision.** Weather (Open-Meteo/ERA5, every hourly variable) and
+Copernicus scene-selection evidence (Sentinel-1 + Sentinel-2, pre/post
+event) for the demo audit geoshape's FireEvents is fetched by a standalone,
+human-run script that checkpoints to a local SQLite file
+(`data_pipeline/output/enrichment_checkpoint.sqlite`, gitignored) and folds
+completed results into the already-committed `audit_triage_detail.json.gz`
+via a separate, idempotent `--finalize` step. No new AWS resource was added.
+
+**Superseded its own first version within the same day.** The first cut
+fetched weather per event (7 windows + a 5-year rainfall-anomaly baseline,
+~7 Open-Meteo calls/event) and imagery per event (2 STAC searches/event) —
+for all 3,610 events in the *committed artifact*, which turned out to be the
+entire unscoped Sumatra/Kalimantan regional export, not one audit geoshape
+(its `scope` metadata carries no geometry at all). A live run hit Open-Meteo
+rate limits repeatedly and the bare `except: skip` meant hits degraded data
+quality instead of waiting them out. Reworked to: (1) one small geoshape —
+the actual demo audit boundary the console shows
+(`frontend/src/lib/scope.ts`'s `DEFAULT_MANAGEMENT_UNIT_GEOMETRY`, 25 km
+buffer), not the artifact's full event set, cutting 3,610 events to 16; (2) a
+weather grid at Open-Meteo/ERA5's own native resolution (~0.15°), fetched
+once via multi-location batching, with each event reading its nearest grid
+point instead of its own query; (3) two windows (event duration, T-7d) with
+every hourly variable, not seven windows plus a 5-year baseline — the
+baseline was the single biggest driver of request volume and is dropped
+entirely, per direct instruction, not silently; (4) two scope-wide STAC
+searches total (one per collection) instead of one pair per event, with
+`scene_selection.select_scenes()` (already pure, no-network) reused per
+event against the shared results; (5) a rate-limit handler that parses
+Open-Meteo's own "try again in a minute/hour" and sleeps-then-retries the
+same request, rather than skipping. Net effect verified live: 16/16 events,
+both sources, zero errors, well under a minute — down from a projected
+several hours.
+
+**Why not a new database.** This enriches one committed *historical*
+geoshape, which never changes once computed — exactly the condition under
+which a precomputed static artifact beats a live store. A real "any
+geoshape, any time" audit needs a live FIRMS backfill plus on-demand
+clustering pipeline that does not exist yet (issue #27, P2, not started);
+standing up DynamoDB/S3 now would not unlock that by itself, and would be
+real Terraform, real IAM, and a real infra PR in exchange for data that fits
+in a committed gzip. The checkpoint tables are a reasonable sketch of what a
+future live store's schema would need, but building that store is a
+separate, larger issue.
+
+**Why offline, not a live Lambda call.** `weather_enrichment.py`'s
+underlying metric functions and pandas/numpy are the same dependency weight
+the Lambda architecture was built to avoid (see "Clustering runs offline"
+below). `scene_selection.py` itself is dependency-light and pure, but the
+STAC search feeding it is still a live network call; running either from
+Lambda per request adds latency and failure modes a precomputed artifact
+does not have, for data that is historical either way.
+
+**Why a script, not run in an agent session.** Even after the grid rework,
+a wider geoshape or finer spacing scales request count back up. A
+human-supervised batch job run in a terminal that can be left open or
+resumed is the right shape for that, not something to launch and wait on
+inside a conversation — confirmed by the first version's real rate-limit
+hits during exactly such a run.
+
+**What was rejected.** A smaller demo subset instead of full coverage of
+the one geoshape — full coverage was every event, nothing held back, once
+the geoshape itself was scoped correctly. Storing raw HTTP responses in the
+checkpoint instead of computed EvidenceObjects — the shared HTTP session
+(`data_pipeline/common/http.py`) already caches raw responses for an hour;
+the checkpoint's job is tracking *which grid points and events are done*,
+not re-implementing that cache. The 5-year rainfall-anomaly baseline —
+real evidentiary value (raw vs. normal-for-the-season), but the largest
+single cost driver; dropped per direct instruction rather than assumed.
+
+**Revisit when** issue #27's live ingestion pipeline exists — at that point
+the "any geoshape" architecture question is worth relitigating on its own,
+with a real target: what a live audit scope's storage needs, not what one
+fixed demo geoshape's do. Also revisit if the rainfall-anomaly baseline
+turns out to be wanted after all — reintroduce it as a second, explicit
+pass over the grid (same batching benefits apply), not a per-event refetch.
+
+---
+
+## 2026-09-09 - The console opens on the map, framed on Borneo, with the explanation as a modal
+
+**Status:** done · issue #125
+
+**Decision.** The first surface on a cold load is the MapLibre canvas itself,
+fitted to Borneo's own bounding box, with no FireEvents drawn. The #124
+first-load explanation moved from a band above the map into a closable dialog
+over it, reopenable from the header. A default demo scope is bootstrapped in
+the background through the real `POST /api/audits` → scope upload → history
+build sequence, and the camera eases from the Borneo frame to the audit
+footprint when it lands.
+
+**Why.** #75 made the scoped map the landing *route* but not the first thing
+on screen: a form still rendered above it, and #124 then added an explanation
+band above that. The only surface in this build showing real derived data was
+below the fold on the frame that decides whether anyone keeps looking.
+
+**What this does not reverse.** The register stays the primary screening
+surface, the regional FIRMS archive stays behind its own toggle, and the
+unscoped Borneo frame is a *basemap only* — the anti-goal in #57/#58 is an
+Indonesia-wide detection browser, and no detection is drawn until a real
+scope bounds them. Same boundary #75 argued, one frame earlier.
+
+**Rejected: a hardcoded centre and zoom.** `{longitude: 114, latitude: 1.4,
+zoom: 6.2}` framed Borneo on the viewport it was tuned against and cropped
+South Kalimantan off the bottom on another — how many degrees a zoom spans
+depends on the container. `initialViewState={{bounds, fitBoundsOptions}}`
+makes MapLibre solve for the zoom from the container it actually has.
+
+**Rejected: reinstating a hardcoded `DEMO_SCOPE` object.** PR #118 removed one
+because a hand-built scope diverged from what the API returns and hid a bbox
+shape bug. `lib/bootstrapScope.ts` gives the automatic bootstrap and the scope
+form one shared path through the real endpoints instead.
+
+**maxBounds has to stay much wider than the viewport.** MapLibre clamps the
+camera to fit `maxBounds` and will silently override the frame you asked for,
+with no error — so the unscoped bounds are wide regional guard rails rather
+than a tight box around the island.
+
+**A hidden Chrome tab cannot verify a MapLibre change.** Most of the debugging
+time here went to a basemap that rendered as a flat olive rectangle in the
+automation browser: no tiles requested, no console error, `onLoad` never
+firing. The cause was `document.visibilityState === "hidden"` in the
+extension's tab — `requestAnimationFrame` never fires there, and MapLibre v6
+resolves a vector source declared with an inline `tiles` array by awaiting a
+frame (`browser.frameAsync` inside `loadTileJson`), so the source never
+loads. Nothing was wrong with the app, the style, or the Carto key. A forced
+screenshot yields one frame, so a *second* screenshot shows the real render.
+If a map ever looks blank through browser automation, check
+`document.visibilityState` before suspecting the code.
+
 ## 2026-09-09 - Review routing is calibrated separately from priority and sufficiency
 
 **Status:** implemented · issue #85
@@ -28,6 +161,46 @@ responsibility signals, and changes to clustering or scientific feature
 calculations. Every escalation carries component evidence IDs and a reason
 code; diagnostics report counts and percentages for priority, workflow, and
 escalation reasons.
+
+---
+
+## 2026-09-09 — An Amplify console field is Terraform-owned until proven otherwise
+
+**Status:** done · issues #108, #110, #113, #116
+
+**Decision.** Every setting the Amplify console exposes is assumed to be an
+attribute Terraform manages, and is declared in `infra/console.tf`, until
+someone checks and finds otherwise. After any console wizard run, re-apply and
+rebuild.
+
+**Why.** Connecting the repository surfaced four settings in one wizard that
+look like console state and are not:
+
+| Console field | Actually | Fixed in |
+|---|---|---|
+| Live package updates | `_LIVE_UPDATES` env var | #108 |
+| Monorepo root directory | `AMPLIFY_MONOREPO_APP_ROOT` env var | #110 |
+| Service role | `iam_service_role_arn` on the app | #113 |
+| — | the wizard replaces the whole env-var map | #116 |
+
+The first three would have been stripped by the next apply. The fourth went the
+other way and bit immediately: the wizard replaced Terraform's environment
+variables wholesale, `VITE_API_BASE_URL` vanished, and the build that followed
+was green while serving a console that could not reach the API — `client.ts`
+falls back to an empty base URL, so every call hit the Amplify origin. A
+successful build serving a dead app is the failure worth designing against.
+
+**What was rejected.** Putting `environment_variables` under `ignore_changes`,
+which would stop the fight in both directions. It also stops Terraform wiring
+`VITE_API_BASE_URL` from the API Gateway stage, which is the one value that
+must not be hand-copied. Declaring everything and re-applying after console
+work is the lesser cost, because console work happens roughly once per account.
+
+**Recovery, which is now in `docs/environments.md`:** `gh workflow run Infra
+--ref main` to restore the settings, then `aws amplify start-job --job-type
+RELEASE`, because Vite bakes `VITE_*` in at build time and restoring a variable
+changes nothing until a rebuild. Verify by grepping the shipped bundle for the
+API host rather than trusting the build status.
 
 ---
 

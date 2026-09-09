@@ -15,8 +15,8 @@ Docs: https://open-meteo.com/en/docs/historical-weather-api
 """
 from __future__ import annotations
 
-import pandas as pd
 import openmeteo_requests
+import pandas as pd
 
 from data_pipeline.common.http import SESSION
 from data_pipeline.common.result import Provenance, SourceResult, SourceStatus
@@ -72,7 +72,16 @@ def fetch_point(lat: float, lon: float, start_date: str, end_date: str):
         "end_date": end_date,
         "hourly": HOURLY_VARS,
         "daily": DAILY_VARS,
-        "timezone": "auto",
+        # "auto" resolves start_date/end_date as the LOCAL calendar day at
+        # each coordinate, then returns the equivalent UTC instants -- but
+        # every FireEvent timestamp and every window boundary in
+        # enrich_audit_events.py is UTC. For a WITA (UTC+8) point this
+        # silently drops the last ~8h of the requested end_date (any event
+        # detected after 16:00 UTC falls in the *next* local day, outside
+        # the fetched range) -- caught via a real event with zero "current"
+        # weather evidence despite ok status. "UTC" makes the two date
+        # systems agree.
+        "timezone": "UTC",
     }
     return client.weather_api(ARCHIVE_URL, params=params)[0]
 
@@ -85,8 +94,9 @@ def fetch_batch(points: dict[str, tuple[float, float]], start_date: str, end_dat
         "longitude": lons,
         "start_date": start_date,
         "end_date": end_date,
+        "hourly": HOURLY_VARS,
         "daily": DAILY_VARS,
-        "timezone": "auto",
+        "timezone": "UTC",  # see fetch_point
     }
     return client.weather_api(ARCHIVE_URL, params=params)
 
