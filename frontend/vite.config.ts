@@ -14,6 +14,14 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['maplibre-gl'],
   },
+  // The production half of the same problem. optimizeDeps above only affects
+  // the dev server; a built bundle needs src/lib/maplibreWorker.ts, which
+  // imports the worker with ?worker&url so Rollup emits it. maplibre-gl
+  // constructs `new Worker(url, { type: 'module' })`, so the emitted worker
+  // has to be an ES module -- the default IIFE output fails at construction.
+  worker: {
+    format: 'es',
+  },
   server: {
     // Proxies /api/* to the local Flask app so the console can call
     // fetch('/api/...') with no CORS setup in development. In deployed
