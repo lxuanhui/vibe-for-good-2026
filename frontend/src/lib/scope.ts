@@ -9,6 +9,34 @@ export const DEFAULT_MANAGEMENT_UNIT_GEOMETRY = {
   coordinates: [[[116.0, -4.05], [116.5, -4.05], [116.5, -3.55], [116.0, -3.55], [116.0, -4.05]]] as [number, number][][],
 }
 
+// Borneo, before any audit scope exists. The dataset behind this demo is
+// Sumatra/Kalimantan, and Borneo is where its management unit sits, so this
+// is the shortest honest first frame -- and the fly-in to the audit footprint
+// stays legible instead of jumping continents.
+//
+// Deliberately a *basemap* only. Spec §4 and §13 rule out a national
+// detection browser, so nothing is drawn at this zoom: FireEvents appear once
+// a real scope exists and are bounded by it. The maxBounds below keep an
+// unscoped map regional rather than global for the same reason.
+//
+// The island's own extent, fitted rather than a fixed zoom: how many degrees
+// a given zoom spans depends on the container, so a hardcoded number framed
+// Borneo on one viewport and cropped Kalimantan off the bottom on another.
+// Let MapLibre solve for the zoom from the box and the container it actually
+// has.
+export const BORNEO_BOUNDS: [number, number, number, number] = [108.5, -4.6, 119.6, 7.6]
+
+// maxBounds has to stay much wider than whatever the viewport spans at
+// UNSCOPED_MIN_ZOOM, or MapLibre clamps the camera to fit the bounds and
+// silently overrides the fitted frame -- so these are wide regional guard
+// rails, not a tight box around the island.
+export const UNSCOPED_MAX_BOUNDS: [number, number, number, number] = [55, -40, 180, 40]
+export const UNSCOPED_MIN_ZOOM = 4
+
+// Only a fallback for the camera helpers that need a point before a scope
+// exists; the first frame comes from BORNEO_BOUNDS.
+export const UNSCOPED_CENTER: [number, number] = [114, 1.5]
+
 export interface ScopePreview {
   geometry: unknown
   bbox: BBox
