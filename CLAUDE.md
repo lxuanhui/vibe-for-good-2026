@@ -97,7 +97,11 @@ seam intact: every function there mirrors `Environmental_Assurance_Spec.md`
 §24 (API), so a caller cannot tell which are real.
 
 Real: `GET /api/events` and `GET /api/events/{id}`, served by Flask from
-`backend/app/data/events.json`. Note these are *flat* routes; the canonical
+`backend/app/data/events.json`, and `GET /api/firms/live`, which proxies the
+NASA FIRMS area API for the landing map's live regional layer — the MAP_KEY
+cannot be domain-restricted, so it is never shipped to the browser, and that
+route is the one deliberate exception to the audit-scoped rule below because
+it serves the screen that exists before a scope does. Note these are *flat* routes; the canonical
 §24 API is audit-scoped (`/api/audits/{audit_id}/events`). The flat pair was
 built before the canonical spec landed and is interim — build new endpoints
 audit-scoped rather than extending the flat shape. Still fixtures in the browser:

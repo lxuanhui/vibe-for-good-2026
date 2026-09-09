@@ -142,6 +142,13 @@ Settings → Secrets and variables → Actions:
 | Variable | `AWS_ROLE_ARN` | yes | Role assumed over OIDC. Set. |
 | Variable | `CORS_ORIGINS` | no | Origin the console is served from; defaults to `*` |
 | Secret | `FLASK_SECRET_KEY` | no | Lambda's `SECRET_KEY`; defaults to `dev` |
+| Secret | `NASA_FIRMS_MAP_KEY` | no | Server-side key for `GET /api/firms/live`. Unset leaves the landing map's live regional layer reporting itself unavailable |
+
+**`NASA_FIRMS_MAP_KEY` is a GitHub *secret*, never an Amplify variable.** A
+FIRMS MAP_KEY cannot be restricted to a domain, and Amplify variables named
+`VITE_*` are inlined into the public bundle by Vite — so setting it there
+publishes it. It reaches the Lambda through `TF_VAR_nasa_firms_map_key` in the
+Infra workflow, the same route `FLASK_SECRET_KEY` takes.
 
 **No AWS access keys, by design** — the whole point of the OIDC role. If
 `AWS_ACCESS_KEY_ID` ever appears in this repo's settings, something has gone

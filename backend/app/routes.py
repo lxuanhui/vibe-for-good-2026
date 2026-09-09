@@ -3,7 +3,7 @@ from time import perf_counter
 
 from flask import Blueprint, current_app, jsonify, request
 
-from app import analysis_jobs, audit_events
+from app import analysis_jobs, audit_events, firms_live
 from app.audits import AuditValidationError, build_history, create_audit, upload_scope
 from app.events import (
     FilterError,
@@ -244,3 +244,26 @@ def audit_report_view(audit_id: str):
     if report is None:
         return jsonify(error=f"No reconstructed history for audit {audit_id}"), 404
     return jsonify(report)
+
+
+@api.get("/firms/live")
+def get_live_firms_detections():
+    """Regional live thermal context for the landing map.
+
+    Deliberately flat rather than audit-scoped: it is what the console shows
+    *before* an audit scope exists, so there is no audit to scope it to.
+
+    503 rather than an empty collection, because an empty regional layer is
+    indistinguishable from "no fires are burning" -- a fabricated observation.
+    The console renders its own unavailable state from the failure.
+    """
+    try:
+        payload = firms_live.live_detections()
+    except firms_live.FirmsUnavailable as exc:
+        current_app.logger.warning("Live FIRMS layer unavailable: %s", exc)
+        return jsonify(status="unavailable", reason=str(exc)), 503
+    response = jsonify(payload)
+    # The server already caches upstream for the same window; saying so lets a
+    # reloading browser skip the request entirely.
+    response.headers["Cache-Control"] = f"public, max-age={firms_live.CACHE_SECONDS}"
+    return response

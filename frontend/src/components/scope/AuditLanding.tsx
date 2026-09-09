@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Layer, Map, Source } from 'react-map-gl/maplibre'
 import type { FeatureCollection, Point } from 'geojson'
+import { fetchLiveFirmsDetections } from '../../api/client'
 import { Button } from '../ui/Button'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
@@ -14,32 +15,31 @@ function emptyHotspots(): FeatureCollection<Point, FirmsProperties> {
   return { type: 'FeatureCollection', features: [] }
 }
 
-function readCsv(value: string): FeatureCollection<Point, FirmsProperties> {
-  const [headerLine, ...rows] = value.trim().split(/\r?\n/)
-  if (!headerLine) return emptyHotspots()
-  const columns = headerLine.split(',').map((column) => column.trim())
-  const index = (name: string) => columns.indexOf(name)
-  const latitude = index('latitude')
-  const longitude = index('longitude')
-  const frp = index('frp')
-  const confidence = index('confidence')
-  const acquisitionDate = index('acq_date')
-  const acquisitionTime = index('acq_time')
-  if (latitude < 0 || longitude < 0) return emptyHotspots()
+/** The API relays raw UTC acquisition times, not ages.
 
+  It caches a response for 15 minutes to stay inside the FIRMS transaction
+  cap, so a server-computed "hours ago" would be up to 15 minutes wrong for
+  everyone after the first visitor. The circle paint expressions below fade on
+  `ageHours`, so it is derived here, against this browser's clock, at the
+  moment the layer is built. */
+function withAgeHours(
+  detections: FeatureCollection<Point, { confidence: string; frp: number; acquiredAt: string | null }>,
+): FeatureCollection<Point, FirmsProperties> {
   const now = Date.now()
   return {
     type: 'FeatureCollection',
-    features: rows.flatMap((row) => {
-      const cells = row.split(',')
-      const lat = Number(cells[latitude])
-      const lon = Number(cells[longitude])
-      if (!Number.isFinite(lat) || !Number.isFinite(lon) || lon < SEA_BOUNDS[0] || lon > SEA_BOUNDS[2] || lat < SEA_BOUNDS[1] || lat > SEA_BOUNDS[3]) return []
-      const date = cells[acquisitionDate]
-      const time = cells[acquisitionTime]?.padStart(4, '0')
-      const acquiredAt = date && time ? Date.parse(`${date}T${time.slice(0, 2)}:${time.slice(2, 4)}:00Z`) : Number.NaN
-      const ageHours = Number.isFinite(acquiredAt) ? Math.max(0, (now - acquiredAt) / 3_600_000) : 24
-      return [{ type: 'Feature' as const, geometry: { type: 'Point' as const, coordinates: [lon, lat] }, properties: { confidence: cells[confidence] ?? 'unknown', frp: Number(cells[frp]) || 0, ageHours } }]
+    features: detections.features.map((feature) => {
+      const acquiredAt = feature.properties.acquiredAt ? Date.parse(feature.properties.acquiredAt) : Number.NaN
+      return {
+        ...feature,
+        properties: {
+          confidence: feature.properties.confidence,
+          frp: feature.properties.frp,
+          // A detection whose timestamp did not parse is drawn at the faintest
+          // end rather than dropped -- it was still observed.
+          ageHours: Number.isFinite(acquiredAt) ? Math.max(0, (now - acquiredAt) / 3_600_000) : 24,
+        },
+      }
     }),
   }
 }
@@ -53,7 +53,6 @@ function southeastAsiaLight(date: Date) {
 
 /** A separate regional live context layer; no unscoped FireEvents are rendered. */
 export function AuditLanding({ onStartAudit, onOpenContext }: { onStartAudit: () => void; onOpenContext: () => void }) {
-  const firmsMapKey = import.meta.env.VITE_FIRMS_MAP_KEY as string | undefined
   const cartoApiKey = import.meta.env.VITE_CARTO_API_KEY as string | undefined
   const [hotspots, setHotspots] = useState<FeatureCollection<Point, FirmsProperties>>(emptyHotspots)
   const [firmsStatus, setFirmsStatus] = useState<'loading' | 'ready' | 'unavailable'>('loading')
@@ -61,23 +60,23 @@ export function AuditLanding({ onStartAudit, onOpenContext }: { onStartAudit: ()
   const [fireSoundMuted, setFireSoundMuted] = useState(false)
 
   useEffect(() => {
-    if (!firmsMapKey) { setFirmsStatus('unavailable'); return }
     let active = true
     const controller = new AbortController()
     const load = async () => {
       try {
-        const response = await fetch(`https://firms.modaps.eosdis.nasa.gov/api/area/csv/${firmsMapKey}/VIIRS_SNPP_NRT/world/1`, { signal: controller.signal })
-        if (!response.ok) throw new Error(`FIRMS ${response.status}`)
-        const next = readCsv(await response.text())
-        if (active) { setHotspots(next); setFirmsStatus('ready') }
+        const live = await fetchLiveFirmsDetections(controller.signal)
+        if (active) { setHotspots(withAgeHours(live.detections)); setFirmsStatus('ready') }
       } catch {
+        // The API answers 503 when it holds no MAP_KEY or FIRMS did not
+        // respond. Either way the honest render is "unavailable" -- an empty
+        // map would say no fires are burning, which nothing measured.
         if (active && !controller.signal.aborted) setFirmsStatus('unavailable')
       }
     }
     void load()
     const refresh = window.setInterval(() => { void load() }, FIRMS_REFRESH_MS)
     return () => { active = false; controller.abort(); window.clearInterval(refresh) }
-  }, [firmsMapKey])
+  }, [])
 
   useEffect(() => {
     const refresh = window.setInterval(() => setClock(new Date()), CLOCK_REFRESH_MS)

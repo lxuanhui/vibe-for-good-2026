@@ -29,5 +29,13 @@ packages = ["app"]
 [tool.ruff]
 line-length = 100
 
+[tool.ruff.lint]
+# The Security workflow runs the flake8-bandit rules as their own invocation
+# (`ruff check --select S`) so that one command also covers data_pipeline. A
+# `# noqa: S310` therefore reads as unused under *this* config, and RUF100
+# deletes the suppression and the reasoning next to it. Enabling the single
+# bandit rule this package has to justify keeps the two runs agreeing.
+extend-select = ["S310"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

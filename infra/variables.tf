@@ -58,3 +58,10 @@ variable "bedrock_model_id" {
   type        = string
   default     = "global.anthropic.claude-haiku-4-5-20251001-v1:0"
 }
+
+variable "nasa_firms_map_key" {
+  description = "NASA FIRMS MAP_KEY. Used server-side by GET /api/firms/live so the landing map's live regional layer never ships the key to the browser -- a FIRMS key cannot be restricted to a domain, unlike the Carto key the console does publish. Empty leaves that route reporting the layer unavailable, which is the honest render rather than an empty region. NOTE: like flask_secret_key, whatever is passed here is stored in plain text in Terraform state -- acceptable for a free, re-issuable key on a dev stack, not for a credential with a real blast radius."
+  type        = string
+  default     = ""
+  sensitive   = true
+}

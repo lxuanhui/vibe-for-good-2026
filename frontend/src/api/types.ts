@@ -1,3 +1,5 @@
+import type { FeatureCollection, PointGeometry } from './geojson'
+
 // Stage-1 outcomes (AMBIGUOUS, LIKELY_NON_FIRE) match the triage states in
 // `Environmental_Assurance_Spec.md` §10; the remaining values are this
 // repo's own naming for Stage-2 adversarial-analysis progress and outcome
@@ -400,6 +402,26 @@ export interface AuditReport {
   provenance: { source: Record<string, unknown>; algorithmVersions: string[] }
   humanNotes: AuditPackReview[]
   disclaimer: string
+}
+
+/** One live NASA FIRMS thermal detection, as the API relays it.
+
+  `acquiredAt` is the raw UTC acquisition time rather than a precomputed age:
+  the API caches a response for 15 minutes, so a server-side "hours ago" would
+  be wrong for every visitor after the first. The landing map derives the age
+  it paints with at render time. */
+export interface LiveFirmsDetectionProperties {
+  confidence: string
+  frp: number
+  acquiredAt: string | null
+}
+
+export interface LiveFirmsDetections {
+  status: 'ready'
+  sensor: string
+  windowHours: number
+  fetchedAt: string
+  detections: FeatureCollection<PointGeometry, LiveFirmsDetectionProperties>
 }
 
 export interface OverlayAvailability {
