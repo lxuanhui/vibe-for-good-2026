@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import type { AuditScope } from '../../api/types'
-import { buildFireHistory, createAuditReview, uploadAuditScope } from '../../api/client'
-import { buildScopePreview } from '../../lib/scope'
+import { buildFireHistory, createAuditReview, uploadAuditScope, uploadAuditScopeGeometry } from '../../api/client'
+import { buildScopePreview, DEFAULT_MANAGEMENT_UNIT_GEOMETRY } from '../../lib/scope'
 import { Button } from '../ui/Button'
 import { ScopePreviewMap } from './ScopePreviewMap'
 
@@ -9,12 +9,18 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'The audit review could not be created.'
 }
 
+// The committed real dataset behind this demo is the 2019 Kalimantan haze
+// window (docs/demo.md). Pre-filling it means a user who skips the upload
+// still lands on a register with real FireEvents, not an empty one.
+const DEFAULT_REVIEW_START = '2019-09-01'
+const DEFAULT_REVIEW_END = '2019-09-05'
+
 export function AuditStart({ onReady, overlay = false, onClose }: { onReady: (scope: AuditScope) => void; overlay?: boolean; onClose?: () => void }) {
-  const [reviewStart, setReviewStart] = useState('')
-  const [reviewEnd, setReviewEnd] = useState('')
+  const [reviewStart, setReviewStart] = useState(DEFAULT_REVIEW_START)
+  const [reviewEnd, setReviewEnd] = useState(DEFAULT_REVIEW_END)
   const [contextBuffer, setContextBuffer] = useState('25')
   const [file, setFile] = useState<File | null>(null)
-  const [geometry, setGeometry] = useState<unknown>(null)
+  const [geometry, setGeometry] = useState<unknown>(DEFAULT_MANAGEMENT_UNIT_GEOMETRY)
   const [fileError, setFileError] = useState('')
   const [submitError, setSubmitError] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -30,14 +36,18 @@ export function AuditStart({ onReady, overlay = false, onClose }: { onReady: (sc
 
   async function handleFileChange(nextFile: File | null) {
     setFile(nextFile)
-    setGeometry(null)
     setFileError('')
-    if (!nextFile) return
+    if (!nextFile) {
+      // No upload -- fall back to the default area rather than an empty preview.
+      setGeometry(DEFAULT_MANAGEMENT_UNIT_GEOMETRY)
+      return
+    }
     try {
       const parsed: unknown = JSON.parse(await nextFile.text())
       buildScopePreview(parsed, Number(contextBuffer))
       setGeometry(parsed)
     } catch (error) {
+      setGeometry(null)
       setFileError(errorMessage(error))
     }
   }
@@ -53,7 +63,7 @@ export function AuditStart({ onReady, overlay = false, onClose }: { onReady: (sc
       setSubmitError('Review end must be on or after review start.')
       return
     }
-    if (!file || !preview) {
+    if (file && !preview) {
       setSubmitError(fileError || 'Upload a valid GeoJSON management-unit polygon.')
       return
     }
@@ -65,7 +75,9 @@ export function AuditStart({ onReady, overlay = false, onClose }: { onReady: (sc
         reviewEnd,
         contextBufferKm: Number(contextBuffer),
       })
-      const uploaded = await uploadAuditScope(created.audit_id, file)
+      const uploaded = file
+        ? await uploadAuditScope(created.audit_id, file)
+        : await uploadAuditScopeGeometry(created.audit_id, DEFAULT_MANAGEMENT_UNIT_GEOMETRY)
       const handoff = await buildFireHistory(uploaded.audit_id)
       onReady({ ...uploaded, status: handoff.status, historyBuild: handoff })
     } catch (error) {
@@ -133,15 +145,18 @@ export function AuditStart({ onReady, overlay = false, onClose }: { onReady: (sc
             </label>
 
             <label className="block space-y-2 text-xs text-text-muted">
-              <span className="block uppercase tracking-wider">Management-unit GeoJSON</span>
+              <span className="block uppercase tracking-wider">Management-unit GeoJSON (optional)</span>
               <input
-                required
                 type="file"
                 accept=".geojson,.json,application/geo+json,application/json"
                 onChange={(event) => void handleFileChange(event.target.files?.[0] ?? null)}
                 className="block w-full cursor-pointer rounded border border-border-strong bg-bg px-3 py-2 text-xs text-text file:mr-3 file:rounded file:border-0 file:bg-panel-raised file:px-2 file:py-1 file:text-xs file:text-text"
               />
-              <span className="block text-[11px] text-text-faint">MVP accepts Polygon, MultiPolygon, Feature, or FeatureCollection GeoJSON.</span>
+              <span className="block text-[11px] text-text-faint">
+                Accepts Polygon, MultiPolygon, Feature, or FeatureCollection GeoJSON. No boundary to
+                upload yet? Leave this empty to use a small default area inside the committed real
+                2019 Kalimantan haze window -- the only period this demo has real FireEvents for.
+              </span>
             </label>
 
             {(fileError || submitError) && <p className="rounded border border-status-urgent/40 bg-status-urgent/10 px-3 py-2 text-xs leading-5 text-red-200" role="alert">{fileError || submitError}</p>}
@@ -164,12 +179,13 @@ export function AuditStart({ onReady, overlay = false, onClose }: { onReady: (sc
             </div>
           </div>
           {submitting && <div role="status" className="border-t border-border px-5 py-3 text-xs text-text-muted">Scope uploaded. Checking the cached real historical dataset and preparing the register…</div>}
+          {!file && !submitting && <div className="border-t border-border bg-panel-raised px-5 py-2 text-[11px] text-text-faint">Showing the default demo area (no file uploaded) -- choose a file above to replace it.</div>}
           <div className="relative min-h-[360px] flex-1 bg-bg">
             {preview ? (
               <ScopePreviewMap scope={preview} />
             ) : (
               <div className="flex h-full min-h-[360px] items-center justify-center px-10 text-center text-sm text-text-faint">
-                Upload a valid GeoJSON polygon to inspect the private boundary and its context buffer.
+                That file could not be read as a GeoJSON polygon. Fix it and re-upload, or remove the file to use the default demo area.
               </div>
             )}
           </div>

@@ -1,5 +1,14 @@
 import type { BBox } from '../api/types'
 
+// The one real dataset behind this demo is the committed 2019 Kalimantan
+// haze-window FIRMS export (see docs/demo.md). A management-unit polygon
+// inside it is the only geometry that will show real FireEvents, so this is
+// what AuditStart submits when a user skips the GeoJSON upload entirely.
+export const DEFAULT_MANAGEMENT_UNIT_GEOMETRY = {
+  type: 'Polygon' as const,
+  coordinates: [[[116.0, -4.05], [116.5, -4.05], [116.5, -3.55], [116.0, -3.55], [116.0, -4.05]]] as [number, number][][],
+}
+
 export interface ScopePreview {
   geometry: unknown
   bbox: BBox

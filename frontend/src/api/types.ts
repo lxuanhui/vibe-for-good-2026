@@ -234,9 +234,39 @@ export interface InvestigationMap {
   layers: Record<string, boolean>
 }
 
+// One raw FIRMS detection this FireEvent's clustering compressed. Real
+// cluster membership (data_pipeline FireEvent.observation_indices), not a
+// bbox/time approximation -- this is why the console can show precisely
+// which detections a FireEvent came from.
+export interface FireEventObservation {
+  lat: number
+  lon: number
+  acqDate: string
+  acqTime: number
+  frp: number | null
+  confidence: string
+}
+
+export interface TriageDetail {
+  algorithm_version: string
+  state: string
+  fire_support_score: number
+  non_fire_support_score: number
+  requires_ai_review: boolean
+  deeper_investigation_eligible: boolean
+  decisive_rule_ids: string[]
+  decision_reasons: string[]
+  budget_reason: string | null
+  evaluated_at: string
+  event_id: string
+  rules: Record<string, unknown>[]
+  evidence: EvidenceObject[]
+  observations: FireEventObservation[]
+}
+
 export interface EventEvidenceResponse {
   auditId: string
-  event: AuditEventSummary & { triageDetail?: Record<string, unknown> }
+  event: AuditEventSummary & { triageDetail?: TriageDetail }
   scopeRelation: ScopeRelation
   observedEvidence: EvidenceObject[]
   derivedEvidence: EvidenceObject[]

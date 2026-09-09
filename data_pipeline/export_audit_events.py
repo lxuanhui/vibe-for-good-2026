@@ -97,6 +97,30 @@ def load_raw_observation_count() -> int:
     return sum(len(collection["features"]) for collection in by_date.values())
 
 
+def event_observations(event: FireEvent, observations: pd.DataFrame) -> list[dict[str, Any]]:
+    """The raw FIRMS detections clustered into this one FireEvent.
+
+    `event.observation_indices` is the exact link `firms_clustering` keeps
+    back to the input rows -- this is real cluster membership, not a bbox/
+    time approximation, so the console can show precisely which detections
+    the deterministic clustering compressed into this event and why one
+    exists at this spot. Kept in the triage-detail artifact, not the list
+    summary: bulky, and only needed once an auditor opens one event.
+    """
+    rows = observations.iloc[event.observation_indices]
+    return [
+        {
+            "lat": round(float(row.latitude), 5),
+            "lon": round(float(row.longitude), 5),
+            "acqDate": row.acq_date,
+            "acqTime": int(row.acq_time),
+            "frp": None if pd.isna(row.frp) else round(float(row.frp), 2),
+            "confidence": row.confidence,
+        }
+        for row in rows.itertuples()
+    ]
+
+
 def event_summary(event: FireEvent, triage: Stage1TriageResult) -> dict[str, Any]:
     """List-view shape: what the Historical Fire Register table needs (§11).
 
@@ -151,6 +175,7 @@ def main() -> None:
     print(f"==> triage states: {summary.state_counts}")
 
     by_id = {result.event_id: result for result in triage_results}
+    events_by_id = {e.event_id: e for e in events}
     artifact = {
         # Deliberately no `generatedAt`: the triage detail already carries the
         # engine's own `evaluated_at`/`retrieved_at` stamps, and the source
@@ -184,7 +209,13 @@ def main() -> None:
         },
     }
     triage_detail = {
-        AUDIT_ID: {result.event_id: result.to_dict() for result in triage_results}
+        AUDIT_ID: {
+            result.event_id: {
+                **result.to_dict(),
+                "observations": event_observations(events_by_id[result.event_id], observations),
+            }
+            for result in triage_results
+        }
     }
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)

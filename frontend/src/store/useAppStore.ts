@@ -2,7 +2,13 @@ import { create } from 'zustand'
 import type { OverlayLayerId, RasterLayerId } from '../api/types'
 import { TIMELINE_DATES } from '../api/fixtures/dates'
 
-export type ViewMode = 'map' | 'table' | 'report'
+// 'scoped-map' (ScopedMapLanding) is reachable from the register rather than
+// shown before it -- canonical spec §5/§11/§28: table first, map second.
+// Both the all-events scoped view and the selected-events + graph
+// investigation live there now; 'map' is unused by current screens but kept
+// in the union for the still-present, unmounted legacy ViewModeToggle/
+// TableSidebar pair (CLAUDE.md "State of things").
+export type ViewMode = 'table' | 'map' | 'report' | 'scoped-map'
 
 type LayerId = OverlayLayerId | RasterLayerId
 
@@ -33,7 +39,7 @@ interface AppState {
 }
 
 export const useAppStore = create<AppState>((set) => ({
-  viewMode: 'map',
+  viewMode: 'table',
   setViewMode: (mode) => set({ viewMode: mode }),
 
   selectedEventId: null,

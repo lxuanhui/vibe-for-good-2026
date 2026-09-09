@@ -52,7 +52,7 @@ def test_upload_returns_scope_geometry_bbox_centroid_and_buffer(client):
     assert response.status_code == 200
     scope = response.get_json()
     assert scope["audit_id"] == review["audit_id"]
-    assert scope["bbox"] == [104.0, -4.0, 105.0, -3.0]
+    assert scope["bbox"] == {"minLon": 104.0, "minLat": -4.0, "maxLon": 105.0, "maxLat": -3.0}
     assert scope["centroid"] == [104.5, -3.5]
     assert scope["buffer_geometry"]["type"] == "Polygon"
     assert scope["status"] == "SCOPE_READY"
