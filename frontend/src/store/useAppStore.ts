@@ -2,10 +2,12 @@ import { create } from 'zustand'
 import type { OverlayLayerId, RasterLayerId } from '../api/types'
 import { TIMELINE_DATES } from '../api/fixtures/dates'
 
-// 'map' is the register's own selected-events + graph investigation view
-// (HistoricalInvestigation); 'scoped-map' is the separate all-events scoped
-// landing (ScopedMapLanding), reachable from the register rather than shown
-// before it -- canonical spec §5/§11/§28: table first, map second.
+// 'scoped-map' (ScopedMapLanding) is reachable from the register rather than
+// shown before it -- canonical spec §5/§11/§28: table first, map second.
+// Both the all-events scoped view and the selected-events + graph
+// investigation live there now; 'map' is unused by current screens but kept
+// in the union for the still-present, unmounted legacy ViewModeToggle/
+// TableSidebar pair (CLAUDE.md "State of things").
 export type ViewMode = 'table' | 'map' | 'report' | 'scoped-map'
 
 type LayerId = OverlayLayerId | RasterLayerId
