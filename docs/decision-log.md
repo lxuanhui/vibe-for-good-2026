@@ -6,6 +6,60 @@ more valuable half.
 
 ---
 
+## 2026-09-09 - The scoped map's correlation graph gets real edges, offline
+
+**Status:** done · issue #135
+
+**Decision.** `GET /api/audits/{id}/graph` (`investigation_map`) now prefers
+a precomputed real `FireEventGraph` edge over its own synthesized
+distance-only one, for any candidate pair inside a new offline artifact.
+`data_pipeline/enrich_fire_spread_audit_events.py` (mirrors
+`enrich_peat_audit_events.py`) reuses `build_fire_event_graph`/
+`compare_event_progression` exactly as they already existed — no new fire
+math was written — over the demo scope's 16 in-scope+buffer FireEvents, and
+writes each edge onto its *source* event's `fireSpreadEdges` field in
+`audit_triage_detail.json.gz`. `SurfaceFireEnvelope.to_polygon()` is the one
+new method: it samples the ellipse boundary into a closed `[lon, lat]` ring
+for map rendering, an exact inverse of the module's own projection (the
+along/across → east/north rotation is its own inverse), not an
+approximation. `FireEventEdgeFeatures` gained three fields
+(`surface_envelope_semi_major_km`/`_semi_minor_km`/`_center_offset_km`) so
+the envelope doesn't need recomputing downstream — `_build_edge` already
+built it via `compare_event_progression` and previously discarded it after
+reading two summary fields off it.
+
+**Why offline, and why this scope.** The dataset is permanently fixed to the
+2019 demo window for this project, so there is no live/arbitrary-audit case
+to support — the same reasoning that already sent clustering and peat
+context offline. The real blocker turned out not to be `fire_event_graph.py`'s
+scipy dependency (offline, that's a non-issue) but that per-event historical
+wind had a checkpoint fully fetched (`enrich_audit_events.py`'s SQLite cache
+had all 16 events at `weather_status='ok'`) that had simply never been
+`--finalize`d into the committed artifact. Finalizing it was this change's
+first step; 82 candidate edges resulted, 59 with a real wind-oriented
+envelope (state distribution: 39 UNRESOLVED, 22 INDEPENDENT_PLAUSIBLE, 19
+PROPAGATION_COMPATIBLE, 2 RELATED_POSSIBLE — not a flat "everything is
+possible", unlike the fallback it now only covers residually).
+
+**The unit gotcha.** Open-Meteo's committed wind-speed evidence is already
+km/h (no `wind_speed_unit` override in `sources/open_meteo.py`), but
+`fire_event_graph._wind_values` multiplies a `mean_wind_speed_ms` key by 3.6
+assuming m/s input. The adapter in the new script deliberately uses the
+`speed_kmh` key instead — the wrong key would have silently inflated every
+wind speed 3.6×.
+
+**Rejected: computing this live in the API.** Not for the reason stated in
+an earlier version of this diagnosis (Lambda bundle size) — `surface_fire.py`
+itself is pure Python, no numpy/scipy. Offline still wins here because the
+dataset is fixed and the derivation is identical for every caller, the same
+argument already accepted for clustering.
+
+**Left alone.** Peatland-corridor uncertainty
+(`peat_fraction_along_corridor`, numpy + Pillow + a raster) is a separable,
+heavier piece not needed for spread *direction* and not attempted here.
+
+---
+
 ## 2026-09-09 - Audit session state goes in DynamoDB; the scope-first landing wins over the map-first one
 
 **Status:** done - PR #131

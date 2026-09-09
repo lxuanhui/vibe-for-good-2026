@@ -124,6 +124,65 @@ def _distance_km(first: dict[str, Any], second: dict[str, Any]) -> float:
     return 6371.0088 * 2 * math.asin(math.sqrt(min(1.0, value)))
 
 
+def _real_edges_by_pair(triage: dict[str, Any], visible: list[dict[str, Any]]) -> dict[frozenset[str], dict[str, Any]]:
+    """Every precomputed FireEventGraph edge among the visible events,
+    keyed by the unordered event-id pair -- `data_pipeline.
+    enrich_fire_spread_audit_events` writes these onto the *source*
+    event's own detail record (`fireSpreadEdges`), so a pair is only found
+    by looking at whichever of the two events is chronologically earlier."""
+
+    by_pair: dict[frozenset[str], dict[str, Any]] = {}
+    for event in visible:
+        record = triage.get(event["eventId"], {})
+        for edge in record.get("fireSpreadEdges", []):
+            key = frozenset((edge["source_event_id"], edge["target_event_id"]))
+            by_pair[key] = edge
+    return by_pair
+
+
+def _edge_from_real(real: dict[str, Any], subject_id: str, candidate_id: str) -> dict[str, Any]:
+    """Translate a precomputed `FireEventEdge.to_dict()` (snake_case,
+    Python-side field names) into this API's existing edge shape, replacing
+    the crude distance-only synthesized edge below with the real
+    FireEventGraph classification, wind-oriented envelope, and limitations."""
+
+    features = real["features"]
+    distance = round(features["geographic_distance_km"], 3)
+    envelope = real.get("envelope")
+    evidence_id = f"GRAPH_{real['source_event_id']}_{real['target_event_id']}_fire_event_graph"
+    limitations = [
+        "A candidate edge is a relationship for review, not evidence of a shared cause or responsibility.",
+        "First-order surface-spread compatibility screen: homogeneous fuel approximation, historical wind "
+        "treated as representative, does not model underground peat propagation.",
+    ]
+    return {
+        "sourceEventId": real["source_event_id"],
+        "targetEventId": real["target_event_id"],
+        "state": real["state"],
+        "distanceKm": distance,
+        "modelVersion": real["model_version"],
+        "supportingEvidenceIds": real.get("supporting_evidence_ids", []),
+        "contradictingEvidenceIds": real.get("contradicting_evidence_ids", []),
+        "evidence": [_evidence_object(
+            evidence_id, "graph", "candidate_edge_fire_event_graph",
+            real.get("explanation") or f"Candidate FireEvent relationship is {distance} km apart.",
+            "FireEventGraph deterministic pipeline (surface-fire-ellipse-v1)",
+            f"elapsed {features['elapsed_time_hours']} h",
+            value={
+                "distance_km": distance,
+                "elapsed_hours": features["elapsed_time_hours"],
+                "propagation_compatibility": features["propagation_compatibility"],
+                "wind_alignment": features.get("wind_alignment"),
+            },
+            quality=1.0,
+            limitations=limitations,
+            algorithm_version=real["model_version"],
+            raw_reference=f"{real['source_event_id']}->{real['target_event_id']}",
+        )],
+        "envelope": envelope,
+    }
+
+
 def investigation_map(audit_id: str, event_ids: list[str]) -> dict[str, Any] | None:
     audit = get_audit(audit_id)
     if audit is None:
@@ -153,9 +212,16 @@ def investigation_map(audit_id: str, event_ids: list[str]) -> dict[str, Any] | N
         }
         for event in visible
     ]
+    real_edges = _real_edges_by_pair(_triage_for_audit(audit_id), visible)
     edges = []
+    has_real_edge = False
     for candidate in neighbours:
         subject = min(selected, key=lambda event: _distance_km(candidate, event))
+        real = real_edges.get(frozenset((subject["eventId"], candidate["eventId"])))
+        if real is not None:
+            has_real_edge = True
+            edges.append(_edge_from_real(real, subject["eventId"], candidate["eventId"]))
+            continue
         distance = round(_distance_km(subject, candidate), 3)
         edge_evidence_id = f"GRAPH_{subject['eventId']}_{candidate['eventId']}_distance"
         edges.append({
@@ -177,7 +243,8 @@ def investigation_map(audit_id: str, event_ids: list[str]) -> dict[str, Any] | N
                 "quality": 1.0,
                 "limitations": [
                     "A candidate edge is a relationship for review, not evidence of a shared cause or responsibility.",
-                    "This current audit adapter exposes distance only; wind, peat-corridor and surface compatibility are not available in this artifact.",
+                    "This pair falls outside the precomputed FireEventGraph scope (demo in-scope+buffer FireEvents "
+                    "with real historical wind); distance is the only signal available for it.",
                 ],
                 "algorithm_version": "fire-event-graph-v1",
                 "raw_reference": f"{subject['eventId']}->{candidate['eventId']}",
@@ -189,7 +256,7 @@ def investigation_map(audit_id: str, event_ids: list[str]) -> dict[str, Any] | N
         "scope": scope,
         "nodes": nodes,
         "edges": edges,
-        "layers": {"selectedRawObservations": False, "fireEvents": True, "graph": True, "peat": False, "weatherWind": False, "surfaceEnvelope": False},
+        "layers": {"selectedRawObservations": False, "fireEvents": True, "graph": True, "peat": False, "weatherWind": has_real_edge, "surfaceEnvelope": has_real_edge},
     }
 
 

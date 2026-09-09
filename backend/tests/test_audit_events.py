@@ -245,6 +245,31 @@ def test_graph_handoff_returns_selected_events_and_context_neighbours(client):
     assert all(edge["evidence"][0]["algorithm_version"] == "fire-event-graph-v1" for edge in body["edges"])
 
 
+def test_graph_prefers_the_precomputed_real_fire_event_graph_edge(client):
+    """`data_pipeline.enrich_fire_spread_audit_events` has real wind-oriented
+    envelopes for this demo pair -- the API must serve that classification,
+    not the synthesized distance-only fallback (which always says
+    RELATED_POSSIBLE and never carries an envelope)."""
+
+    # Only one side selected -- the other must surface as a discovered
+    # EXTERNAL_CONTEXT neighbour (edges never connect two selected events
+    # directly; see `investigation_map`'s neighbour-search loop).
+    response = client.get(f"/api/audits/{AUDIT}/graph?event_ids=FE-20190904-0fb85076c0")
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["layers"]["surfaceEnvelope"] is True
+    assert body["layers"]["weatherWind"] is True
+    edge = next(
+        e for e in body["edges"]
+        if {e["sourceEventId"], e["targetEventId"]} == {"FE-20190901-f0d0bb0675", "FE-20190904-0fb85076c0"}
+    )
+    assert edge["state"] == "PROPAGATION_COMPATIBLE"
+    assert edge["envelope"] is not None
+    assert len(edge["envelope"]["polygon"]) > 3
+    assert edge["envelope"]["polygon"][0] == edge["envelope"]["polygon"][-1]
+
+
 def test_unknown_event_in_a_known_audit_is_404(client):
     response = client.get(f"{BASE}/FE-does-not-exist")
 

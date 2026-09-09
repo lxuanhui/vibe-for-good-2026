@@ -231,6 +231,16 @@ export interface InvestigationMap {
     supportingEvidenceIds?: string[]
     contradictingEvidenceIds?: string[]
     evidence?: EvidenceObject[]
+    // Present only for a precomputed FireEventGraph edge with real
+    // historical wind (`data_pipeline/enrich_fire_spread_audit_events.py`) --
+    // a wind-oriented surface-fire compatibility envelope, not a claim about
+    // what happened. `polygon` is a closed [lon, lat] ring.
+    envelope?: {
+      polygon: number[][]
+      orientationDeg: number
+      semiMajorKm: number
+      semiMinorKm: number
+    } | null
   }[]
   layers: Record<string, boolean>
 }

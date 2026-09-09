@@ -1,3 +1,5 @@
+import math
+
 import pytest
 
 from data_pipeline.clustering.firms_clustering import FireEvent
@@ -104,3 +106,37 @@ def test_invalid_spread_parameters_and_time_are_rejected():
         SurfaceFireSpreadParameters(head_spread_kmh=1.0, back_spread_kmh=2.0)
     with pytest.raises(ValueError):
         project_surface_fire_envelope((0.0, 0.0), -1.0, 270.0)
+
+
+def test_to_polygon_is_a_closed_ring_matching_contains_point():
+    envelope = project_surface_fire_envelope(
+        origin=(-3.78, 116.25),
+        elapsed_hours=10.0,
+        wind_direction_from_deg=90.0,
+        parameters=SurfaceFireSpreadParameters(head_spread_kmh=5.0, back_spread_kmh=1.0, flank_spread_kmh=2.5),
+    )
+
+    ring = envelope.to_polygon(n_points=48)
+
+    assert len(ring) == 49
+    assert ring[0] == ring[-1]
+    # Every sampled boundary vertex should sit right on the envelope
+    # boundary -- inside with a hair of positive tolerance.
+    for lon, lat in ring[:-1]:
+        assert envelope.contains_point((lat, lon), tolerance_km=0.05)
+
+    # Wind FROM due east blows toward due west, so the "head" vertex
+    # (theta=0, the ellipse's downwind extreme) must land due west of the
+    # origin at exactly semi_major + center_offset km.
+    head_lon, head_lat = ring[0]
+    expected_km = envelope.semi_major_km + envelope.center_offset_km
+    mean_lat = math.radians((envelope.origin[0] + head_lat) / 2.0)
+    actual_km = math.radians(envelope.origin[1] - head_lon) * 6371.0088 * math.cos(mean_lat)
+    assert head_lat == pytest.approx(envelope.origin[0], abs=1e-6)
+    assert actual_km == pytest.approx(expected_km, abs=1e-3)
+
+
+def test_to_polygon_rejects_too_few_points():
+    envelope = project_surface_fire_envelope((0.0, 0.0), 1.0, 0.0)
+    with pytest.raises(ValueError):
+        envelope.to_polygon(n_points=2)

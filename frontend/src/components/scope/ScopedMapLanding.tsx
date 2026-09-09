@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Layer, Map, Source, type MapLayerMouseEvent } from 'react-map-gl/maplibre'
-import type { Feature, FeatureCollection, Geometry, LineString, Point } from 'geojson'
+import type { Feature, FeatureCollection, Geometry, LineString, Point, Polygon } from 'geojson'
 import type { AuditEventSummary, AuditScope, EventEvidenceResponse, InvestigationMap } from '../../api/types'
 import { fetchAuditRegister, fetchInvestigationBundle, fetchInvestigationMap } from '../../api/client'
-import { AUDIT_EVENT_COLORS, AUDIT_SCOPE_BOUNDARY_COLOR, AUDIT_SCOPE_BUFFER_COLOR } from '../../lib/layerColors'
+import { AUDIT_EVENT_COLORS, AUDIT_SCOPE_BOUNDARY_COLOR, AUDIT_SCOPE_BUFFER_COLOR, SURFACE_FIRE_ENVELOPE_COLOR } from '../../lib/layerColors'
 import { useAppStore } from '../../store/useAppStore'
 import { Button } from '../ui/Button'
 import { EvidenceDrawer } from '../audit/EvidenceDrawer'
@@ -55,6 +55,26 @@ function graphEdges(graph: InvestigationMap | undefined): FeatureCollection<Line
       return from && to
         ? [{ type: 'Feature' as const, geometry: { type: 'LineString' as const, coordinates: [[from.centroid.lon, from.centroid.lat], [to.centroid.lon, to.centroid.lat]] }, properties: {} }]
         : []
+    }),
+  }
+}
+
+// One polygon per candidate edge that has a precomputed wind-oriented
+// surface-spread envelope (`data_pipeline/enrich_fire_spread_audit_events.py`
+// -- real historical wind, only available for this demo's in-scope+buffer
+// FireEvents). A first-order geometric compatibility estimate, not a
+// fire-behaviour forecast or a claim about what happened (evidence-framing).
+function envelopePolygons(graph: InvestigationMap | undefined): FeatureCollection<Polygon> {
+  if (!graph) return { type: 'FeatureCollection', features: [] }
+  return {
+    type: 'FeatureCollection',
+    features: graph.edges.flatMap((edge) => {
+      if (!edge.envelope) return []
+      return [{
+        type: 'Feature' as const,
+        geometry: { type: 'Polygon' as const, coordinates: [edge.envelope.polygon] },
+        properties: { state: edge.state, sourceEventId: edge.sourceEventId, targetEventId: edge.targetEventId },
+      }]
     }),
   }
 }
@@ -144,6 +164,8 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister }: { scope
 
   const points = useMemo(() => mapPoints(events, graph), [events, graph])
   const edges = useMemo(() => graphEdges(graph), [graph])
+  const envelopes = useMemo(() => envelopePolygons(graph), [graph])
+  const [showSpreadEnvelopes, setShowSpreadEnvelopes] = useState(true)
   const center = useMemo<[number, number]>(() => scope.centroid ?? [116.25, -3.8], [scope.centroid])
 
   // Carto's basemap tiles now require a key on every request. The style JSON
@@ -217,6 +239,7 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister }: { scope
           {boundary && <Source id="audit-scope-boundary" type="geojson" data={boundary}><Layer id="audit-scope-fill" type="fill" paint={{ 'fill-color': AUDIT_SCOPE_BOUNDARY_COLOR, 'fill-opacity': 0.08 }} /><Layer id="audit-scope-line" type="line" paint={{ 'line-color': AUDIT_SCOPE_BOUNDARY_COLOR, 'line-width': 2 }} /></Source>}
           {showPeatland && <Source id="peatland-context" type="geojson" data="/peatland-indonesia.geojson"><Layer id="peatland-context-fill" type="fill" paint={{ 'fill-color': '#a855f7', 'fill-opacity': 0.22 }} /><Layer id="peatland-context-line" type="line" paint={{ 'line-color': '#c084fc', 'line-width': 0.7, 'line-opacity': 0.7 }} /></Source>}
           {edges.features.length > 0 && <Source id="fireevent-graph" type="geojson" data={edges}><Layer id="fireevent-graph-line" type="line" paint={{ 'line-color': GRAPH_LINE_COLOR, 'line-width': 2, 'line-dasharray': [1, 1] }} layout={{ 'line-cap': 'round' }} /></Source>}
+          {showSpreadEnvelopes && envelopes.features.length > 0 && <Source id="fireevent-spread-envelope" type="geojson" data={envelopes}><Layer id="fireevent-spread-envelope-fill" type="fill" paint={{ 'fill-color': SURFACE_FIRE_ENVELOPE_COLOR, 'fill-opacity': 0.18 }} /><Layer id="fireevent-spread-envelope-line" type="line" paint={{ 'line-color': SURFACE_FIRE_ENVELOPE_COLOR, 'line-width': 1.5, 'line-dasharray': [3, 3] }} /></Source>}
           {showObservations && observations.features.length > 0 && <Source id="fireevent-observations" type="geojson" data={observations}><Layer id="fireevent-observations-points" type="circle" paint={{ 'circle-radius': 3, 'circle-color': OBSERVATION_COLOR, 'circle-opacity': 0.85, 'circle-stroke-color': '#0a0d12', 'circle-stroke-width': 1 }} /></Source>}
           <Source id="audit-events" type="geojson" data={points}>
             <Layer
@@ -240,12 +263,14 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister }: { scope
           <p className="mt-2 text-xs leading-5 text-text-muted">Review scoped FireEvents and optional peat context.</p>
           <div className="mt-3 grid grid-cols-2 gap-2 text-xs"><div className="rounded border border-border bg-bg p-2"><div className="text-text-faint">EVENTS SHOWN</div><div className="mt-1 text-lg font-semibold text-accent">{loading ? '…' : events.length.toLocaleString()}</div></div><div className="rounded border border-border bg-bg p-2"><div className="text-text-faint">SOURCE</div><div className="mt-1 text-status-good">API artifact</div></div></div>
           <p className="mt-3 text-[10px] leading-4 text-text-faint">Peat is environmental context, not cause. Compare it with selected-event evidence and candidate links.</p>
+          {envelopes.features.length > 0 && <p className="mt-2 text-[10px] leading-4 text-text-faint">Dashed outline: a first-order wind-oriented surface-spread compatibility estimate for a candidate FireEvent pair -- not a validated fire-behaviour forecast, and not a claim about what happened.</p>}
           {error && <div role="alert" className="mt-3 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-xs text-red-200">{error}</div>}
           {graphError && <div role="alert" className="mt-3 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-xs text-red-200">{graphError}</div>}
           {loading && <div role="status" className="mt-3 text-xs text-text-muted">Loading real audit FireEvents…</div>}
           {!loading && !error && events.length === 0 && <div className="mt-3 text-xs text-text-muted">No events intersect this audit scope and buffer.</div>}
           <Button variant="primary" className="mt-4 w-full" onClick={onOpenRegister}>OPEN FIRE REGISTER</Button>
           <Button className="mt-2 w-full" onClick={() => setShowPeatland((shown) => !shown)}>{showPeatland ? 'HIDE PEATLAND' : 'SHOW PEATLAND'}</Button>
+          {envelopes.features.length > 0 && <Button className="mt-2 w-full" onClick={() => setShowSpreadEnvelopes((shown) => !shown)}>{showSpreadEnvelopes ? 'HIDE SPREAD ENVELOPES' : 'SHOW SPREAD ENVELOPES'}</Button>}
         </div>
       </aside>
       {drawerEventId && (

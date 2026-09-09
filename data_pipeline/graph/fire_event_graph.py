@@ -97,6 +97,13 @@ class FireEventEdgeFeatures:
     propagation_compatibility: PropagationCompatibility
     surface_envelope_contains_target: bool | None = None
     surface_envelope_orientation_deg: float | None = None
+    # The three numbers needed to reconstruct the envelope
+    # (`SurfaceFireEnvelope.to_polygon()`) without recomputing
+    # `compare_event_progression` a second time downstream -- `_build_edge`
+    # already builds the full envelope, this just keeps what it discarded.
+    surface_envelope_semi_major_km: float | None = None
+    surface_envelope_semi_minor_km: float | None = None
+    surface_envelope_center_offset_km: float | None = None
 
     @property
     def distance_km(self) -> float:
@@ -506,6 +513,9 @@ def _build_edge(
     )
     surface_envelope_contains_target = None
     surface_envelope_orientation_deg = None
+    surface_envelope_semi_major_km = None
+    surface_envelope_semi_minor_km = None
+    surface_envelope_center_offset_km = None
     if source_wind is not None and ordering != TemporalOrdering.OVERLAPPING:
         surface_result = compare_event_progression(
             source,
@@ -517,6 +527,10 @@ def _build_edge(
         if target_result is not None:
             surface_envelope_contains_target = target_result.inside_expected_envelope
             surface_envelope_orientation_deg = surface_result.downwind_orientation_deg
+            if target_result.envelope is not None:
+                surface_envelope_semi_major_km = target_result.envelope.semi_major_km
+                surface_envelope_semi_minor_km = target_result.envelope.semi_minor_km
+                surface_envelope_center_offset_km = target_result.envelope.center_offset_km
             if surface_envelope_contains_target is True:
                 compatibility = PropagationCompatibility.COMPATIBLE
             elif surface_envelope_contains_target is False:
@@ -534,6 +548,9 @@ def _build_edge(
         propagation_compatibility=compatibility,
         surface_envelope_contains_target=surface_envelope_contains_target,
         surface_envelope_orientation_deg=surface_envelope_orientation_deg,
+        surface_envelope_semi_major_km=surface_envelope_semi_major_km,
+        surface_envelope_semi_minor_km=surface_envelope_semi_minor_km,
+        surface_envelope_center_offset_km=surface_envelope_center_offset_km,
     )
     state, explanation = _state_for_features(features)
 

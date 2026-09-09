@@ -70,6 +70,7 @@ deliberate change is wrong.
 | Largest event | `FE-20190901-392b394abd`: 1,103 obs, 107 h, 20.5 km |
 | LIKELY_FIRE / AMBIGUOUS / LIKELY_NON_FIRE | 396 / 3,214 / 0 |
 | Max FRP ≥20 MW | 582 |
+| `fireSpreadEdges` (demo scope, 16 in-scope+buffer events) | 82 candidate edges, 59 with a real wind-oriented envelope |
 
 Recompute them in a few lines rather than trusting this table:
 

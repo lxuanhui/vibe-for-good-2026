@@ -117,6 +117,18 @@ artifact itself is packaged and immutable — nothing writes to it. The one
 thing that does persist is audit session state (`backend/app/audit_store.py`):
 memory locally, the DynamoDB table when `AUDIT_STATE_TABLE` is set.
 
+`GET /api/audits/{id}/graph` (`investigation_map`) now also serves real
+`graph/fire_event_graph.py`/`propagation/surface_fire.py` output — a
+wind-oriented surface-spread compatibility state and envelope polygon per
+candidate edge, not the flat distance-only `RELATED_POSSIBLE` it used to
+synthesize for every pair. `data_pipeline/enrich_fire_spread_audit_events.py`
+precomputes this offline, same reasoning as clustering, and it only covers
+the demo scope's 16 in-scope+buffer FireEvents — real historical wind was
+only ever fetched for those. A candidate pair reaching outside that set (an
+`EXTERNAL_CONTEXT` neighbour from the wider regional archive) still gets the
+old distance-only synthesized edge; peatland-corridor uncertainty for any
+edge remains unwired. See decision log, 2026-09-09.
+
 The console consumes them. `components/scope/ScopedMapLanding.tsx` is the
 map-first landing surface for the bounded demo scope, and
 `components/audit/HistoricalInvestigation.tsx` is the register, investigation
