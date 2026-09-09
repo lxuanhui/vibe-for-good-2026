@@ -28,7 +28,7 @@ apply an older decision without checking the entries above it.
 
 ## 2026-09-10 - The live FIRMS layer is proxied by the API, not fetched by the browser
 
-**Status:** done · PR #PRNUM · Closes #149
+**Status:** done · PR #150 · Closes #149
 
 The console's landing screen draws current regional thermal detections as
 orientation context. It fetched them from the browser:
