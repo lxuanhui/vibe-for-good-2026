@@ -63,7 +63,7 @@ function InvestigationMapView({ investigation, scope, onBack }: { investigation:
   </div>
 }
 
-export function HistoricalInvestigation({ scope }: { scope: AuditScope }) {
+export function HistoricalInvestigation({ scope, onOpenScopedMap }: { scope: AuditScope; onOpenScopedMap?: () => void }) {
   const viewMode = useAppStore((s) => s.viewMode)
   const setViewMode = useAppStore((s) => s.setViewMode)
   const selection = useAppStore((s) => s.registerSelection)
@@ -80,12 +80,19 @@ export function HistoricalInvestigation({ scope }: { scope: AuditScope }) {
     setLoading(true)
     setError('')
     try {
-      const result = await fetchAuditRegister(scope.audit_id, { since: scope.review_start, until: scope.review_end })
+      // Filtered by both time (review period) and space (scope + context
+      // buffer) -- canonical spec §11's register is a screening view of the
+      // audit's own footprint, not the whole committed artifact.
+      const result = await fetchAuditRegister(scope.audit_id, {
+        since: scope.review_start,
+        until: scope.review_end,
+        bbox: scope.buffer_bbox ?? undefined,
+      })
       setEvents(result.events)
       setProgression(result.progression)
       setPacked(result.progression.selectedEventIds)
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Register could not be loaded.') } finally { setLoading(false) }
-  }, [scope.audit_id, scope.review_start, scope.review_end])
+  }, [scope.audit_id, scope.review_start, scope.review_end, scope.buffer_bbox])
   useEffect(() => { void loadRegister() }, [loadRegister])
   const selectedEvents = useMemo(() => events.filter((event) => selection.includes(event.eventId)), [events, selection])
 
@@ -116,7 +123,7 @@ export function HistoricalInvestigation({ scope }: { scope: AuditScope }) {
   if (viewMode === 'report') return <AuditReportView auditId={scope.audit_id} onBack={() => setViewMode('table')} />
   if (viewMode === 'map' && investigation) return <InvestigationMapView investigation={investigation} scope={scope} onBack={() => setViewMode('table')} />
   return <div className="flex h-full flex-col bg-bg text-text">
-    <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border-strong bg-panel px-5 py-3"><div><div className="text-sm font-semibold">Historical Fire Register</div><div className="text-xs text-text-muted">{progression ? `${progression.fireEvents.toLocaleString()} FireEvents` : 'FireEvents'} · {scope.review_start} → {scope.review_end} · {scope.context_buffer_km} km context buffer</div></div><Button variant="primary" disabled={!selection.length || mapLoading || loading} onClick={() => void investigate()}>{mapLoading ? 'OPENING MAP…' : `INVESTIGATE ON MAP (${selection.length})`}</Button></div>
+    <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border-strong bg-panel px-5 py-3"><div><div className="text-sm font-semibold">Historical Fire Register</div><div className="text-xs text-text-muted">{progression ? `${progression.fireEvents.toLocaleString()} FireEvents` : 'FireEvents'} · {scope.review_start} → {scope.review_end} · {scope.context_buffer_km} km context buffer</div></div><div className="flex items-center gap-2">{onOpenScopedMap && <Button onClick={onOpenScopedMap}>VIEW SCOPED MAP</Button>}<Button variant="primary" disabled={!selection.length || mapLoading || loading} onClick={() => void investigate()}>{mapLoading ? 'OPENING MAP…' : `INVESTIGATE ON MAP (${selection.length})`}</Button></div></div>
     {progression && <section aria-label="Observation compression progression" className="shrink-0 border-b border-border bg-border"><div className="bg-panel px-3 py-1 text-center text-[10px] uppercase tracking-[0.12em] text-text-faint">observations → FireEvents → in scope + buffer → human review</div><div className="grid grid-cols-2 gap-px border-t border-border bg-border text-center text-[11px] sm:grid-cols-4"><div className="bg-panel px-3 py-2"><div className="font-semibold text-accent">{progression.qualifiedObservations.toLocaleString()}</div><div className="text-text-faint">FIRMS OBSERVATIONS</div><div className="text-[10px] text-text-faint">→ FireEvents {progression.observationsToEventsCompression?.toFixed(1) ?? '—'}×</div></div><div className="bg-panel px-3 py-2"><div className="font-semibold text-accent">{progression.fireEvents.toLocaleString()}</div><div className="text-text-faint">CLUSTERED FIREEVENTS</div></div><div className="bg-panel px-3 py-2"><div className="font-semibold text-accent">{progression.inScopeAndBuffer?.toLocaleString() ?? '—'}</div><div className="text-text-faint">IN SCOPE + BUFFER</div><div className="text-[10px] text-text-faint">{progression.scopeBoundaryAvailable ? `${progression.scopeCompression?.toFixed(1) ?? '—'}× scope` : 'No boundary supplied'}</div></div><div className="bg-panel px-3 py-2"><div className="font-semibold text-accent">{progression.requiringHumanReview.toLocaleString()}</div><div className="text-text-faint">HUMAN REVIEW</div><div className="text-[10px] text-text-faint">{(progression.routingDiagnostics.humanReviewPercentage * 100).toFixed(1)}% · inspect reasons</div></div></div></section>}
     {progression && <p className="border-b border-border bg-panel px-5 py-2 text-[11px] text-text-muted">Priority, evidence sufficiency, and human workflow are separate. Ambiguous events remain review-recommended; only calibrated HIGH/URGENT routes enter human review. {progression.scopeBoundaryAvailable ? 'Scope compression is measured from the supplied private boundary and context buffer.' : 'Supply a private audit boundary to measure in-scope plus buffer compression.'}</p>}
     {progression && <div className="flex flex-wrap gap-x-5 gap-y-1 border-b border-border bg-panel px-5 py-2 text-[10px] text-text-muted" aria-label="Review routing diagnostics"><span className="font-semibold uppercase tracking-[0.1em] text-text-faint">Routing diagnostics</span>{Object.entries(progression.routingDiagnostics.priorityDistribution).map(([priority, distribution]) => <span key={priority}>Priority {priority}: {distribution.count.toLocaleString()} ({(distribution.percentage * 100).toFixed(1)}%)</span>)}{Object.entries(progression.routingDiagnostics.reviewStateDistribution).map(([state, distribution]) => <span key={state}>Workflow {state}: {distribution.count.toLocaleString()} ({(distribution.percentage * 100).toFixed(1)}%)</span>)}{Object.entries(progression.routingDiagnostics.evidenceSufficiencyDistribution).map(([sufficiency, distribution]) => <span key={sufficiency}>Sufficiency {sufficiency}: {distribution.count.toLocaleString()} ({(distribution.percentage * 100).toFixed(1)}%)</span>)}{Object.entries(progression.routingDiagnostics.escalationReasonCodes).map(([reason, distribution]) => <span key={reason}>Escalation {reason}: {distribution.count.toLocaleString()}</span>)}{Object.entries(progression.routingDiagnostics.componentContributionDistribution).map(([factor, distribution]) => <span key={factor}>Component {factor}: {distribution.totalContribution.toFixed(1)} ({(distribution.percentageOfContribution * 100).toFixed(1)}%)</span>)}</div>}

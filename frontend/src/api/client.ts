@@ -59,6 +59,13 @@ export async function uploadAuditScope(auditId: string, file: File): Promise<Aud
   return apiPost<AuditScope>(`/audits/${encodeURIComponent(auditId)}/scope/upload`, form)
 }
 
+// Same endpoint, no file -- the backend route already accepts a raw GeoJSON
+// body when no multipart file is attached. Used when AuditStart falls back
+// to a default management-unit geometry instead of an upload.
+export async function uploadAuditScopeGeometry(auditId: string, geometry: unknown): Promise<AuditScope> {
+  return apiPost<AuditScope>(`/audits/${encodeURIComponent(auditId)}/scope/upload`, JSON.stringify(geometry), { 'Content-Type': 'application/json' })
+}
+
 export async function buildFireHistory(auditId: string): Promise<{ audit_id: string; scope_id: string; status: 'HISTORY_BUILD_READY'; duration_ms: number; dataset_mode: string }> {
   return apiPost(`/audits/${encodeURIComponent(auditId)}/history/build`, null)
 }
