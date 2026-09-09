@@ -21,10 +21,11 @@ bucket and the CI role).
 | Service | Resource | Why | Observed / month |
 |---|---|---|---|
 | **Lambda** | `vibe-for-good-2026-dev-api` — python3.13, arm64, 512 MB, 29 s | The Flask API. Nothing to keep warm between demo runs | **$0.00** |
+| **Lambda** | `vibe-for-good-2026-dev-analysis-worker` — same zip, handler `lambda_handler.analysis_worker`, 512 MB, 300 s | Runs Investigator/Skeptic analysis, which measures ~51s and cannot fit API Gateway's 30s response cap. Invoked async by the API; async retries are off so a failure is not billed three times | **$0.00** (created 2026-09-10; ~$0.02 per 1,000 assessments) |
 | **API Gateway** | HTTP API, `ANY /{proxy+}` | Fronts the Lambda. HTTP API, not REST — roughly a third the price | **$0.0001** |
-| **DynamoDB** | `vibe-for-good-2026-dev-audit-state`, PAY_PER_REQUEST | Audit session state. Lambda serves later calls from a different warm container, so process memory lost the scope | **$0.00** (created 2026-09-09; est. **< $0.05**) |
+| **DynamoDB** | `vibe-for-good-2026-dev-audit-state`, PAY_PER_REQUEST | Audit session state, plus analysis job rows under a `job#<audit>#<event>` key. Lambda serves later calls from a different warm container, so process memory lost the scope | **$0.00** (created 2026-09-09; est. **< $0.05**) |
 | **Amplify Hosting** | `console` app + PR previews | The frontend, and a preview per pull request | **$0.02** |
-| **CloudWatch Logs** | 2 groups, 14-day retention, ~11 KB stored | Lambda and API Gateway logs. Retention is explicit so the groups die with the stack | **$0.00** |
+| **CloudWatch Logs** | 3 groups, 14-day retention, ~11 KB stored | Both Lambdas and API Gateway. Retention is explicit so the groups die with the stack | **$0.00** |
 | **S3** | `vibe-for-good-2026-tfstate-apse1` — versioned, encrypted, lifecycle-expired | Terraform state. Not application storage | **$0.01** |
 | **IAM** | 3 roles + inline policies, 1 OIDC provider | CI authenticates over OIDC; there are no access keys in this repo by design | free |
 
@@ -47,11 +48,32 @@ Only three things, in order of likelihood:
    `ap-southeast-1` rates: ~$1.42 per million writes, ~$0.28 per million
    reads, ~$0.285/GB-month. Verify against the AWS calculator before relying
    on them.
-3. **Claude analysis calls.** Investigator/Skeptic analysis now makes two
-   explicit, structured provider rounds per auditor request. That is a
-   model-provider bill first and a Lambda bill second; it is deliberately not
-   estimated here because usage is controlled by human requests and provider
-   pricing must be checked at deployment time.
+3. **Claude analysis calls** — the only line where a single click costs real
+   money. Investigator/Skeptic analysis makes two structured rounds of two
+   roles, four provider calls, per auditor request. Measured against the real
+   evidence pack (19,075 input + ~3,500 output tokens per call) at published
+   `ap-southeast-1` Bedrock on-demand rates on 2026-09-10:
+
+   | Model | $/1M in | $/1M out | Per assessment |
+   |---|---|---|---|
+   | **Claude Haiku 4.5** (deployed) | $1 | $5 | **$0.15** |
+   | Claude Sonnet 5 | $2 | $10 | $0.29 |
+   | Claude Opus 5 | $5 | $25 | $0.73 |
+   | Amazon Nova Lite | $0.081 | $0.324 | $0.011 |
+
+   So ~$15 per 100 assessments. Cheaper models are not a saving here: the
+   ones tried below Haiku 4.5 were both slower and failed schema validation,
+   and cost per *successful* assessment is the only figure that matters. The
+   real lever is Bedrock prompt caching on the ~19k-token evidence prefix
+   every one of the four calls repeats — cache reads are $0.10/1M against
+   $1.00/1M, taking an assessment to roughly $0.09 with no quality tradeoff.
+   Not built yet (#147); the Lambda share of the same request is a rounding
+   error beside it.
+
+   The structural risk is not the model, it is a retry loop: an unbounded
+   poll or auto-retry re-triggering analysis would multiply this line
+   silently. `GET .../analyse` therefore only reads, and a job already
+   RUNNING is returned rather than started again.
 
 Nothing here is always-on. There is no NAT gateway, no load balancer, no RDS,
 no provisioned concurrency — the four usual ways a serverless project starts

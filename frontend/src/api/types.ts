@@ -323,6 +323,22 @@ export interface StructuredAnalysis {
   unresolved_questions: StructuredAnalysisQuestion[]
 }
 
+// The analysis endpoint is a job, not a synchronous result: a two-round
+// assessment outlives API Gateway's 30s response cap. `jobStatus` describes
+// the work; the HTTP status describes the request. `status` inside
+// StructuredAnalysis is a different thing entirely -- CONVERGED/UNRESOLVED,
+// the outcome of the debate -- and the two must not be conflated.
+export interface AnalysisJob {
+  auditId: string
+  eventId: string
+  jobStatus: 'NOT_RUN' | 'RUNNING' | 'COMPLETE' | 'FAILED'
+  analysis?: StructuredAnalysis | null
+  error?: string | null
+  startedAt?: string | null
+  completedAt?: string | null
+  pollAfterSeconds?: number
+}
+
 export interface InvestigationBundle {
   event: EventEvidenceResponse
   graph: InvestigationMap | null

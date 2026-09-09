@@ -1,5 +1,5 @@
 import type { FeatureCollection } from './geojson'
-import type { AuditEventSummary, AuditPackReview, AuditProgression, AuditReport, AuditScope, BBox, DemoDatasetSummary, EventEvidenceResponse, EventStatus, FireEvent, InvestigationBundle, InvestigationMap, InvestigationReport, OverlayLayerId, StructuredAnalysis } from './types'
+import type { AnalysisJob, AuditEventSummary, AuditPackReview, AuditProgression, AuditReport, AuditScope, BBox, DemoDatasetSummary, EventEvidenceResponse, EventStatus, FireEvent, InvestigationBundle, InvestigationMap, InvestigationReport, OverlayLayerId, StructuredAnalysis } from './types'
 import { getOverlay, isLayerAvailable } from './fixtures/overlays'
 import { REPORTS } from './fixtures/reports'
 
@@ -140,8 +140,29 @@ export async function fetchInvestigationBundle(auditId: string, eventId: string)
   return apiGet<InvestigationBundle>(`/audits/${encodeURIComponent(auditId)}/events/${encodeURIComponent(eventId)}/investigation`)
 }
 
+// A two-round Investigator/Skeptic assessment measures ~51s, past API
+// Gateway's 30s response cap, so the API records a job and this polls it
+// (#143). The seam keeps the old promise contract -- callers still await one
+// analysis or one error -- rather than pushing job state into every caller.
+const ANALYSIS_POLL_DEADLINE_MS = 5 * 60 * 1000
+
 export async function generateInvestigationAnalysis(auditId: string, eventId: string): Promise<StructuredAnalysis> {
-  return apiPost<StructuredAnalysis>(`/audits/${encodeURIComponent(auditId)}/events/${encodeURIComponent(eventId)}/analyse`, '')
+  const path = `/audits/${encodeURIComponent(auditId)}/events/${encodeURIComponent(eventId)}/analyse`
+  let job = await apiPost<AnalysisJob>(path, '')
+  const deadline = Date.now() + ANALYSIS_POLL_DEADLINE_MS
+  while (job.jobStatus === 'RUNNING') {
+    if (Date.now() > deadline) {
+      // The job itself is not lost -- it keeps running and its result will be
+      // there on the next read. Say that rather than implying it failed.
+      throw new Error('Investigation analysis is still running. Reopen this event shortly to read the completed assessment.')
+    }
+    await delay(null, Math.max(1, job.pollAfterSeconds ?? 5) * 1000)
+    job = await apiGet<AnalysisJob>(path)
+  }
+  if (job.jobStatus !== 'COMPLETE' || !job.analysis) {
+    throw new Error(job.error ?? 'Investigation analysis could not be generated.')
+  }
+  return job.analysis
 }
 
 export async function addToAuditPack(auditId: string, eventId: string, review: Partial<Pick<AuditPackReview, 'note' | 'disposition'>> = {}): Promise<AuditPackReview> {

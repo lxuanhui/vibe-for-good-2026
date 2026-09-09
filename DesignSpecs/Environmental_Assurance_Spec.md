@@ -414,10 +414,17 @@ GET  /api/audits/{audit_id}/tiles/{layer}/{z}/{x}/{y}?date=
 POST /api/audits/{audit_id}/events/{event_id}/triage
 POST /api/audits/{audit_id}/events/{event_id}/evidence/collect
 POST /api/audits/{audit_id}/events/{event_id}/analyse
+GET  /api/audits/{audit_id}/events/{event_id}/analyse
 POST /api/audits/{audit_id}/events/{event_id}/add-to-pack
 POST /api/audits/{audit_id}/report
 GET  /api/audits/{audit_id}/report
 ```
+
+`.../analyse` is asynchronous as built, and the paired `GET` above is what
+that added. POST records a job and returns 202; GET polls it and never spends
+provider tokens. A two-round Investigator/Skeptic assessment measures ~51s and
+API Gateway's HTTP API caps a response at 30s, so no synchronous form of this
+route can exist (decision log, 2026-09-10).
 
 # 25. Core data models
 

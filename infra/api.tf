@@ -3,6 +3,14 @@
 # Every /api/* route is proxied to one function rather than split across
 # per-route Lambdas: the app is one Flask blueprint, splitting it would mean
 # N cold starts instead of one, and routing already exists inside Flask.
+#
+# There is one exception, and it is not a route split: `analysis_worker` runs
+# Investigator/Skeptic analysis, which measures ~51s and therefore cannot be
+# delivered inside API Gateway's 30s response cap at all. Both functions are
+# the same zip with a different handler -- so they cannot drift apart -- and a
+# second function rather than one longer timeout on `api` is deliberate: a
+# stuck synchronous request would otherwise bill the worker's whole budget
+# for a response the client stopped waiting for at 30s.
 
 locals {
   name = "${var.project}-${var.environment}"
@@ -91,6 +99,22 @@ resource "aws_iam_role_policy" "bedrock_inference" {
   policy = data.aws_iam_policy_document.bedrock_inference.json
 }
 
+# Scoped to the worker function alone -- the API may hand off analysis and
+# nothing else. Analysis is the one thing this account's Lambda is allowed to
+# invoke on its own behalf.
+data "aws_iam_policy_document" "invoke_analysis_worker" {
+  statement {
+    actions   = ["lambda:InvokeFunction"]
+    resources = [aws_lambda_function.analysis_worker.arn]
+  }
+}
+
+resource "aws_iam_role_policy" "invoke_analysis_worker" {
+  name   = "${local.name}-invoke-analysis-worker"
+  role   = aws_iam_role.api.id
+  policy = data.aws_iam_policy_document.invoke_analysis_worker.json
+}
+
 # Declared explicitly so retention is enforced and the group is destroyed
 # with the stack. Lambda would otherwise create it on first invocation with
 # never-expire retention, outliving `terraform destroy`.
@@ -124,6 +148,11 @@ resource "aws_lambda_function" "api" {
       CORS_ORIGINS      = var.cors_origins
       AUDIT_STATE_TABLE = aws_dynamodb_table.audit_state.name
       BEDROCK_MODEL_ID  = var.bedrock_model_id
+
+      # Unset locally, which is what makes `analysis_jobs.dispatch` run the
+      # work inline for the dev server instead of reporting a job nothing
+      # will ever pick up.
+      ANALYSIS_WORKER_FUNCTION = aws_lambda_function.analysis_worker.function_name
     }
   }
 
@@ -131,8 +160,62 @@ resource "aws_lambda_function" "api" {
     aws_iam_role_policy_attachment.api_logs,
     aws_iam_role_policy.audit_state,
     aws_iam_role_policy.bedrock_inference,
+    aws_iam_role_policy.invoke_analysis_worker,
     aws_cloudwatch_log_group.api,
   ]
+}
+
+# --- Analysis worker ------------------------------------------------------
+
+# Same artifact, same role, different handler and timeout. The role is shared
+# because both functions read the same table and call the same Bedrock model;
+# the only grant the worker does not need is InvokeFunction, and holding it
+# changes nothing because the worker never dispatches.
+resource "aws_cloudwatch_log_group" "analysis_worker" {
+  name              = "/aws/lambda/${local.name}-analysis-worker"
+  retention_in_days = var.log_retention_days
+}
+
+resource "aws_lambda_function" "analysis_worker" {
+  function_name = "${local.name}-analysis-worker"
+  role          = aws_iam_role.api.arn
+
+  filename         = data.archive_file.api.output_path
+  source_code_hash = data.archive_file.api.output_base64sha256
+
+  runtime = "python3.13"
+  handler = "lambda_handler.analysis_worker"
+
+  architectures = ["arm64"]
+
+  memory_size = var.lambda_memory_mb
+  timeout     = var.analysis_worker_timeout_seconds
+
+  environment {
+    variables = {
+      SECRET_KEY        = var.flask_secret_key
+      CORS_ORIGINS      = var.cors_origins
+      AUDIT_STATE_TABLE = aws_dynamodb_table.audit_state.name
+      BEDROCK_MODEL_ID  = var.bedrock_model_id
+    }
+  }
+
+  depends_on = [
+    aws_iam_role_policy_attachment.api_logs,
+    aws_iam_role_policy.audit_state,
+    aws_iam_role_policy.bedrock_inference,
+    aws_cloudwatch_log_group.analysis_worker,
+  ]
+}
+
+# Lambda retries a failed async invocation twice by default. For this
+# function that means paying for the same two-round assessment three times
+# over, and the job row already records the failure truthfully for the
+# auditor to retry deliberately -- which is the only retry that should ever
+# spend provider tokens.
+resource "aws_lambda_function_event_invoke_config" "analysis_worker" {
+  function_name          = aws_lambda_function.analysis_worker.function_name
+  maximum_retry_attempts = 0
 }
 
 # --- HTTP API -------------------------------------------------------------

@@ -28,6 +28,12 @@ variable "lambda_timeout_seconds" {
   default     = 29
 }
 
+variable "analysis_worker_timeout_seconds" {
+  description = "Timeout for the analysis worker Lambda. It runs off the API Gateway request path, so the 30s response cap does not apply; a two-round Investigator/Skeptic assessment measures ~51s and this leaves room for a cold start and a slow provider without letting a wedged run bill for Lambda's full 900s ceiling."
+  type        = number
+  default     = 300
+}
+
 variable "log_retention_days" {
   description = "CloudWatch Logs retention. Without this, log groups default to never expiring and bill forever."
   type        = number

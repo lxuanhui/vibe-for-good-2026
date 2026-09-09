@@ -718,7 +718,7 @@ def analysis_for_event(audit_id: str, event_id: str) -> dict[str, Any] | None:
     return dict(store[event_id]) if store and event_id in store else None
 
 
-def _analysis_evidence(audit_id: str, event_id: str) -> list[dict[str, Any]] | None:
+def analysis_evidence(audit_id: str, event_id: str) -> list[dict[str, Any]] | None:
     """Assemble the bounded, provenance-bearing input for one event analysis."""
     evidence = evidence_for_event(audit_id, event_id)
     graph = investigation_map(audit_id, [event_id])
@@ -743,10 +743,11 @@ def _analysis_evidence(audit_id: str, event_id: str) -> list[dict[str, Any]] | N
 def analyse_event(audit_id: str, event_id: str, *, investigator=None, skeptic=None) -> dict[str, Any] | None:
     """Run and persist explicit, schema-checked structured analysis.
 
-    This function is deliberately called only by the POST route. Fetching an
-    event, graph, drawer, or engagement report never spends provider tokens.
+    This function is deliberately reached only from an analysis job the POST
+    route started (`app.analysis_jobs`). Fetching an event, graph, drawer, or
+    engagement report -- or polling a job -- never spends provider tokens.
     """
-    evidence = _analysis_evidence(audit_id, event_id)
+    evidence = analysis_evidence(audit_id, event_id)
     if evidence is None:
         return None
     investigator = investigator or bedrock_runner
