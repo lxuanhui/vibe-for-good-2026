@@ -1,0 +1,15 @@
+{
+  "version": 8,
+  "sources": {
+    "carto-dark": {
+      "type": "raster",
+      "tiles": ["https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png"],
+      "tileSize": 256,
+      "attribution": "© OpenStreetMap contributors © CARTO"
+    }
+  },
+  "layers": [
+    { "id": "background", "type": "background", "paint": { "background-color": "#0a0d12" } },
+    { "id": "carto-dark", "type": "raster", "source": "carto-dark", "paint": { "raster-opacity": 0.82 } }
+  ]
+}

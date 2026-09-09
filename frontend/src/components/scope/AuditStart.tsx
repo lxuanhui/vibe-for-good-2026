@@ -9,7 +9,7 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'The audit review could not be created.'
 }
 
-export function AuditStart({ onReady }: { onReady: (scope: AuditScope) => void }) {
+export function AuditStart({ onReady, overlay = false, onClose }: { onReady: (scope: AuditScope) => void; overlay?: boolean; onClose?: () => void }) {
   const [reviewStart, setReviewStart] = useState('')
   const [reviewEnd, setReviewEnd] = useState('')
   const [contextBuffer, setContextBuffer] = useState('25')
@@ -76,13 +76,13 @@ export function AuditStart({ onReady }: { onReady: (scope: AuditScope) => void }
   }
 
   return (
-    <div className="flex h-full min-h-screen flex-col bg-bg text-text">
+    <div className={`flex h-full flex-col overflow-hidden bg-bg text-text ${overlay ? 'rounded-xl border border-border-strong shadow-2xl' : 'min-h-screen'}`}>
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-border-strong bg-panel px-6">
         <div>
           <div className="text-sm font-semibold tracking-wide">Environmental Assurance Console</div>
           <div className="text-[10px] uppercase tracking-[0.2em] text-text-faint">Create audit review</div>
         </div>
-        <span className="rounded border border-accent-muted px-2 py-1 text-[10px] uppercase tracking-widest text-accent">Scope first</span>
+        <div className="flex items-center gap-3"><span className="rounded border border-accent-muted px-2 py-1 text-[10px] uppercase tracking-widest text-accent">Scope first</span>{onClose && <Button onClick={onClose}>CLOSE</Button>}</div>
       </header>
 
       <main className="mx-auto grid w-full max-w-6xl flex-1 gap-6 overflow-auto p-6 lg:grid-cols-[minmax(320px,0.8fr)_minmax(420px,1.2fr)]">
