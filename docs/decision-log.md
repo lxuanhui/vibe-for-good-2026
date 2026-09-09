@@ -8,7 +8,7 @@ more valuable half.
 
 ## 2026-09-09 - DynamoDB and S3 are authorised; every service switched on gets a cost row
 
-**Status:** done - PR for `docs/infra.md`
+**Status:** done - PR #137
 
 **Decision.** DynamoDB and S3 are approved for use without a fresh
 service-selection argument each time (owner's call). In exchange, every AWS
