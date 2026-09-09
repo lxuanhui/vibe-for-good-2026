@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
@@ -535,8 +536,19 @@ def run_structured_analysis(
             prior_assessment=previous.skeptic if previous else None,
             opponent_assessment=previous.investigator if previous else None,
         )
+        # Both roles in a round read only the *previous* round, never each
+        # other, so running them concurrently changes wall time and nothing
+        # else -- same inputs, same outputs, same validation. It is what keeps
+        # a two-round assessment inside API Gateway's 30s response cap; run
+        # sequentially, four provider calls overshoot it. Resolving the
+        # investigator first preserves the sequential exception precedence.
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            investigator_future = pool.submit(investigator, investigator_input)
+            skeptic_future = pool.submit(skeptic, skeptic_input)
+            investigator_output = investigator_future.result()
+            skeptic_output = skeptic_future.result()
         investigator_assessment = _assessment(
-            investigator(investigator_input),
+            investigator_output,
             role=AgentRole.INVESTIGATOR,
             round_number=round_number,
             phase=phase,
@@ -544,7 +556,7 @@ def run_structured_analysis(
             valid_evidence_ids=valid_evidence_ids,
         )
         skeptic_assessment = _assessment(
-            skeptic(skeptic_input),
+            skeptic_output,
             role=AgentRole.SKEPTIC,
             round_number=round_number,
             phase=phase,

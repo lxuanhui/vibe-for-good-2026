@@ -50,5 +50,5 @@ variable "flask_secret_key" {
 variable "bedrock_model_id" {
   description = "Amazon Bedrock model ID or inference-profile ID used by the structured investigation-analysis provider."
   type        = string
-  default     = "global.anthropic.claude-sonnet-5"
+  default     = "global.anthropic.claude-haiku-4-5-20251001-v1:0"
 }
