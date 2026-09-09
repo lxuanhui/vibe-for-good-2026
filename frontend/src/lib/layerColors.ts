@@ -1,10 +1,10 @@
 import type { OverlayLayerId } from '../api/types'
 
 // Single source of truth for overlay layer colors — used both for MapLibre
-// paint expressions (MapView) and the layer legend (LayerControlPanel), so
-// the two can never drift apart. One color scheme, reused everywhere -- this
-// repo's own convention; `Environmental_Assurance_Spec.md` doesn't specify
-// exact colors.
+// paint expressions (ScopedMapLanding) and the layer legend
+// (LayerControlPanel), so the two can never drift apart. One color scheme,
+// reused everywhere -- this repo's own convention; `Environmental_Assurance_Spec.md`
+// doesn't specify exact colors.
 export const LAYER_COLORS: Record<OverlayLayerId, string> = {
   firms: '#ff5a4a',
   'sar-backscatter': '#22d3ee',
@@ -25,16 +25,13 @@ export const SURFACE_FIRE_INSIDE_COLOR = '#22c55e'
 export const SURFACE_FIRE_OUTSIDE_COLOR = '#f97316'
 export const SURFACE_FIRE_UNEVALUATED_COLOR = '#8b96a8'
 
-export const BOUNDARY_LINE_COLOR = '#2e3a4a'
-
-// Deep green landmass fill for Indonesia's boundary -- the previous
-// near-black slate (#141a24) barely stood out from the map's background.
+// Deep green landmass fill -- the previous near-black slate (#141a24) barely
+// stood out from the map's background. This is now also the hand-synced land
+// color in the scoped map's Carto vector style: `scoped-map-style.json`
+// can't import a TS constant, so if this value changes, its "background" /
+// "landcover" / "landuse" / "park_*" paint colors need the same edit --
+// see the note in ScopedMapLanding.tsx next to `mapStyle`.
 export const INDONESIA_FILL_COLOR = '#364527'
-
-// Lighter tint of INDONESIA_FILL_COLOR, blurred along the coastline for a
-// soft rim-light sheen -- same glow-halo technique as the pulsing event
-// marker (EventMarkers.tsx), just muted and static for a landmass-sized shape.
-export const INDONESIA_GLOW_COLOR = '#8fbf5c'
 
 export const AUDIT_SCOPE_BOUNDARY_COLOR = '#22d3ee'
 export const AUDIT_SCOPE_BUFFER_COLOR = '#eab308'
