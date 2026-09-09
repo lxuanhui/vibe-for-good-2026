@@ -24,6 +24,90 @@ apply an older decision without checking the entries above it.
 
 ---
 
+## 2026-09-10 - Bedrock runs Haiku 4.5, and analysis cannot be delivered synchronously
+
+**Status:** in progress · Refs #61
+
+**The 503 was a model entitlement, not a bug.** The deployed
+`POST /api/audits/{id}/events/{id}/analyse` returned 503 for every request. The
+cause was invisible because the adapter discarded the underlying `ClientError`,
+so a missing entitlement, an IAM denial and a throttle all logged identically.
+It now logs the cause; the caller still gets the same generic message.
+
+Probing Converse in `ap-southeast-1` on account 424609180893 established that
+**the Claude 5 family is not entitled for this account** -- `AccessDeniedException:
+"anthropic.claude-sonnet-5 is not available for this account"` -- which is
+exactly what `BEDROCK_MODEL_ID` defaulted to. Note that an inference profile
+listing as ACTIVE does *not* imply entitlement: all 16 Claude profiles list
+ACTIVE and most are not invokable. Several 4.x profiles additionally return
+`ResourceNotFoundException: "Model use case details have not been submitted"`
+intermittently, so availability was confirmed by repeated probing rather than
+by a single success.
+
+**Default is now `global.anthropic.claude-haiku-4-5-20251001-v1:0`**, on two
+measured grounds: it is entitled, and it is roughly twice as fast as Sonnet 4.5
+(~8.8s vs ~17s on a synthetic pack). Speed decides here, for the reason below.
+
+**Two output-handling faults were masking as one.** The model wraps its JSON in
+a ```json fence despite the prompt forbidding markdown, and `maxTokens` of 2200
+truncated a real six-hypothesis pack mid-array. Both surfaced only as
+`JSONDecodeError`. Fences are now stripped, the budget is 6000, and a
+`max_tokens` stop reason is reported as itself rather than as invalid JSON.
+
+**The two roles in a round now run concurrently.** Both agents read only the
+*previous* round, never each other, so this changes wall time and nothing else
+-- same inputs, same outputs, same validation.
+
+**Synchronous delivery is nonetheless impossible, and that is the open part.**
+Measured against the real evidence pack (19k input tokens, six hypotheses,
+~3.5k output tokens): a full two-round assessment takes **51.1s**, and even a
+single round takes **29.9s**. API Gateway HTTP API hard-caps a response at 30s,
+which is why `lambda_timeout_seconds` is 29. So no arrangement of rounds fits:
+parallelism halves the cost of a round but the slowest single provider call
+already exceeds the cap on its own.
+
+**A different model does not fix this, and it was measured, not assumed.** One
+round against the real pack, each output run through the pipeline's own
+validation:
+
+| Model | Region | One round | Outcome |
+|---|---|---|---|
+| `google.gemma-3-27b-it` | us-east-1 | 92.6s | Failed: output was not a structured mapping |
+| `us.google.gemma-3-27b-it` | us-east-1 | - | Failed: no such model identifier |
+| `global.anthropic.claude-sonnet-4-5-20250929-v1:0` | ap-southeast-1 | 44.3s | Failed: unresolved question carried no evidence ID |
+| `global.anthropic.claude-haiku-4-5-20251001-v1:0` | ap-southeast-1 | 29.6s | Passed, six findings |
+
+Haiku 4.5 is not a downgrade accepted for speed; it is both the fastest and
+the only candidate that produced schema-valid output. Two results are worth
+keeping: a small open model is cheap per token but *slower* per request and
+markedly worse at emitting strict JSON with exact evidence IDs (Gemma 3 27B is
+the largest Gemma on Bedrock -- there is no Gemma 4 -- and it is us-east-1
+only); and Sonnet 4.5 was rejected by the evidence-ID guard, so a larger model
+is not automatically a safer one here.
+
+**Rejected:** cutting to one round (29.9s leaves no margin for cold start and
+evidence assembly, and discards the rebuttal round that makes the loop
+adversarial); trimming the hypothesis set or asking for terser findings
+(competing hypotheses and explicit evidence sufficiency are the product's
+safety substance, not padding, and must not be traded for latency); a larger
+or smaller model (see the table above -- every alternative was slower, and
+both failed validation).
+
+**EC2 was also rejected**, though it would genuinely remove the cap: the 30s
+limit belongs to API Gateway, not to Lambda, whose own budget is 900s. Moving
+to an always-on instance to escape a limit that an asynchronous job escapes
+for free would take the project from ~$0.03/month to ~$15/month permanently,
+and require a VPC, TLS, a deploy path and a second CI target. Serverless by
+default stands; the delivery model is what needs to change, not the compute.
+
+**Consequence:** analysis has to become an asynchronous job -- accept, work
+past the API Gateway cap in the Lambda's own 900s budget, persist to the
+`audit-state` DynamoDB table that already exists, and let the console poll.
+That changes the API contract and the frontend, so it is tracked separately
+rather than folded in here.
+
+---
+
 ## 2026-09-09 - Investigator/Skeptic analysis is explicit, evidence-bound, and durable
 
 **Status:** done Â· issue #64
