@@ -3,8 +3,7 @@ from time import perf_counter
 
 from flask import Blueprint, current_app, jsonify, request
 
-from app import audit_events
-from app.analysis_provider import AnalysisProviderUnavailable
+from app import analysis_jobs, audit_events
 from app.audits import AuditValidationError, build_history, create_audit, upload_scope
 from app.events import (
     FilterError,
@@ -177,27 +176,33 @@ def get_audit_event_investigation(audit_id: str, event_id: str):
 
 @api.route("/audits/<audit_id>/events/<event_id>/analyse", methods=["GET", "POST"])
 def analyse_audit_event(audit_id: str, event_id: str):
-    """Read or explicitly generate bounded Investigator/Skeptic analysis."""
+    """Start, or poll, bounded Investigator/Skeptic analysis for one event.
+
+    A two-round assessment outlives API Gateway's 30s response cap however
+    the rounds are arranged, so POST records a job and GET reports it (#143).
+    Two rules the shape depends on: an HTTP status describes the *request*
+    while `jobStatus` describes the *work*, so a provider failure is a
+    truthful FAILED job rather than a 5xx on a request that was valid; and
+    GET only reads, so polling never re-triggers work or spends tokens.
+    """
+    if audit_events.find_event(audit_id, event_id) is None:
+        status = audit_events.history_status(audit_id)
+        if status != "AVAILABLE":
+            return jsonify(error=f"No reconstructed history for audit {audit_id}", status=status), 404
+        return jsonify(error=f"No event with id {event_id} in audit {audit_id}"), 404
+
     if request.method == "GET":
-        if audit_events.find_event(audit_id, event_id) is None:
-            return jsonify(error=f"No event with id {event_id} in audit {audit_id}"), 404
-        analysis = audit_events.analysis_for_event(audit_id, event_id)
-        return jsonify(status="not_run", eventId=event_id) if analysis is None else jsonify(analysis)
-    try:
-        provider = current_app.config.get("ANALYSIS_PROVIDER")
-        analysis = audit_events.analyse_event(
-            audit_id, event_id, investigator=provider, skeptic=provider
-        )
-    except AnalysisProviderUnavailable as exc:
-        return jsonify(error=str(exc), status="provider_unavailable"), 503
-    except (TypeError, ValueError) as exc:
-        # The pipeline rejected malformed provider output or unsupported
-        # evidence references. Do not retain a partial analysis.
-        return jsonify(error=f"Structured analysis was rejected: {exc}", status="invalid_output"), 502
-    if analysis is None:
+        return jsonify(analysis_jobs.read(audit_id, event_id))
+
+    job = analysis_jobs.dispatch(
+        audit_id, event_id, provider=current_app.config.get("ANALYSIS_PROVIDER")
+    )
+    if job is None:
         status = audit_events.history_status(audit_id)
         return jsonify(error=f"No evidence for event {event_id} in audit {audit_id}", status=status), 404
-    return jsonify(analysis), 201
+    # 202 while the work is still owed; 200 once the record already holds the
+    # outcome, which is what the local inline path returns.
+    return jsonify(job), 202 if job["jobStatus"] == analysis_jobs.RUNNING else 200
 
 
 @api.get("/audits/<audit_id>/graph")

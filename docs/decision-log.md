@@ -14,6 +14,7 @@ when changing that subsystem.
 | Derived data | Clustered events, weather, imagery selection, peat context, and prepared graph data are offline artifacts, not request-time Lambda work. | 2026-09-09, graph; weather and imagery; 2026-09-08, clustering |
 | Investigation | Scores, review routing, graph edges, and propagation are separate deterministic evidence outputs; none establishes causation. | 2026-09-09, graph; review routing; 2026-09-08, triage / graph / surface growth |
 | AI interpretation | Claude runs only after an explicit auditor request, receives bounded EvidenceObjects plus graph summaries, and returns schema-validated Investigator/Skeptic findings retained with the audit session. | 2026-09-09, structured analysis |
+| Analysis delivery | Analysis is an async job on a second Lambda: POST starts one, GET polls it and never spends tokens. It does not fit API Gateway's 30s response cap. | 2026-09-10, async job |
 | Map and imagery | Camera fitting is bounds-driven; map context is not an unscoped fire browser. Satellite display processing is deterministic and provenance-preserving. | 2026-09-09, audit session / landing; 2026-09-08, Copernicus scenes |
 | Infrastructure | Flask runs on Lambda behind API Gateway; Terraform owns the deployed configuration; CORS is Flask-owned. | 2026-09-09, Amplify; 2026-09-07, Lambda / CORS |
 | Service selection | DynamoDB and S3 are authorised without a fresh argument each time; every service switched on gets a cost row in `docs/infra.md` in the same PR. | 2026-09-09, DynamoDB and S3 are authorised |
@@ -24,9 +25,67 @@ apply an older decision without checking the entries above it.
 
 ---
 
+## 2026-09-10 - Analysis runs as an async job on a second Lambda
+
+**Status:** done · PR #144 · Closes #143
+
+The measurement in the entry below left one conclusion: a two-round
+Investigator/Skeptic assessment (51.1s) cannot be delivered inside API
+Gateway's 30s response cap, and neither can a single round (29.9s). This is
+how the work now gets delivered anyway.
+
+**`POST .../analyse` records a job and returns; `GET` polls it.** The rules
+the shape rests on are worth stating because they are easy to erode later:
+an HTTP status describes the *request* and `jobStatus` describes the *work*,
+so a provider failure is a truthful `FAILED` job rather than a 5xx (the
+deployed path has no other option -- the response is long gone by the time
+the worker fails); and `GET` only ever reads, so polling never re-triggers
+work or spends tokens. A job already `RUNNING` is returned rather than
+started again, which makes a double press free.
+
+**Two Lambda functions from one artifact, rather than one longer timeout.**
+`api` stays at 29s and a new `analysis-worker` gets 300s, both built from the
+same zip with different handlers. Raising the single function's timeout was
+the smaller diff and was rejected: it would let a stuck *synchronous* request
+bill the full worker budget for a response API Gateway abandoned at 30s.
+Both functions share one IAM role -- same table, same model -- plus a
+`lambda:InvokeFunction` grant scoped to the worker alone. Async retries are
+set to zero: Lambda's default of two would bill the same assessment three
+times, and the job row already records a failure for the auditor to retry
+deliberately.
+
+**Job rows live in the existing audit-state table** under a namespaced
+`job#<audit_id>#<event_id>` hash key. Same key attribute, same item shape, so
+`audit_store` needed no change and no new service was switched on. They are
+deliberately *not* nested inside the audit session: `audit_store` reads a
+whole session, mutates it and writes it back, so a worker persisting an
+analysis while the console saves a pack review would silently drop one of the
+two writes. That read-modify-write is now the store's weak point rather than
+a theoretical one -- filed as #146 rather than fixed here.
+
+**A stale `RUNNING` job does not wedge the endpoint.** A worker killed before
+it records an outcome would otherwise leave a job running forever, which the
+console cannot tell from slow work and which blocks every retry. A job whose
+`startedAt` is older than Lambda's 900s ceiling is treated as startable.
+
+**Local development runs the job inline.** With `ANALYSIS_WORKER_FUNCTION`
+unset there is no second function to invoke and no 30s cap to fit under, so
+`dispatch` does the work and returns a `COMPLETE` job. Reporting `RUNNING`
+for work nothing would ever perform was the alternative, and it would have
+made the dev server lie.
+
+**Rejected: SQS, Step Functions, or a status endpoint of its own.** Each adds
+a service or a URL for a queue that is one item deep and a state machine with
+two states. Async self-invocation needs no new compute and no new service;
+the existing `analyse` URL already had a natural GET.
+
+---
+
 ## 2026-09-10 - Bedrock runs Haiku 4.5, and analysis cannot be delivered synchronously
 
-**Status:** in progress · Refs #61
+**Status:** done · PR #142 · Refs #61 — the open part below (synchronous
+delivery is impossible) is answered by the entry above it: analysis is now an
+async job. Everything else here still holds.
 
 **The 503 was a model entitlement, not a bug.** The deployed
 `POST /api/audits/{id}/events/{id}/analyse` returned 503 for every request. The

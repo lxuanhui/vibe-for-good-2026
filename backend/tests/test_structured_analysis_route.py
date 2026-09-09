@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from app import audit_events, create_app
+from app import analysis_jobs, audit_events, audit_store, create_app
 
 AUDIT = "demo-2019-haze"
 
@@ -35,14 +35,20 @@ def _provider(agent_input):
     }
 
 
+def _reset() -> None:
+    audit_events.AUDIT_ANALYSES.clear()
+    audit_events.AUDIT_PACKS.pop(AUDIT, None)
+    # Job rows share the audit-state store, which is a module-level dict
+    # locally. Leaving one behind makes the next test read a COMPLETE job.
+    audit_store._MEMORY.clear()
+
+
 @pytest.fixture
 def client():
-    audit_events.AUDIT_ANALYSES.clear()
-    audit_events.AUDIT_PACKS.pop(AUDIT, None)
+    _reset()
     app = create_app({"TESTING": True, "ANALYSIS_PROVIDER": _provider})
     yield app.test_client()
-    audit_events.AUDIT_ANALYSES.clear()
-    audit_events.AUDIT_PACKS.pop(AUDIT, None)
+    _reset()
 
 
 def _event_id(client) -> str:
@@ -54,11 +60,17 @@ def test_analysis_is_explicit_and_is_included_in_the_selected_event_report(clien
 
     not_run = client.get(f"/api/audits/{AUDIT}/events/{event_id}/analyse")
     assert not_run.status_code == 200
-    assert not_run.get_json() == {"status": "not_run", "eventId": event_id}
+    assert not_run.get_json() == {
+        "auditId": AUDIT, "eventId": event_id, "jobStatus": "NOT_RUN",
+    }
 
+    # No worker function is configured here, so the job runs inline and the
+    # POST already carries the outcome -- 200, not the deployed path's 202.
     generated = client.post(f"/api/audits/{AUDIT}/events/{event_id}/analyse")
-    assert generated.status_code == 201
-    analysis = generated.get_json()
+    assert generated.status_code == 200
+    job = generated.get_json()
+    assert job["jobStatus"] == "COMPLETE"
+    analysis = job["analysis"]
     assert analysis["event_id"] == event_id
     assert {finding["hypothesis_id"] for finding in analysis["final_assessment"]["investigator"]["findings"]} == {
         "H1", "H2", "H3", "H4", "H5", "H6"
@@ -81,7 +93,7 @@ def test_analysis_pack_keeps_weather_peat_and_graph_context_separate_from_raw_ob
     # This event has the committed weather/peat enrichment and a precomputed
     # FireEventGraph relationship. The adapter is intentionally fed those
     # EvidenceObjects, not its raw FIRMS point membership list.
-    evidence = audit_events._analysis_evidence(AUDIT, "FE-20190904-0fb85076c0")
+    evidence = audit_events.analysis_evidence(AUDIT, "FE-20190904-0fb85076c0")
 
     assert evidence is not None
     categories = {item["category"] for item in evidence}
@@ -105,12 +117,85 @@ def test_unsupported_provider_evidence_is_rejected_and_not_persisted():
         result["findings"][0]["supporting_evidence_ids"] = ["NOT_A_REAL_EVIDENCE_ID"]
         return result
 
-    audit_events.AUDIT_ANALYSES.clear()
+    _reset()
     app = create_app({"TESTING": True, "ANALYSIS_PROVIDER": unsupported_provider})
     client = app.test_client()
     event_id = _event_id(client)
 
     response = client.post(f"/api/audits/{AUDIT}/events/{event_id}/analyse")
-    assert response.status_code == 502
-    assert "unknown evidence IDs" in response.get_json()["error"]
+    # The request was valid; the work failed. That is a FAILED job, not a
+    # 502 -- the deployed path cannot report it any other way, because the
+    # response is long gone by the time the worker gets there.
+    assert response.status_code == 200
+    job = response.get_json()
+    assert job["jobStatus"] == "FAILED"
+    assert "unknown evidence IDs" in job["error"]
+    assert job["analysis"] is None
     assert audit_events.analysis_for_event(AUDIT, event_id) is None
+
+
+def test_poll_reports_running_work_without_starting_a_second_job(client, monkeypatch):
+    """The deployed shape: dispatch hands off, and GET never spends tokens."""
+    event_id = _event_id(client)
+    invocations: list[dict] = []
+    monkeypatch.setenv("ANALYSIS_WORKER_FUNCTION", "vibe-analysis-worker")
+    monkeypatch.setattr(
+        analysis_jobs,
+        "_invoke_worker",
+        lambda function_name, audit_id, event: invocations.append(
+            {"function": function_name, "auditId": audit_id, "eventId": event}
+        ),
+    )
+
+    accepted = client.post(f"/api/audits/{AUDIT}/events/{event_id}/analyse")
+    assert accepted.status_code == 202
+    assert accepted.get_json()["jobStatus"] == "RUNNING"
+    assert invocations == [
+        {"function": "vibe-analysis-worker", "auditId": AUDIT, "eventId": event_id}
+    ]
+
+    polled = client.get(f"/api/audits/{AUDIT}/events/{event_id}/analyse")
+    assert polled.status_code == 200
+    assert polled.get_json()["jobStatus"] == "RUNNING"
+    assert polled.get_json()["analysis"] is None
+
+    # A second press while the first job is in flight must not run the two
+    # rounds again -- that is the same result billed twice.
+    again = client.post(f"/api/audits/{AUDIT}/events/{event_id}/analyse")
+    assert again.status_code == 202
+    assert len(invocations) == 1
+
+    # What the worker does, in the worker's own process.
+    analysis_jobs.run(AUDIT, event_id, provider=_provider)
+    completed = client.get(f"/api/audits/{AUDIT}/events/{event_id}/analyse").get_json()
+    assert completed["jobStatus"] == "COMPLETE"
+    assert completed["analysis"]["event_id"] == event_id
+
+
+def test_a_worker_that_never_recorded_an_outcome_does_not_block_a_retry(client, monkeypatch):
+    event_id = _event_id(client)
+    monkeypatch.setenv("ANALYSIS_WORKER_FUNCTION", "vibe-analysis-worker")
+    monkeypatch.setattr(analysis_jobs, "_invoke_worker", lambda *args: None)
+    client.post(f"/api/audits/{AUDIT}/events/{event_id}/analyse")
+
+    stale = audit_store.get(analysis_jobs.job_key(AUDIT, event_id))
+    stale["startedAt"] = "2019-09-01T00:00:00+00:00"
+    audit_store.put(stale)
+
+    retried = client.post(f"/api/audits/{AUDIT}/events/{event_id}/analyse")
+    assert retried.status_code == 202
+    assert retried.get_json()["startedAt"] != "2019-09-01T00:00:00+00:00"
+
+
+def test_a_failed_dispatch_is_recorded_rather_than_left_running(client, monkeypatch):
+    event_id = _event_id(client)
+    monkeypatch.setenv("ANALYSIS_WORKER_FUNCTION", "vibe-analysis-worker")
+
+    def _unavailable(*args):
+        raise RuntimeError("Lambda invoke failed")
+
+    monkeypatch.setattr(analysis_jobs, "_invoke_worker", _unavailable)
+    response = client.post(f"/api/audits/{AUDIT}/events/{event_id}/analyse")
+    assert response.status_code == 200
+    assert response.get_json()["jobStatus"] == "FAILED"
+    assert client.get(f"/api/audits/{AUDIT}/events/{event_id}/analyse").get_json()["jobStatus"] == "FAILED"
