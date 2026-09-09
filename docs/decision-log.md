@@ -31,6 +31,46 @@ escalation reasons.
 
 ---
 
+## 2026-09-09 — An Amplify console field is Terraform-owned until proven otherwise
+
+**Status:** done · issues #108, #110, #113, #116
+
+**Decision.** Every setting the Amplify console exposes is assumed to be an
+attribute Terraform manages, and is declared in `infra/console.tf`, until
+someone checks and finds otherwise. After any console wizard run, re-apply and
+rebuild.
+
+**Why.** Connecting the repository surfaced four settings in one wizard that
+look like console state and are not:
+
+| Console field | Actually | Fixed in |
+|---|---|---|
+| Live package updates | `_LIVE_UPDATES` env var | #108 |
+| Monorepo root directory | `AMPLIFY_MONOREPO_APP_ROOT` env var | #110 |
+| Service role | `iam_service_role_arn` on the app | #113 |
+| — | the wizard replaces the whole env-var map | #116 |
+
+The first three would have been stripped by the next apply. The fourth went the
+other way and bit immediately: the wizard replaced Terraform's environment
+variables wholesale, `VITE_API_BASE_URL` vanished, and the build that followed
+was green while serving a console that could not reach the API — `client.ts`
+falls back to an empty base URL, so every call hit the Amplify origin. A
+successful build serving a dead app is the failure worth designing against.
+
+**What was rejected.** Putting `environment_variables` under `ignore_changes`,
+which would stop the fight in both directions. It also stops Terraform wiring
+`VITE_API_BASE_URL` from the API Gateway stage, which is the one value that
+must not be hand-copied. Declaring everything and re-applying after console
+work is the lesser cost, because console work happens roughly once per account.
+
+**Recovery, which is now in `docs/environments.md`:** `gh workflow run Infra
+--ref main` to restore the settings, then `aws amplify start-job --job-type
+RELEASE`, because Vite bakes `VITE_*` in at build time and restoring a variable
+changes nothing until a rebuild. Verify by grepping the shipped bundle for the
+API host rather than trusting the build status.
+
+---
+
 ## 2026-09-09 — Terraform creates the Amplify app; a human connects the repo
 
 **Status:** done · issue #96
