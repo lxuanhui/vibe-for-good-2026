@@ -20,6 +20,9 @@ to an evidence ID.
 ## Layout
 
 ```
+PRODUCT.md      Durable product truth: users, purpose, positioning, the safety
+                boundary, and what must not be fabricated. Derived from the
+                canonical spec, so the spec still wins on detail
 docs/           Decision log and environment facts — read before re-deciding anything
 frontend/       Vite + React + TS console (MapLibre, Tailwind 4, zustand, recharts)
 backend/        Flask API — runs locally via wsgi.py, on Lambda via lambda_handler.py
@@ -45,11 +48,15 @@ which is what is actually deployed. The three legacy specs still say
 Cloudflare — they are history, not instructions.
 
 §8's persistence *roles* are canonical — durable/queryable metadata, bulky
-immutable evidence, disposable cache — but the AWS services behind them are
-deliberately **not chosen yet**, so the spec names roles rather than products.
-Nothing persists today, so nothing forces the decision; don't quietly settle
-it by writing DynamoDB or S3 into the spec. Serverless only when it is made,
-and anything always-on needs justification first.
+immutable evidence, disposable cache — and the spec still names roles rather
+than products. One role is now filled: **audit session state lives in
+DynamoDB** (`aws_dynamodb_table.audit_state`, PAY_PER_REQUEST), because
+Lambda served later register/graph/evidence calls from a different warm
+container than the one that created the audit, so process-local dicts lost
+the scope. That decision covers *session state only*. The bulky-immutable-evidence
+and disposable-cache roles are still unchosen — don't settle them by
+writing S3 or ElastiCache into the spec, and anything always-on still needs
+justification first.
 
 Check [`docs/decision-log.md`](docs/decision-log.md) before changing anything
 architectural — it records what was already tried and rejected, and why.
@@ -105,14 +112,23 @@ FireEvents clustered from 20,471 FIRMS detections in the 2019 haze window and
 run through Stage-1 triage. Clustering happens offline in
 `data_pipeline/export_audit_events.py` and the API serves the committed
 artifact, because scipy/pandas would take the Lambda bundle to the edge of its
-250 MB limit and the derivation is identical for every caller. Nothing
-persists yet: no module touches a database, an S3 bucket, or any store.
+250 MB limit and the derivation is identical for every caller. The FIRMS
+artifact itself is packaged and immutable — nothing writes to it. The one
+thing that does persist is audit session state (`backend/app/audit_store.py`):
+memory locally, the DynamoDB table when `AUDIT_STATE_TABLE` is set.
 
 The console consumes them. `components/scope/ScopedMapLanding.tsx` is the
 map-first landing surface for the bounded demo scope, and
 `components/audit/HistoricalInvestigation.tsx` is the register, investigation
-map, evidence drawer and pack view. `components/scope/AuditStart.tsx` remains
-the scope-entry and history-build panel over the map. Events are typed
+map, evidence drawer and pack view. The console opens on
+`components/scope/AuditLanding.tsx`: a deliberately event-free regional
+Indonesia orientation map with a START AUDIT button. No FireEvent is drawn
+until a scope exists — that is the point of the screen, not a loading state.
+`AuditStart.tsx` is the scope-entry and history-build panel, shown over the
+landing. `ConsoleContextPanel.tsx` exports both the panel and
+`ConsoleContextModal`, the first-load dialog stating what the console does,
+what it refuses to conclude, and which parts of this build are real —
+dismissed per browser, reopened from the landing. Events are typed
 `AuditEventSummary`, deliberately **not** `FireEvent` — that type
 requires `location`, `peatClassification` and `currentConditions`, none of
 which FIRMS-only data can honestly supply, and widening it with optionals

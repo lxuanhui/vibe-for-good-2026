@@ -1,5 +1,5 @@
 import type { FeatureCollection } from './geojson'
-import type { AuditEventSummary, AuditPackReview, AuditProgression, AuditReport, AuditScope, BBox, EventEvidenceResponse, EventStatus, FireEvent, InvestigationBundle, InvestigationMap, InvestigationReport, OverlayLayerId } from './types'
+import type { AuditEventSummary, AuditPackReview, AuditProgression, AuditReport, AuditScope, BBox, DemoDatasetSummary, EventEvidenceResponse, EventStatus, FireEvent, InvestigationBundle, InvestigationMap, InvestigationReport, OverlayLayerId } from './types'
 import { getOverlay, isLayerAvailable } from './fixtures/overlays'
 import { REPORTS } from './fixtures/reports'
 
@@ -104,6 +104,27 @@ export async function fetchAuditRegister(auditId: string, filters?: { since?: st
     pages.push(page.events)
   }
   return { events: pages.flat(), progression: first.progression }
+}
+
+// The audit id of the one committed real dataset. The events route resolves
+// any session-created id back to this artifact anyway (backend/app/audit_events.py
+// `get_audit`); naming it directly is what lets the landing screen describe the
+// dataset before an audit exists. `limit=1` because only `progression` and
+// `source` are wanted -- the 3,610 events would be 240 KB of waste on first paint.
+const DEMO_DATASET_AUDIT_ID = 'demo-2019-haze'
+
+export async function fetchDemoDatasetSummary(): Promise<DemoDatasetSummary> {
+  const response = await apiGet<{
+    source: { dataset?: string; region?: string; window?: string }
+    progression: AuditProgression
+  }>(`/audits/${DEMO_DATASET_AUDIT_ID}/events?limit=1`)
+  const { rawObservations, qualifiedObservations, fireEvents, requiringHumanReview } = response.progression
+  return {
+    dataset: response.source.dataset ?? 'NASA FIRMS',
+    region: response.source.region ?? '',
+    window: response.source.window ?? '',
+    progression: { rawObservations, qualifiedObservations, fireEvents, requiringHumanReview },
+  }
 }
 
 export async function fetchInvestigationMap(auditId: string, eventIds: string[]): Promise<InvestigationMap> {

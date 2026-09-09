@@ -5,7 +5,7 @@ import { Button } from '../ui/Button'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
 /** A deliberately event-free regional orientation screen. */
-export function AuditLanding({ onStartAudit }: { onStartAudit: () => void }) {
+export function AuditLanding({ onStartAudit, onOpenContext }: { onStartAudit: () => void; onOpenContext: () => void }) {
   return (
     <main className="relative h-screen overflow-hidden bg-bg text-text">
       <Map
@@ -26,6 +26,13 @@ export function AuditLanding({ onStartAudit }: { onStartAudit: () => void }) {
         <p className="mt-3 text-sm leading-6 text-text-muted">This regional view is orientation only. FireEvents are not shown until you define an authorised management-unit boundary and review period.</p>
         <Button variant="primary" className="mt-5 w-full py-3 uppercase tracking-[0.14em]" onClick={onStartAudit}>START AUDIT</Button>
         <p className="mt-3 text-[11px] leading-4 text-text-faint">Upload GeoJSON → validate scope → build the cached historical register → inspect selected FireEvents.</p>
+        <button
+          type="button"
+          onClick={onOpenContext}
+          className="mt-3 text-[11px] leading-4 text-text-muted underline underline-offset-2 transition-colors hover:text-text"
+        >
+          What this console does, and what it refuses to conclude
+        </button>
       </section>
     </main>
   )

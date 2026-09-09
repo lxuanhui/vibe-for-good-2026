@@ -17,7 +17,7 @@ nobody has to go digging. Nothing on this page is a credential.
 | Terraform state | `s3://vibe-for-good-2026-tfstate-apse1/infra/terraform.tfstate`, native `use_lockfile` |
 | CI role | `vibe-for-good-2026-github-actions` (assumed over OIDC) |
 | Console | Amplify app `vibe-for-good-2026-dev-console`, id `dz8w2n4hd2d22`. Terraform creates the app; the repository, the `main` branch and previews are connected by hand (see below). |
-| Console URL | `https://main.dz8w2n4hd2d22.amplifyapp.com` — 404s until the repository is connected and `main` has built. |
+| Console URL | `https://main.dz8w2n4hd2d22.amplifyapp.com` (live) |
 
 The `environment` Terraform variable defaults to `dev` and feeds every
 resource name, so a second environment is `-var environment=staging` plus a
@@ -41,6 +41,37 @@ Moving the project to a different AWS account means: `terraform destroy` on
 `infra/` then `infra/bootstrap/`, re-apply under the new profile, and update
 the `AWS_ROLE_ARN` repository variable. Cheap early, expensive later.
 
+## Signing in to the AWS console
+
+Access keys and a console password are different credentials, and this account
+started with only the first. As of 2026-09-09 neither IAM user had a login
+profile:
+
+| Principal | Console password | Notes |
+|---|---|---|
+| `kino` | none | `AdministratorAccess`, no MFA — access keys only, which is what the laptop and every `terraform apply` here uses |
+| `lxuanhui` | none | created 2023, unused |
+| Root | yes | MFA enabled |
+
+The trap is that this reads as a permissions problem and is not one. `kino` is
+already an administrator; it simply has no password to sign in with. Adding
+Amplify permissions, or any other policy, does nothing for it.
+
+Root is therefore the only way into the console until that is fixed, and
+fixing it is a one-time job:
+
+1. Sign in as root.
+2. IAM → Users → `kino` → Security credentials → **Enable console access**,
+   set a password.
+3. Assign an MFA device to `kino` while you are on that page.
+4. Sign out. From then on, sign in as an IAM user against account
+   `424609180893` and leave root alone.
+
+Root is worth avoiding for routine work: it cannot be scoped, restricted or
+handed to CI, and every action it takes is indistinguishable from every other.
+The only tasks that genuinely need it are account-level ones — billing,
+closing the account, and exactly this bootstrap.
+
 ## Connecting the console to GitHub
 
 Amplify builds nothing until the repository is connected, and that connection
@@ -50,7 +81,9 @@ to satisfy it is a personal access token, which would then sit in the state
 file in S3. This stack has no long-lived credential anywhere; CI assumes a role
 over OIDC so that none is needed. The connection is a manual step instead.
 
-Once per account, after the first apply:
+Once per account, after the first apply. This is a console task, so it needs a
+principal that can sign in — see the section above if that is currently only
+root:
 
 1. [The app in the Amplify console](https://ap-southeast-1.console.aws.amazon.com/amplify/apps/dz8w2n4hd2d22)
    (also the `console_app_id` Terraform output, if the id ever changes).
@@ -66,6 +99,39 @@ Once per account, after the first apply:
 
 Terraform ignores later changes to `repository` and the token attributes, so
 the next plan does not strip any of this.
+
+## After any Amplify console change: re-apply, then rebuild
+
+The connect-repository wizard replaced the app's entire environment-variable
+map with its own defaults. `VITE_API_BASE_URL` disappeared, the Node pin was
+overwritten with Amplify CLI `latest`, and the build that followed shipped a
+console that loaded correctly and could not reach the API at all —
+`client.ts` falls back to `API_BASE = ''`, so every request went to the Amplify
+origin and 404'd. A green build serving an inert app is the worst shape this
+failure could take, because nothing looks wrong.
+
+So, after touching anything in the Amplify console:
+
+```bash
+gh workflow run Infra --ref main        # restores the Terraform-managed settings
+aws amplify start-job --region ap-southeast-1 \
+  --app-id dz8w2n4hd2d22 --branch-name main --job-type RELEASE
+```
+
+The second command is not optional. Vite bakes `VITE_*` in at build time, so
+restoring the variable does nothing until something rebuilds. The repository
+connection survives the apply — `ignore_changes` covers `repository` and the
+token attributes.
+
+To check it actually worked, look for the API host in the shipped bundle
+rather than trusting the build status:
+
+```bash
+curl -s https://main.dz8w2n4hd2d22.amplifyapp.com/ \
+  | grep -oE '/assets/[A-Za-z0-9._-]+\.js'         # find the bundle
+curl -s https://main.dz8w2n4hd2d22.amplifyapp.com/assets/<that>.js \
+  | grep -o 'execute-api[^"]*'                      # must not be empty
+```
 
 ## GitHub configuration
 

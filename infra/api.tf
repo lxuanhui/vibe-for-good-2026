@@ -46,15 +46,20 @@ resource "aws_iam_role_policy_attachment" "api_logs" {
 
 # Audit ids are followed by later register, graph, evidence, and pack calls.
 # Process-local dictionaries therefore fail whenever Lambda serves those calls
-# from a different warm container.  This small TTL-backed table persists only
-# anonymous audit scope/session state; the regional FIRMS artifact remains
-# packaged and immutable.
+# from a different warm container.  This small table persists only anonymous
+# audit scope/session state; the regional FIRMS artifact remains packaged and
+# immutable. No TTL is configured yet -- rows are few and small, and an expiry
+# policy wants a decision about how long an audit session may be resumed,
+# which is not settled (see docs/decision-log.md, 2026-09-09).
 resource "aws_dynamodb_table" "audit_state" {
   name         = "${local.name}-audit-state"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "audit_id"
 
-  attribute { name = "audit_id" type = "S" }
+  attribute {
+    name = "audit_id"
+    type = "S"
+  }
 }
 
 data "aws_iam_policy_document" "audit_state" {
@@ -99,8 +104,8 @@ resource "aws_lambda_function" "api" {
 
   environment {
     variables = {
-      SECRET_KEY   = var.flask_secret_key
-      CORS_ORIGINS = var.cors_origins
+      SECRET_KEY        = var.flask_secret_key
+      CORS_ORIGINS      = var.cors_origins
       AUDIT_STATE_TABLE = aws_dynamodb_table.audit_state.name
     }
   }
