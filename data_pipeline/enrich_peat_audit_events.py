@@ -27,9 +27,9 @@ OVERLAY_PATH = ROOT / "frontend" / "public" / "peatland-indonesia.geojson"
 
 
 def export_overlay(path: Path) -> None:
-    """Create a deterministic ~9 km visual peatland overlay from the cache."""
+    """Create a deterministic ~4.5 km visual peatland overlay from the cache."""
     raster = load_peat_raster()
-    stride = 8
+    stride = 4
     rows, cols = raster.array.shape
     polygons = []
     for row in range(0, rows, stride):
@@ -50,7 +50,7 @@ def export_overlay(path: Path) -> None:
                 start = None
     payload = {"type": "FeatureCollection", "features": [{
         "type": "Feature",
-        "properties": {"source": "Greifswald Mire Centre — Global Peatland Map 2.0 (GPM 2022)", "display_resolution_km": 9},
+        "properties": {"source": "Greifswald Mire Centre — Global Peatland Map 2.0 (GPM 2022)", "display_resolution_km": 4.5},
         "geometry": {"type": "MultiPolygon", "coordinates": polygons},
     }]}
     path.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
