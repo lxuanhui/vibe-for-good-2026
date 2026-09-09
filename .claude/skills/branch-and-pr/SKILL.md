@@ -209,6 +209,10 @@ already carry progress, and a third surface is a third thing to forget.
 
 ## Recording the decision
 
+**Load the `decision-log` skill when you open the PR** — it carries the entry
+format, the test for what earns an entry, and the rule for annotating a
+reversal. The short version:
+
 If the change settles something an agent would otherwise re-litigate — an
 approach that was tried and rejected, a limitation of the platform, a
 deliberate deviation — add an entry to `docs/decision-log.md` in the same PR,

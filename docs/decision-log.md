@@ -6,6 +6,50 @@ more valuable half.
 
 ---
 
+## 2026-09-09 - DynamoDB and S3 are authorised; every service switched on gets a cost row
+
+**Status:** done - PR #137
+
+**Decision.** DynamoDB and S3 are approved for use without a fresh
+service-selection argument each time (owner's call). In exchange, every AWS
+service this project switches on is recorded in
+[`docs/infra.md`](infra.md) with what it is for and what it costs, updated in
+the pull request that adds it.
+
+**Why the trade.** The reason the persistence roles were left unchosen was
+never that DynamoDB was suspect - it was that nobody wanted a service quietly
+appearing in the stack because one agent found it convenient. A cost table
+that has to be updated in the same PR solves that directly and cheaply,
+without making each new table an architecture debate.
+
+**What the numbers actually are.** The whole project costs about **$0.03 a
+month** at demo traffic - Lambda, API Gateway, DynamoDB and CloudWatch all sit
+inside free tiers or round to zero, and most of the three cents is Amplify
+build minutes for PR previews. Lambda's monthly free allowance is perpetual
+rather than a 12-month trial, so this does not change when the account's first
+year ends.
+
+**The account bill is dominated by something else.** August's account total
+was **$6.18**, of which this project was roughly a cent. The rest is
+`i-03d53840a3553a537` (`anvil-api`, a `t4g.small` running since 2026-07-23)
+and its attached public IPv4 address and 16 GB gp3 volume - about $4.90/month
+between them. It predates this project, is in neither Terraform stack, and is
+somebody else's workload. Recorded so that nobody reads a bill, concludes the
+console is expensive, and starts deleting things to find out which part.
+
+**Enforced by a skill, not by memory.** `.claude/skills/decision-log/` is
+loaded when opening a PR or creating an issue. It makes the *check* mandatory
+and the *entry* conditional -- a log with an entry for every typo fix stops
+being read, which defeats the point -- and it carries the test for what earns
+an entry, the format, the rule for annotating a reversal rather than deleting
+it, and the requirement that a new AWS service also gets a cost row here.
+`branch-and-pr` now points at it for the recording step instead of restating
+a shorter version.
+
+**Still true, and not weakened by this:** serverless by default, and anything
+always-on needs justification before it is switched on. The escalation order
+for compute is unchanged: zip, then container image, then EC2.
+
 ## 2026-09-09 - Audit session state goes in DynamoDB; the scope-first landing wins over the map-first one
 
 **Status:** done - PR #131
