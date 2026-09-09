@@ -27,31 +27,36 @@ way.
 4. **`frontend/src/lib/layerColors.ts`** — add the colour. Do not inline a hex
    in a component; this repo keeps one consistent scheme across map markers,
    table status, and report scores.
-5. **`frontend/src/components/map/MapView.tsx`** — a `useOverlay(...)` call
-   and a `<Source>` / `<Layer>` pair, guarded on the data being non-null.
-   Then **`LayerControlPanel.tsx`** — an entry in `GEOJSON_LAYERS` or
+5. **`frontend/src/components/scope/ScopedMapLanding.tsx`** — the console's
+   current map surface (issue #75). A `useOverlay(...)` call and a `<Source>`
+   / `<Layer>` pair, guarded on the data being non-null. Then
+   **`LayerControlPanel.tsx`** — an entry in `GEOJSON_LAYERS` or
    `RASTER_LAYERS` with a swatch matching the map paint, and a caption if the
-   layer needs a caveat.
+   layer needs a caveat. Pass `scoped` where the panel is mounted scoped; it
+   filters `GEOJSON_LAYERS` down to `firms` only until the other layers have a
+   scoped-map story.
 
 ## Sensor cadence is a feature, not a bug
 
 If the layer comes from a sensor with a real revisit cadence, add its
-available dates to `frontend/src/api/fixtures/dates.ts` and, if it should show
-in the scrubber's availability badges, to `DATE_GATED_LAYERS` in
-`TimelineScrubber.tsx`. The canonical spec (§13) requires the timeline to
-expose sensor availability and missing passes rather than silently rendering
-stale or empty data. Sparse SAR coverage is the honest picture, not a gap to
-paper over.
+available dates to `frontend/src/api/fixtures/dates.ts`. The canonical spec
+(§13) requires the timeline to expose sensor availability and missing passes
+rather than silently rendering stale or empty data — sparse SAR coverage is
+the honest picture, not a gap to paper over. There is currently no live
+surface for this: `TimelineScrubber.tsx` and `MapView.tsx` (its
+`DATE_GATED_LAYERS` availability badges included) were deleted as dead code
+once issue #75 stopped mounting `MapView`, and `ScopedMapLanding.tsx` has no
+scrubber yet. Rebuild the availability-badge pattern there when a date-gated
+layer actually needs it, rather than reviving the deleted file.
 
 ## Known seams to respect
 
 - `client.ts` is the swap point for a real backend — every fetch mirrors the
   endpoint contract in `Environmental_Assurance_Spec.md` §24 (API). New layers
   fetch through `useOverlay`, not through a direct `fetch` in a component.
-  (`isLayerAvailable` is currently imported straight from fixtures in
-  `TimelineScrubber` — a hole in that seam, don't widen it.)
 - `fetchEvents`/`fetchOverlay` accept a bbox that nothing currently passes.
-  If viewport-driven fetching gets wired up, it goes there, not into MapView.
+  If viewport-driven fetching gets wired up, it goes into the map component
+  that owns the source, not into a fixture or the store.
 - A layer sourced from real pipeline output must state so in its caption, with
   its date range, the way the FIRMS pipeline toggle does — the demo must never
   blur which data is real and which is a fixture.
