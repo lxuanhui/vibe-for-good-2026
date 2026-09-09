@@ -23,7 +23,8 @@ to an evidence ID.
 PRODUCT.md      Durable product truth: users, purpose, positioning, the safety
                 boundary, and what must not be fabricated. Derived from the
                 canonical spec, so the spec still wins on detail
-docs/           Decision log and environment facts — read before re-deciding anything
+docs/           Decision log, environment facts, and the running cost of every
+                AWS service switched on — read before re-deciding anything
 frontend/       Vite + React + TS console (MapLibre, Tailwind 4, zustand, recharts)
 backend/        Flask API — runs locally via wsgi.py, on Lambda via lambda_handler.py
 infra/          Terraform: Lambda + API Gateway HTTP API, applied by CI
@@ -53,10 +54,15 @@ than products. One role is now filled: **audit session state lives in
 DynamoDB** (`aws_dynamodb_table.audit_state`, PAY_PER_REQUEST), because
 Lambda served later register/graph/evidence calls from a different warm
 container than the one that created the audit, so process-local dicts lost
-the scope. That decision covers *session state only*. The bulky-immutable-evidence
-and disposable-cache roles are still unchosen — don't settle them by
-writing S3 or ElastiCache into the spec, and anything always-on still needs
-justification first.
+the scope. That decision covers *session state only*; the
+bulky-immutable-evidence and disposable-cache roles are still unfilled.
+
+**DynamoDB and S3 are now authorised** (owner's call, 2026-09-09), so filling
+those roles no longer needs a fresh argument about the service — but it does
+still need the *design* recorded in the decision log, and the new service
+added to [`docs/infra.md`](docs/infra.md) with its cost in the same PR. The
+older constraint is unchanged and unaffected by this: serverless by default,
+and anything always-on needs justification before it is switched on.
 
 Check [`docs/decision-log.md`](docs/decision-log.md) before changing anything
 architectural — it records what was already tried and rejected, and why.
@@ -166,6 +172,7 @@ The demo must never blur which data is real and which is a fixture.
 | `add-data-source` | Adding or re-checking a source in `data_pipeline/` |
 | `deploy-api` | Deploying or debugging the Lambda-hosted API |
 | `branch-and-pr` | Before the first edit of any task, and again before merging |
+| `decision-log` | Opening a PR or creating an issue — check whether a decision needs recording |
 | `audit-artifact` | Regenerating, inspecting or measuring `backend/app/data/audit_events.json.gz` |
 
 ## Working in this repo

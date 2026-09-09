@@ -8,6 +8,7 @@ code.
 |---|---|
 | [`decision-log.md`](decision-log.md) | Dated decisions with their reasoning, including the ones that were reversed and the approaches that failed |
 | [`environments.md`](environments.md) | Where it's deployed, under whose account, live URLs, what CI needs |
+| [`infra.md`](infra.md) | Every AWS service switched on, why, and what it actually costs |
 
 ## What goes where
 
