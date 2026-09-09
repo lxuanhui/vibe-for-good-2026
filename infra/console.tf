@@ -76,6 +76,18 @@ resource "aws_amplify_app" "console" {
     # produce a double slash.
     VITE_API_BASE_URL = trimsuffix(aws_apigatewayv2_stage.default.invoke_url, "/")
 
+    # The monorepo root, and the second setting the console stores as an
+    # environment variable rather than as app state -- the connect-repository
+    # wizard writes exactly this when you tell it the app lives in a
+    # subdirectory. Terraform replaces this map wholesale, so a value typed
+    # into the wizard would survive only until the next infra merge, and the
+    # build would then fail looking for package.json at the repository root.
+    #
+    # It agrees with appRoot in the build spec above on purpose. Either
+    # mechanism works alone; having both disagree is the failure worth
+    # preventing, so they are set from the same literal and change together.
+    AMPLIFY_MONOREPO_APP_ROOT = "frontend"
+
     # Amplify's "live package updates" -- the Build image settings panel in the
     # console writes exactly this variable, which is why the setting has to
     # live here: environment_variables is Terraform's, so a value set by hand
