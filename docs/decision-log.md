@@ -1,8 +1,24 @@
 # Decision log
 
-Newest first. Each entry records what was decided, why, and what was rejected
-— including approaches that were tried and abandoned, which are usually the
-more valuable half.
+Newest first. The complete historical record follows; do not delete an entry
+to make this file shorter. Read the summary first, then the linked decision
+when changing that subsystem.
+
+## Current decisions at a glance
+
+| Area | Current decision | Detail |
+|---|---|---|
+| Product boundary | Evidence supports human review; it never establishes blame, intent, or legal responsibility. | Standing constraints |
+| Audit flow | Scope-first: create an audit from uploaded GeoJSON before rendering FireEvents. The regional landing may show labelled FIRMS context only. | 2026-09-09, audit session / landing |
+| API state | Audit IDs and scope state persist in DynamoDB in deployed environments; in-memory state is local development only. | 2026-09-09, audit session / landing |
+| Derived data | Clustered events, weather, imagery selection, peat context, and prepared graph data are offline artifacts, not request-time Lambda work. | 2026-09-09, graph; weather and imagery; 2026-09-08, clustering |
+| Investigation | Scores, review routing, graph edges, and propagation are separate deterministic evidence outputs; none establishes causation. | 2026-09-09, graph; review routing; 2026-09-08, triage / graph / surface growth |
+| Map and imagery | Camera fitting is bounds-driven; map context is not an unscoped fire browser. Satellite display processing is deterministic and provenance-preserving. | 2026-09-09, audit session / landing; 2026-09-08, Copernicus scenes |
+| Infrastructure | Flask runs on Lambda behind API Gateway; Terraform owns the deployed configuration; CORS is Flask-owned. | 2026-09-09, Amplify; 2026-09-07, Lambda / CORS |
+
+**Use this log:** entries retain the original diagnosis, rejected alternatives,
+and historical context. A later entry can supersede an earlier one; do not
+apply an older decision without checking the entries above it.
 
 ---
 
@@ -224,6 +240,10 @@ pass over the grid (same batching benefits apply), not a per-event refetch.
 ---
 
 ## 2026-09-09 - The console opens on the map, framed on Borneo, with the explanation as a modal
+
+**Superseded.** The later 2026-09-09 scope-first landing decision above
+replaced its automatic default scope and Borneo-first frame. This entry is
+retained as the historical diagnosis and rejected-options record.
 
 **Status:** done · issue #125
 
