@@ -15,7 +15,7 @@ function errorMessage(error: unknown): string {
 const DEFAULT_REVIEW_START = '2019-09-01'
 const DEFAULT_REVIEW_END = '2019-09-05'
 
-export function AuditStart({ onReady, overlay = false, onClose }: { onReady: (scope: AuditScope) => void; overlay?: boolean; onClose?: () => void }) {
+export function AuditStart({ onReady, overlay = false, fullScreen = false, onClose }: { onReady: (scope: AuditScope) => void; overlay?: boolean; fullScreen?: boolean; onClose?: () => void }) {
   const [reviewStart, setReviewStart] = useState(DEFAULT_REVIEW_START)
   const [reviewEnd, setReviewEnd] = useState(DEFAULT_REVIEW_END)
   const [contextBuffer, setContextBuffer] = useState('25')
@@ -88,7 +88,7 @@ export function AuditStart({ onReady, overlay = false, onClose }: { onReady: (sc
   }
 
   return (
-    <div className={`flex h-full flex-col overflow-hidden bg-bg text-text ${overlay ? 'rounded-xl border border-border-strong shadow-2xl' : 'min-h-screen'}`}>
+    <div className={`flex h-full flex-col overflow-hidden bg-bg text-text ${overlay && !fullScreen ? 'rounded-xl border border-border-strong shadow-2xl' : 'min-h-screen'}`}>
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-border-strong bg-panel px-6">
         <div>
           <div className="text-sm font-semibold tracking-wide">Environmental Assurance Console</div>

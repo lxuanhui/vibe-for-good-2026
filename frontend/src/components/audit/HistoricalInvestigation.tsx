@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { AuditEventSummary, AuditProgression, AuditScope } from '../../api/types'
-import { addToAuditPack, fetchAuditRegister, removeFromAuditPack } from '../../api/client'
+import { fetchAuditRegister } from '../../api/client'
 import { useAppStore } from '../../store/useAppStore'
 import { Button } from '../ui/Button'
 
-function eventRows(events: AuditEventSummary[], selected: string[], toggle: (id: string) => void, packed: string[], add: (id: string) => void, remove: (id: string) => void) {
+function eventRows(events: AuditEventSummary[], selected: string[], toggle: (id: string) => void) {
   return events.map((event) => (
     <tr key={event.eventId} className="border-b border-border/60 hover:bg-panel-raised">
       <td className="px-3 py-2"><input aria-label={`Select ${event.eventId}`} type="checkbox" checked={selected.includes(event.eventId)} onChange={() => toggle(event.eventId)} /></td>
@@ -16,7 +16,6 @@ function eventRows(events: AuditEventSummary[], selected: string[], toggle: (id:
       <td className="px-3 py-2">{event.investigationPriority}</td>
       <td className="px-3 py-2 text-text-muted">{event.reviewState}</td>
       <td className="px-3 py-2 text-right">{event.maxFrp?.toFixed(1) ?? '—'}</td>
-      <td className="px-3 py-2"><Button className="whitespace-nowrap text-[10px]" onClick={() => packed.includes(event.eventId) ? remove(event.eventId) : add(event.eventId)}>{packed.includes(event.eventId) ? 'REMOVE FROM PACK' : 'ADD TO AUDIT EVIDENCE PACK'}</Button></td>
     </tr>
   ))
 }
@@ -33,7 +32,6 @@ export function HistoricalInvestigation({ scope, onOpenScopedMap }: { scope: Aud
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [progression, setProgression] = useState<AuditProgression | null>(null)
-  const [packed, setPacked] = useState<string[]>([])
 
   const loadRegister = useCallback(async () => {
     setLoading(true)
@@ -49,29 +47,10 @@ export function HistoricalInvestigation({ scope, onOpenScopedMap }: { scope: Aud
       })
       setEvents(result.events)
       setProgression(result.progression)
-      setPacked(result.progression.selectedEventIds)
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Register could not be loaded.') } finally { setLoading(false) }
   }, [scope.audit_id, scope.review_start, scope.review_end, scope.buffer_bbox])
   useEffect(() => { void loadRegister() }, [loadRegister])
   const selectedEvents = useMemo(() => events.filter((event) => selection.includes(event.eventId)), [events, selection])
-
-  async function addEvent(eventId: string) {
-    try {
-      await addToAuditPack(scope.audit_id, eventId)
-      const alreadyPacked = packed.includes(eventId)
-      setPacked((ids) => alreadyPacked || ids.includes(eventId) ? ids : [...ids, eventId])
-      setProgression((current) => current ? { ...current, selected: current.selected + (alreadyPacked ? 0 : 1), selectedEventIds: alreadyPacked ? current.selectedEventIds : [...current.selectedEventIds, eventId] } : current)
-    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not add event to pack.') }
-  }
-
-  async function removeEvent(eventId: string) {
-    try {
-      await removeFromAuditPack(scope.audit_id, eventId)
-      const wasPacked = packed.includes(eventId)
-      setPacked((ids) => ids.filter((id) => id !== eventId))
-      setProgression((current) => current ? { ...current, selected: Math.max(0, current.selected - (wasPacked ? 1 : 0)), selectedEventIds: current.selectedEventIds.filter((id) => id !== eventId) } : current)
-    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not remove event from pack.') }
-  }
 
   return <div className="flex h-full flex-col bg-bg text-text">
     <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border-strong bg-panel px-5 py-3"><div><div className="text-sm font-semibold">Historical Fire Register</div><div className="text-xs text-text-muted">{progression ? `${progression.fireEvents.toLocaleString()} FireEvents` : 'FireEvents'} · {scope.review_start} → {scope.review_end} · {scope.context_buffer_km} km context buffer</div></div><div className="flex items-center gap-2">{onOpenScopedMap && <Button onClick={onOpenScopedMap}>VIEW SCOPED MAP</Button>}<Button variant="primary" disabled={!selection.length || !onOpenScopedMap} onClick={onOpenScopedMap}>{`INVESTIGATE ON MAP (${selection.length})`}</Button></div></div>
@@ -81,7 +60,7 @@ export function HistoricalInvestigation({ scope, onOpenScopedMap }: { scope: Aud
     {scope.historyBuild && <div className="border-b border-border bg-panel px-5 py-2 text-[11px] text-text-muted">Cached real historical dataset · build handoff {scope.historyBuild.duration_ms.toFixed(2)} ms · counts below are from the current audit artifact.</div>}
     {error && <div role="alert" className="flex items-center justify-between gap-3 border-b border-status-urgent/40 bg-status-urgent/10 px-5 py-2 text-xs text-red-200"><span>{error}</span><Button onClick={() => void loadRegister()}>RETRY</Button></div>}
     {loading && <div role="status" className="flex flex-1 items-center justify-center text-sm text-text-muted">Loading current-audit FireEvent register…</div>}
-    {!loading && <div className="flex-1 overflow-auto"><table className="w-full border-collapse text-xs"><thead className="sticky top-0 bg-panel"><tr className="border-b border-border"><th className="px-3 py-2 text-left">Select</th><th className="px-3 py-2 text-left">FireEvent ID</th><th className="px-3 py-2 text-left">First detected</th><th className="px-3 py-2 text-right">Observations</th><th className="px-3 py-2 text-left">Stage-1 state</th><th className="px-3 py-2 text-left">Sufficiency</th><th className="px-3 py-2 text-left">Priority</th><th className="px-3 py-2 text-left">Workflow</th><th className="px-3 py-2 text-right">Max FRP</th><th className="px-3 py-2 text-left">Pack</th></tr></thead><tbody>{eventRows(events, selection, toggleSelection, packed, (id) => void addEvent(id), (id) => void removeEvent(id))}</tbody></table></div>}
+    {!loading && <div className="flex-1 overflow-auto"><table className="w-full border-collapse text-xs"><thead className="sticky top-0 bg-panel"><tr className="border-b border-border"><th className="px-3 py-2 text-left">Select</th><th className="px-3 py-2 text-left">FireEvent ID</th><th className="px-3 py-2 text-left">First detected</th><th className="px-3 py-2 text-right">Observations</th><th className="px-3 py-2 text-left">Stage-1 state</th><th className="px-3 py-2 text-left">Sufficiency</th><th className="px-3 py-2 text-left">Priority</th><th className="px-3 py-2 text-left">Workflow</th><th className="px-3 py-2 text-right">Max FRP</th></tr></thead><tbody>{eventRows(events, selection, toggleSelection)}</tbody></table></div>}
     {selectedEvents.length > 0 && <div className="shrink-0 border-t border-border bg-panel px-5 py-2 text-xs text-text-muted">Selected FireEvents remain selected on the scoped map.</div>}
   </div>
 }

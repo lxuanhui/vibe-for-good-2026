@@ -129,6 +129,39 @@ class SurfaceFireEnvelope:
         ) ** 2
         return normalized <= 1.0
 
+    def to_polygon(self, n_points: int = 48) -> list[list[float]]:
+        """Sample the envelope boundary as a closed ``[lon, lat]`` ring.
+
+        Exact inverse of ``contains_point``'s rotated-ellipse test composed
+        with the module's equirectangular ``_local_offset_km`` projection --
+        not an approximation. The along/across -> east/north rotation matrix
+        is its own inverse (its rows are orthonormal and its determinant is
+        -1), so the same sin/cos pair used to build ``along_axis``/
+        ``across_axis`` in ``contains_point`` maps a sampled ellipse point
+        straight back to an east/north offset.
+        """
+
+        if n_points < 3:
+            raise ValueError("n_points must be at least 3")
+        heading = math.radians(self.orientation_deg)
+        sin_h, cos_h = math.sin(heading), math.cos(heading)
+        origin_lat, origin_lon = self.origin
+        ring: list[list[float]] = []
+        for index in range(n_points):
+            theta = 2.0 * math.pi * index / n_points
+            along = self.center_offset_km + self.semi_major_km * math.cos(theta)
+            across = self.semi_minor_km * math.sin(theta)
+            east_km = along * sin_h + across * cos_h
+            north_km = along * cos_h - across * sin_h
+            lat = origin_lat + math.degrees(north_km / EARTH_RADIUS_KM)
+            mean_lat = math.radians((origin_lat + lat) / 2.0)
+            lon = origin_lon + math.degrees(
+                east_km / (EARTH_RADIUS_KM * math.cos(mean_lat))
+            )
+            ring.append([round(lon, 6), round(lat, 6)])
+        ring.append(list(ring[0]))
+        return ring
+
     def to_dict(self) -> dict[str, Any]:
         result = asdict(self)
         result["origin"] = list(self.origin)

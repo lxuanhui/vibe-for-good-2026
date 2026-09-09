@@ -1,8 +1,79 @@
 # Decision log
 
-Newest first. Each entry records what was decided, why, and what was rejected
-— including approaches that were tried and abandoned, which are usually the
-more valuable half.
+Newest first. The complete historical record follows; do not delete an entry
+to make this file shorter. Read the summary first, then the linked decision
+when changing that subsystem.
+
+## Current decisions at a glance
+
+| Area | Current decision | Detail |
+|---|---|---|
+| Product boundary | Evidence supports human review; it never establishes blame, intent, or legal responsibility. | Standing constraints |
+| Audit flow | Scope-first: create an audit from uploaded GeoJSON before rendering FireEvents. The regional landing may show labelled FIRMS context only. | 2026-09-09, audit session / landing |
+| API state | Audit IDs and scope state persist in DynamoDB in deployed environments; in-memory state is local development only. | 2026-09-09, audit session / landing |
+| Derived data | Clustered events, weather, imagery selection, peat context, and prepared graph data are offline artifacts, not request-time Lambda work. | 2026-09-09, graph; weather and imagery; 2026-09-08, clustering |
+| Investigation | Scores, review routing, graph edges, and propagation are separate deterministic evidence outputs; none establishes causation. | 2026-09-09, graph; review routing; 2026-09-08, triage / graph / surface growth |
+| Map and imagery | Camera fitting is bounds-driven; map context is not an unscoped fire browser. Satellite display processing is deterministic and provenance-preserving. | 2026-09-09, audit session / landing; 2026-09-08, Copernicus scenes |
+| Infrastructure | Flask runs on Lambda behind API Gateway; Terraform owns the deployed configuration; CORS is Flask-owned. | 2026-09-09, Amplify; 2026-09-07, Lambda / CORS |
+| Service selection | DynamoDB and S3 are authorised without a fresh argument each time; every service switched on gets a cost row in `docs/infra.md` in the same PR. | 2026-09-09, DynamoDB and S3 are authorised |
+
+**Use this log:** entries retain the original diagnosis, rejected alternatives,
+and historical context. A later entry can supersede an earlier one; do not
+apply an older decision without checking the entries above it.
+
+---
+
+## 2026-09-09 - The scoped map's correlation graph gets real edges, offline
+
+**Status:** done · issue #135
+
+**Decision.** `GET /api/audits/{id}/graph` (`investigation_map`) now prefers
+a precomputed real `FireEventGraph` edge over its own synthesized
+distance-only one, for any candidate pair inside a new offline artifact.
+`data_pipeline/enrich_fire_spread_audit_events.py` (mirrors
+`enrich_peat_audit_events.py`) reuses `build_fire_event_graph`/
+`compare_event_progression` exactly as they already existed — no new fire
+math was written — over the demo scope's 16 in-scope+buffer FireEvents, and
+writes each edge onto its *source* event's `fireSpreadEdges` field in
+`audit_triage_detail.json.gz`. `SurfaceFireEnvelope.to_polygon()` is the one
+new method: it samples the ellipse boundary into a closed `[lon, lat]` ring
+for map rendering, an exact inverse of the module's own projection (the
+along/across → east/north rotation is its own inverse), not an
+approximation. `FireEventEdgeFeatures` gained three fields
+(`surface_envelope_semi_major_km`/`_semi_minor_km`/`_center_offset_km`) so
+the envelope doesn't need recomputing downstream — `_build_edge` already
+built it via `compare_event_progression` and previously discarded it after
+reading two summary fields off it.
+
+**Why offline, and why this scope.** The dataset is permanently fixed to the
+2019 demo window for this project, so there is no live/arbitrary-audit case
+to support — the same reasoning that already sent clustering and peat
+context offline. The real blocker turned out not to be `fire_event_graph.py`'s
+scipy dependency (offline, that's a non-issue) but that per-event historical
+wind had a checkpoint fully fetched (`enrich_audit_events.py`'s SQLite cache
+had all 16 events at `weather_status='ok'`) that had simply never been
+`--finalize`d into the committed artifact. Finalizing it was this change's
+first step; 82 candidate edges resulted, 59 with a real wind-oriented
+envelope (state distribution: 39 UNRESOLVED, 22 INDEPENDENT_PLAUSIBLE, 19
+PROPAGATION_COMPATIBLE, 2 RELATED_POSSIBLE — not a flat "everything is
+possible", unlike the fallback it now only covers residually).
+
+**The unit gotcha.** Open-Meteo's committed wind-speed evidence is already
+km/h (no `wind_speed_unit` override in `sources/open_meteo.py`), but
+`fire_event_graph._wind_values` multiplies a `mean_wind_speed_ms` key by 3.6
+assuming m/s input. The adapter in the new script deliberately uses the
+`speed_kmh` key instead — the wrong key would have silently inflated every
+wind speed 3.6×.
+
+**Rejected: computing this live in the API.** Not for the reason stated in
+an earlier version of this diagnosis (Lambda bundle size) — `surface_fire.py`
+itself is pure Python, no numpy/scipy. Offline still wins here because the
+dataset is fixed and the derivation is identical for every caller, the same
+argument already accepted for clustering.
+
+**Left alone.** Peatland-corridor uncertainty
+(`peat_fraction_along_corridor`, numpy + Pillow + a raster) is a separable,
+heavier piece not needed for spread *direction* and not attempted here.
 
 ---
 
@@ -49,6 +120,8 @@ a shorter version.
 **Still true, and not weakened by this:** serverless by default, and anything
 always-on needs justification before it is switched on. The escalation order
 for compute is unchanged: zip, then container image, then EC2.
+
+---
 
 ## 2026-09-09 - Audit session state goes in DynamoDB; the scope-first landing wins over the map-first one
 
@@ -214,6 +287,10 @@ pass over the grid (same batching benefits apply), not a per-event refetch.
 ---
 
 ## 2026-09-09 - The console opens on the map, framed on Borneo, with the explanation as a modal
+
+**Superseded.** The later 2026-09-09 scope-first landing decision above
+replaced its automatic default scope and Borneo-first frame. This entry is
+retained as the historical diagnosis and rejected-options record.
 
 **Status:** done · issue #125
 
