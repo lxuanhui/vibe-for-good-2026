@@ -75,6 +75,24 @@ resource "aws_amplify_app" "console" {
     # a slash and the client appends "/api${path}", which would otherwise
     # produce a double slash.
     VITE_API_BASE_URL = trimsuffix(aws_apigatewayv2_stage.default.invoke_url, "/")
+
+    # Amplify's "live package updates" -- the Build image settings panel in the
+    # console writes exactly this variable, which is why the setting has to
+    # live here: environment_variables is Terraform's, so a value set by hand
+    # would be reverted on the next apply and the build would start failing
+    # again with nothing in the repository to explain it.
+    #
+    # The default build image ships Node 18 and 20. This frontend is vite 8 and
+    # typescript 7, which will not run on 18, and CI builds it on 24 -- an
+    # Amplify build on a different major is the "passes in Actions, breaks in
+    # hosting" gap that previews exist to catch, so both should be 24. Keep
+    # this in step with node-version in .github/workflows/ci.yml.
+    #
+    # An exact version, not "latest": AWS documents that latest makes builds
+    # fail.
+    _LIVE_UPDATES = jsonencode([
+      { name = "Node.js version", pkg = "node", type = "nvm", version = "24" }
+    ])
   }
 }
 
