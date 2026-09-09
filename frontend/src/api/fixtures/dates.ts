@@ -18,8 +18,9 @@ export const TIMELINE_DATES: string[] = Array.from(new Set([...MOCK_FIRMS_DATES,
 
 // By construction every timeline date has FIRMS coverage from at least one
 // source -- kept as its own export since isLayerAvailable('firms', date)
-// (fixtures/overlays.ts) and the timeline's per-layer badge
-// (TimelineScrubber.tsx) read it independently of TIMELINE_DATES.
+// (fixtures/overlays.ts) reads it independently of TIMELINE_DATES. Also once
+// backed a per-layer availability badge in the deleted TimelineScrubber.tsx;
+// rebuild that against this same set if a scrubber returns.
 export const FIRMS_AVAILABLE_DATES = new Set(TIMELINE_DATES)
 
 // Sentinel-1 nominal ~6-day revisit — sparse by design, not a UI simplification.

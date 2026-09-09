@@ -71,6 +71,21 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister }: { scope
   }, [scope.buffer_bbox, staticFirms])
   const center = useMemo<[number, number]>(() => scope.centroid ?? [116.25, -3.8], [scope.centroid])
 
+  // Carto's basemap tiles now require a key on every request. The style JSON
+  // stays key-free and committed; the key is appended here so it never lands
+  // in a tracked file, only in the built bundle (Carto keys are meant to be
+  // client-side and domain-restricted on Carto's end, unlike a server secret).
+  // The vector style pulls from several cartocdn.com subdomains -- tile,
+  // sprite, and glyph requests all match this, not just the tile domain.
+  const cartoApiKey = import.meta.env.VITE_CARTO_API_KEY as string | undefined
+  const transformRequest = useMemo(() => {
+    if (!cartoApiKey) return undefined
+    return (url: string) => {
+      if (!url.includes('cartocdn.com')) return { url }
+      return { url: `${url}${url.includes('?') ? '&' : '?'}key=${cartoApiKey}` }
+    }
+  }, [cartoApiKey])
+
   const initialViewState = useMemo(() => {
     const span = scope.buffer_bbox
       ? Math.max(scope.buffer_bbox.maxLon - scope.buffer_bbox.minLon, scope.buffer_bbox.maxLat - scope.buffer_bbox.minLat, 0.01)
@@ -87,7 +102,14 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister }: { scope
 
   return <div className="relative h-full w-full bg-bg">
     <Map
+      // Carto's vector dark-matter style with land/water recoloured to this
+      // app's palette (land INDONESIA_FILL_COLOR #364527, water --color-bg
+      // #0a0d12 -- see layerColors.ts / index.css). A static JSON asset can't
+      // import those constants, so if either changes, update
+      // scoped-map-style.json's "background"/"landcover"/"landuse"/"park_*"
+      // and "water" paint colours to match by hand.
       mapStyle="/scoped-map-style.json"
+      transformRequest={transformRequest}
       initialViewState={initialViewState}
       minZoom={5}
       maxZoom={15}

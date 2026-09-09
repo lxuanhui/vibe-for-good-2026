@@ -117,8 +117,10 @@ the scope-entry and history-build panel over the map. Events are typed
 requires `location`, `peatClassification` and `currentConditions`, none of
 which FIRMS-only data can honestly supply, and widening it with optionals
 would make a real event and a fixture indistinguishable to the compiler. Keep
-the two apart. The legacy `MapView`/`EventTable`/`ReportPanel` console is not
-mounted anywhere and still reads fixtures.
+the two apart. The legacy `EventTable`/`ReportPanel` console is not mounted
+anywhere and still reads fixtures. `MapView`/`EventMarkers`/`EventInfoCard`/
+`TimelineScrubber` were the same kind of orphan and have been deleted
+outright rather than left unmounted.
 
 Stage-1 triage does not compress this dataset and is not meant to. On
 FIRMS-only input `LIKELY_NON_FIRE` is unreachable (max non-fire score 2,
