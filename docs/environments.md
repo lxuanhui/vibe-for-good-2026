@@ -41,6 +41,37 @@ Moving the project to a different AWS account means: `terraform destroy` on
 `infra/` then `infra/bootstrap/`, re-apply under the new profile, and update
 the `AWS_ROLE_ARN` repository variable. Cheap early, expensive later.
 
+## Signing in to the AWS console
+
+Access keys and a console password are different credentials, and this account
+started with only the first. As of 2026-09-09 neither IAM user had a login
+profile:
+
+| Principal | Console password | Notes |
+|---|---|---|
+| `kino` | none | `AdministratorAccess`, no MFA — access keys only, which is what the laptop and every `terraform apply` here uses |
+| `lxuanhui` | none | created 2023, unused |
+| Root | yes | MFA enabled |
+
+The trap is that this reads as a permissions problem and is not one. `kino` is
+already an administrator; it simply has no password to sign in with. Adding
+Amplify permissions, or any other policy, does nothing for it.
+
+Root is therefore the only way into the console until that is fixed, and
+fixing it is a one-time job:
+
+1. Sign in as root.
+2. IAM → Users → `kino` → Security credentials → **Enable console access**,
+   set a password.
+3. Assign an MFA device to `kino` while you are on that page.
+4. Sign out. From then on, sign in as an IAM user against account
+   `424609180893` and leave root alone.
+
+Root is worth avoiding for routine work: it cannot be scoped, restricted or
+handed to CI, and every action it takes is indistinguishable from every other.
+The only tasks that genuinely need it are account-level ones — billing,
+closing the account, and exactly this bootstrap.
+
 ## Connecting the console to GitHub
 
 Amplify builds nothing until the repository is connected, and that connection
@@ -50,7 +81,9 @@ to satisfy it is a personal access token, which would then sit in the state
 file in S3. This stack has no long-lived credential anywhere; CI assumes a role
 over OIDC so that none is needed. The connection is a manual step instead.
 
-Once per account, after the first apply:
+Once per account, after the first apply. This is a console task, so it needs a
+principal that can sign in — see the section above if that is currently only
+root:
 
 1. [The app in the Amplify console](https://ap-southeast-1.console.aws.amazon.com/amplify/apps/dz8w2n4hd2d22)
    (also the `console_app_id` Terraform output, if the id ever changes).
