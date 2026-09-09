@@ -38,6 +38,16 @@ from data_pipeline.propagation.surface_fire import SurfaceFireEnvelope
 # Matches build_fire_event_graph's own default -- not a new assumption.
 CANDIDATE_DISTANCE_KM = 50.0
 
+# The drawn envelope's maximum reach (see `_capped_dimensions`). A single
+# candidate pair is never farther apart than CANDIDATE_DISTANCE_KM, but a
+# scoped map can show a dozen-plus candidate edges from one selection at
+# once (this demo's 16-event scope: up to ~14 per focused event) -- several
+# overlapping envelopes at the full 50 km gate compound into solid coverage
+# well before any one of them is individually implausible. 60% of the gate
+# keeps shapes legible at this map's typical zoom without needing to know
+# how many will render alongside it.
+MAX_ENVELOPE_REACH_KM = CANDIDATE_DISTANCE_KM * 0.6
+
 
 def _event_from_summary(row: dict[str, Any]) -> FireEvent:
     """Same field mapping as ``benchmark.automated_run._event_from_artifact``."""
@@ -105,6 +115,30 @@ def build_graph(events_summary: list[dict[str, Any]], detail_audit: dict[str, An
     )
 
 
+def _capped_dimensions(semi_major: float, semi_minor: float, center_offset: float) -> tuple[float, float, float]:
+    """Cap the *drawn* envelope's reach at the same candidate-distance gate
+    that decided which pairs get an edge at all.
+
+    `compare_event_progression` sizes the envelope from elapsed time between
+    the source event's own first and last detection to the target's, which
+    for a long-duration source event can be far larger than the gap
+    (`elapsed_time_hours` on the edge) between them -- real cases in the demo
+    scope reach 300+ km. No candidate this feature considers is ever farther
+    than `CANDIDATE_DISTANCE_KM` apart, so a drawn reach beyond that adds no
+    discriminating information and only blankets a scoped map (tens of km
+    across) in solid fill. All three dimensions are linear in elapsed_hours,
+    so scaling them by one factor is exactly what capping elapsed_hours and
+    re-projecting would produce -- a presentation cap, not a different
+    envelope; the edge's `state`/compatibility classification is untouched.
+    """
+
+    max_reach = abs(center_offset) + semi_major
+    if max_reach <= MAX_ENVELOPE_REACH_KM:
+        return semi_major, semi_minor, center_offset
+    scale = MAX_ENVELOPE_REACH_KM / max_reach
+    return semi_major * scale, semi_minor * scale, center_offset * scale
+
+
 def _envelope_dict(features: Any, source_centroid: tuple[float, float]) -> dict[str, Any] | None:
     """Reconstruct the envelope geometry the graph module discarded and
     render it as a polygon. Exact, not approximate: head/back/flank are
@@ -123,9 +157,11 @@ def _envelope_dict(features: Any, source_centroid: tuple[float, float]) -> dict[
         or features.surface_envelope_orientation_deg is None
     ):
         return None
-    semi_major = features.surface_envelope_semi_major_km
-    semi_minor = features.surface_envelope_semi_minor_km
-    center_offset = features.surface_envelope_center_offset_km
+    semi_major, semi_minor, center_offset = _capped_dimensions(
+        features.surface_envelope_semi_major_km,
+        features.surface_envelope_semi_minor_km,
+        features.surface_envelope_center_offset_km,
+    )
     envelope = SurfaceFireEnvelope(
         origin=source_centroid,
         elapsed_hours=features.elapsed_time_hours,

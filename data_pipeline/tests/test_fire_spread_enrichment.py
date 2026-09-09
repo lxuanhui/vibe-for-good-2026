@@ -1,4 +1,10 @@
+import math
+
+import pytest
+
 from data_pipeline.enrich_fire_spread_audit_events import (
+    MAX_ENVELOPE_REACH_KM,
+    _capped_dimensions,
     _current_window_wind,
     _envelope_dict,
     _event_from_summary,
@@ -69,13 +75,53 @@ def test_envelope_dict_none_when_any_field_missing():
     assert _envelope_dict(Features(), (-3.0, 116.0)) is None
 
 
+def test_capped_dimensions_leaves_reach_within_the_gate_untouched():
+    # 12 + 18 = 30 == MAX_ENVELOPE_REACH_KM exactly -- not over, no scaling.
+    assert _capped_dimensions(18.0, 15.0, 12.0) == (18.0, 15.0, 12.0)
+
+
+def test_capped_dimensions_scales_a_pair_that_would_blanket_the_map():
+    # A real demo-scope case: a long-duration source event pushes the
+    # envelope to 256 km reach though every candidate is within 50 km.
+    semi_major, semi_minor, center_offset = _capped_dimensions(151.4, 126.2, 105.0)
+
+    max_reach = abs(center_offset) + semi_major
+    assert max_reach == pytest.approx(MAX_ENVELOPE_REACH_KM, abs=1e-6)
+    # Eccentricity (the ellipse's shape) is preserved -- only scaled down.
+    assert semi_minor / semi_major == pytest.approx(126.2 / 151.4, abs=1e-6)
+
+
+def test_envelope_dict_caps_a_pair_that_would_otherwise_blanket_the_map():
+    class Features:
+        surface_envelope_semi_major_km = 151.4
+        surface_envelope_semi_minor_km = 126.2
+        surface_envelope_center_offset_km = 105.0
+        surface_envelope_orientation_deg = 45.0
+        elapsed_time_hours = 72.7
+
+    result = _envelope_dict(Features(), (-3.78, 116.25))
+
+    assert result is not None
+    assert result["semiMajorKm"] < 151.4
+    # The polygon's own farthest point from the origin must respect the cap
+    # too, not just the stored semi-axis numbers.
+    origin_lat, origin_lon = -3.78, 116.25
+    farthest_km = max(
+        math.radians(lat - origin_lat) * 6371.0088
+        for lon, lat in result["polygon"]
+    ) or 0.0
+    assert farthest_km <= MAX_ENVELOPE_REACH_KM + 1.0
+
+
 def test_envelope_dict_produces_a_closed_polygon_when_complete():
     class Features:
-        surface_envelope_semi_major_km = 30.0
-        surface_envelope_semi_minor_km = 25.0
-        surface_envelope_center_offset_km = 20.0
+        # 12 + 18 = 30 == MAX_ENVELOPE_REACH_KM exactly -- no scaling, so the
+        # output should equal the input dimensions unchanged.
+        surface_envelope_semi_major_km = 18.0
+        surface_envelope_semi_minor_km = 15.0
+        surface_envelope_center_offset_km = 12.0
         surface_envelope_orientation_deg = 270.0
-        elapsed_time_hours = 10.0
+        elapsed_time_hours = 6.0
 
     result = _envelope_dict(Features(), (-3.78, 116.25))
 
@@ -83,8 +129,8 @@ def test_envelope_dict_produces_a_closed_polygon_when_complete():
     assert result["polygon"][0] == result["polygon"][-1]
     assert len(result["polygon"]) == 49
     assert result["orientationDeg"] == 270.0
-    assert result["semiMajorKm"] == 30.0
-    assert result["semiMinorKm"] == 25.0
+    assert result["semiMajorKm"] == 18.0
+    assert result["semiMinorKm"] == 15.0
 
 
 def test_build_graph_and_edges_by_source_produce_a_real_envelope():
