@@ -151,6 +151,16 @@ data "aws_iam_policy_document" "github_actions" {
       "dynamodb:CreateTable", "dynamodb:DeleteTable", "dynamodb:DescribeTable",
       "dynamodb:UpdateTable", "dynamodb:TagResource", "dynamodb:UntagResource",
       "dynamodb:ListTagsOfResource",
+      # Not optional, and not obvious from the resource block: the provider
+      # reads a table's TTL and continuous-backups state on *every* refresh,
+      # even though api.tf configures neither. CloudTrail for the apply that
+      # created this table shows the CI role calling DescribeTimeToLive and
+      # DescribeContinuousBackups; without them the next plan fails with
+      # AccessDenied on a table that already exists. The Update* pair is here
+      # so that turning on a TTL later -- an open question in the decision
+      # log -- does not need another bootstrap round trip.
+      "dynamodb:DescribeTimeToLive", "dynamodb:UpdateTimeToLive",
+      "dynamodb:DescribeContinuousBackups", "dynamodb:UpdateContinuousBackups",
     ]
     resources = ["arn:${data.aws_partition.current.partition}:dynamodb:*:${data.aws_caller_identity.current.account_id}:table/${var.project}-*"]
   }
