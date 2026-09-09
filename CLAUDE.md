@@ -20,6 +20,9 @@ to an evidence ID.
 ## Layout
 
 ```
+PRODUCT.md      Durable product truth: users, purpose, positioning, the safety
+                boundary, and what must not be fabricated. Derived from the
+                canonical spec, so the spec still wins on detail
 docs/           Decision log and environment facts — read before re-deciding anything
 frontend/       Vite + React + TS console (MapLibre, Tailwind 4, zustand, recharts)
 backend/        Flask API — runs locally via wsgi.py, on Lambda via lambda_handler.py
