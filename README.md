@@ -32,13 +32,13 @@ DesignSpecs/    The specs the product is built against; Environmental_Assurance_
 The Vite dev server proxies `/api/*` to the Flask backend, so the frontend can
 call `fetch('/api/hello')` with no CORS setup in development.
 
-The console opens with the audit-scope-first review flow: review dates, a
-private GeoJSON management-unit boundary, and a configurable context buffer
-are validated and previewed before the history build. The known demo case
-uses the committed real 2019 FIRMS dataset as a clearly labelled cached
-reconstruction and returns its measured build-handoff time. The register then
-shows FIRMS observations, clustered FireEvents, the boundary-and-buffer
-subset, the review queue, and events selected for the engagement pack.
+The console opens on a full-bleed, dark map framed to the bounded demo scope.
+The map loads real derived 2019 FIRMS FireEvents from the audit-scoped API;
+the audit-scope panel overlays the map so review dates, a private GeoJSON
+management-unit boundary, and a configurable context buffer remain validated
+before history build. The register remains the primary screening workspace and
+is opened from the map after the same handoff. The static FIRMS export remains
+a separately labelled layer.
 
 The real demo path uses the audit-scoped Flask endpoints:
 `POST /api/audits`, `POST /api/audits/{id}/scope/upload`,

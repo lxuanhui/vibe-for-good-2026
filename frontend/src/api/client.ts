@@ -63,11 +63,12 @@ export async function buildFireHistory(auditId: string): Promise<{ audit_id: str
   return apiPost(`/audits/${encodeURIComponent(auditId)}/history/build`, null)
 }
 
-export async function fetchAuditRegister(auditId: string, filters?: { since?: string; until?: string }): Promise<{ events: AuditEventSummary[]; progression: AuditProgression }> {
+export async function fetchAuditRegister(auditId: string, filters?: { since?: string; until?: string; bbox?: BBox }): Promise<{ events: AuditEventSummary[]; progression: AuditProgression }> {
   const pageSize = 2000
   const query = new URLSearchParams({ limit: String(pageSize) })
   if (filters?.since) query.set('since', filters.since)
   if (filters?.until) query.set('until', filters.until)
+  if (filters?.bbox) query.set('bbox', `${filters.bbox.minLon},${filters.bbox.minLat},${filters.bbox.maxLon},${filters.bbox.maxLat}`)
   const first = await apiGet<{ total: number; events: AuditEventSummary[]; progression: AuditProgression }>(`/audits/${encodeURIComponent(auditId)}/events?${query}`)
   const pages = [first.events]
   for (let offset = pageSize; offset < first.total; offset += pageSize) {

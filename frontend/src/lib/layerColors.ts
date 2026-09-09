@@ -38,3 +38,9 @@ export const INDONESIA_GLOW_COLOR = '#8fbf5c'
 
 export const AUDIT_SCOPE_BOUNDARY_COLOR = '#22d3ee'
 export const AUDIT_SCOPE_BUFFER_COLOR = '#eab308'
+
+export const AUDIT_EVENT_COLORS = {
+  LIKELY_FIRE: '#22c55e',
+  AMBIGUOUS: '#eab308',
+  LIKELY_NON_FIRE: '#8b96a8',
+} as const
