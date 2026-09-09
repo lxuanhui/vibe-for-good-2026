@@ -38,15 +38,15 @@ from data_pipeline.propagation.surface_fire import SurfaceFireEnvelope
 # Matches build_fire_event_graph's own default -- not a new assumption.
 CANDIDATE_DISTANCE_KM = 50.0
 
-# The drawn envelope's maximum reach (see `_capped_dimensions`). A single
-# candidate pair is never farther apart than CANDIDATE_DISTANCE_KM, but a
-# scoped map can show a dozen-plus candidate edges from one selection at
-# once (this demo's 16-event scope: up to ~14 per focused event) -- several
-# overlapping envelopes at the full 50 km gate compound into solid coverage
-# well before any one of them is individually implausible. 60% of the gate
-# keeps shapes legible at this map's typical zoom without needing to know
-# how many will render alongside it.
-MAX_ENVELOPE_REACH_KM = CANDIDATE_DISTANCE_KM * 0.6
+# The drawn envelope's maximum reach (see `_capped_dimensions`). A product
+# decision, not one derived from the candidate gate: this model assumes wind
+# alone moves a fire, nothing else -- no suppression, no barrier, no human
+# response of any kind -- so it is only honest at a short, near-field range.
+# Anything a candidate pair needs beyond that is a job for AI interpretation
+# over the evidence, not a longer deterministic projection from this model.
+# Kept under 10 km on that basis alone, independent of CANDIDATE_DISTANCE_KM
+# and of how many candidate edges a given selection happens to render at once.
+MAX_ENVELOPE_REACH_KM = 8.0
 
 
 def _event_from_summary(row: dict[str, Any]) -> FireEvent:
