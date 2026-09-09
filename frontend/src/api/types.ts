@@ -278,6 +278,17 @@ export interface EventEvidenceResponse {
   provenance: { source: Record<string, unknown>; algorithmVersions: string[] }
 }
 
+// The committed real dataset, described without building an audit. Narrower
+// than the `source` blob the events endpoint returns -- only the fields the
+// first-load context panel states as fact are typed here, so a change to the
+// artifact's provenance shape cannot silently widen what the UI claims.
+export interface DemoDatasetSummary {
+  dataset: string
+  region: string
+  window: string
+  progression: Pick<AuditProgression, 'rawObservations' | 'qualifiedObservations' | 'fireEvents' | 'requiringHumanReview'>
+}
+
 export interface AuditProgression {
   rawObservations: number
   qualifiedObservations: number
