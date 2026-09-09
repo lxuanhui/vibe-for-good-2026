@@ -173,6 +173,8 @@ function ImagerySummary({ items }: { items: EvidenceObject[] }) {
     const cloud = v.cloud_cover
     const thumbnailUrl = typeof v.thumbnail_url === 'string' ? v.thumbnail_url : undefined
     const caption = `${sensor} ${position}`.trim()
+    const processing = typeof v.display_processing === 'string' ? v.display_processing : undefined
+    const product = typeof v.product === 'string' ? v.product : undefined
     return <div key={item.evidence_id} className="flex gap-2 rounded border border-border bg-bg/60 p-2 text-[11px] print:border-black/20 print:bg-transparent">
       {/* The catalogue's own quicklook JPEG, not the product -- a glance at
           cloud/vegetation/burn-scar context beats acquisition metadata alone.
@@ -196,6 +198,7 @@ function ImagerySummary({ items }: { items: EvidenceObject[] }) {
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2"><span className="font-mono text-accent print:text-black">{sensor} {position}</span>{typeof cloud === 'number' && <span className="text-text-muted">{cloud.toFixed(0)}% cloud</span>}</div>
         <div className="mt-0.5 text-text-muted">{item.time_window}</div>
+        {(product || processing) && <div className="mt-1 text-[10px] text-text-faint">{product && <>Product: {product}</>}{product && processing && ' · '}{processing && <>Display: {processing}</>}</div>}
       </div>
     </div>
   })}
@@ -344,7 +347,7 @@ export function EvidenceDrawer({
       <MetricSection title="Peat / event-buffer intersection" note="The drawer shows the event footprint or buffer intersection only when a peat EvidenceObject is available. Peat overlap is environmental context and does not establish an underground path, cause, or responsibility." items={grouped.peat} />
       <Section title="Weather time window"><p className="mb-2 text-[11px] leading-4 text-text-muted">Every Open-Meteo/ERA5 hourly variable, during the event and the 7 days before it. Historical values, not a forecast; missing weather is not negative evidence.</p><WeatherSummary items={grouped.weather} /></Section>
       <MetricSection title="Surface compatibility" note="Any ellipse/envelope comparison is first-order surface-fire compatibility only; it does not model underground peat propagation." items={grouped.surface} />
-      <Section title="Imagery acquisition metadata"><p className="mb-2 text-[11px] leading-4 text-text-muted">Closest usable Sentinel-1 (SAR) and Sentinel-2 (optical) scenes before and after the event. Scene-level metadata only -- this does not establish pixel-level usability or change.</p><ImagerySummary items={grouped.imagery} /></Section>
+      <Section title="Imagery acquisition metadata"><p className="mb-2 text-[11px] leading-4 text-text-muted">Closest usable Sentinel-1 (SAR) and Sentinel-2 (optical) scenes before and after the event. Quicklooks are display previews, not analytical imagery; their source product and deterministic display processing are retained with the scene metadata.</p><ImagerySummary items={grouped.imagery} /></Section>
       <Section title="Availability / limitations"><div className="space-y-2">{data.availability.map((item) => <div key={item.kind} className="rounded border border-border bg-bg/60 p-2 text-[11px] print:border-black/20 print:bg-transparent"><div className="flex justify-between"><span className="capitalize">{item.kind}</span><span className="text-status-moderate">{item.status}</span></div><p className="mt-1 text-text-muted">{item.reason}</p></div>)}</div></Section>
 
       {/* Print-only: the full log "EXPORT TO PDF" produces -- every observed-

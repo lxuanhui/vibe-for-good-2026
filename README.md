@@ -55,6 +55,18 @@ components, remain an explicitly separate fixture path in
 
 **Backend**
 
+Start the API in a separate terminal before using **Build Fire History** in
+Vite. The development server proxies `/api` to port 5001; if no process is
+listening there Vite correctly returns a 502 before Flask receives the
+GeoJSON request.
+
+```powershell
+backend\.venv\Scripts\python.exe backend\wsgi.py
+```
+
+Confirm it is reachable at `http://127.0.0.1:5001/api/health`, then start the
+frontend development server.
+
 ```bash
 cd backend
 uv venv && uv pip install -e ".[dev]"   # or: python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"

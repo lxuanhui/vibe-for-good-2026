@@ -23,6 +23,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from app import audit_store
 from app.audits import get_audit as get_audit_session
 from app.audits import get_scope_geometry
 from app.review_routing import attach_routing, routing_diagnostics
@@ -299,7 +300,7 @@ def progression(audit_id: str) -> dict[str, Any] | None:
     fire_events = len(audit["events"])
     observations_to_events = round(qualified / fire_events, 2) if fire_events else None
     scope_compression = round(fire_events / in_scope, 2) if in_scope else None
-    pack = AUDIT_PACKS.get(audit_id, {})
+    pack = audit_store.pack(audit_id) if get_audit_session(audit_id) else AUDIT_PACKS.get(audit_id, {})
     route_summary = routing_diagnostics(audit["events"])
     return {
         "rawObservations": source.get("rawObservations", source.get("observationsUsed")),
@@ -516,7 +517,13 @@ def evidence_for_event(audit_id: str, event_id: str) -> dict[str, Any] | None:
             raw_reference=event_id,
         ),
     ]
-    derived = list(event.get("triageDetail", {}).get("evidence", []))
+    triage_detail = event.get("triageDetail", {})
+    # Offline enrichment jobs append their provenance-bearing records next to
+    # Stage-1 evidence in the detail artifact. Include both fields: the
+    # previous code read only ``evidence``, silently discarding peat/weather/
+    # imagery records written by those jobs before the response reached React.
+    derived = list(triage_detail.get("evidence", []))
+    derived.extend(triage_detail.get("derivedEvidence", []))
     derived.append(_evidence_object(
         f"DERIVED_SCOPE_{event_id}_relation", "scope", "scope_relation",
         f"The event centroid is classified as {relation} against the private audit scope.", "Audit scope geometry / FireEvent centroid",
@@ -612,6 +619,8 @@ def evidence_for_event(audit_id: str, event_id: str) -> dict[str, Any] | None:
 def _pack(audit_id: str) -> dict[str, dict[str, Any]] | None:
     if get_audit(audit_id) is None:
         return None
+    if get_audit_session(audit_id):
+        return audit_store.pack(audit_id)
     return AUDIT_PACKS.setdefault(audit_id, {})
 
 
@@ -626,6 +635,8 @@ def add_to_pack(audit_id: str, event_id: str, note: str = "", disposition: str =
         "disposition": disposition.strip()[:80],
         "addedAt": existing.get("addedAt", datetime.now(UTC).isoformat()),
     }
+    if get_audit_session(audit_id):
+        audit_store.update_pack(audit_id, pack)
     return pack[event_id]
 
 
@@ -634,6 +645,8 @@ def remove_from_pack(audit_id: str, event_id: str) -> bool | None:
     if pack is None:
         return None
     pack.pop(event_id, None)
+    if get_audit_session(audit_id):
+        audit_store.update_pack(audit_id, pack)
     return True
 
 

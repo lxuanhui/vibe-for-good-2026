@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import type { AuditScope } from '../../api/types'
-import { createScope, DEFAULT_REVIEW_END, DEFAULT_REVIEW_START } from '../../lib/bootstrapScope'
+import { buildFireHistory, createAuditReview, uploadAuditScope, uploadAuditScopeGeometry } from '../../api/client'
 import { buildScopePreview, DEFAULT_MANAGEMENT_UNIT_GEOMETRY } from '../../lib/scope'
 import { Button } from '../ui/Button'
 import { ScopePreviewMap } from './ScopePreviewMap'
@@ -8,6 +8,12 @@ import { ScopePreviewMap } from './ScopePreviewMap'
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'The audit review could not be created.'
 }
+
+// The committed real dataset behind this demo is the 2019 Kalimantan haze
+// window (docs/demo.md). Pre-filling it means a user who skips the upload
+// still lands on a register with real FireEvents, not an empty one.
+const DEFAULT_REVIEW_START = '2019-09-01'
+const DEFAULT_REVIEW_END = '2019-09-05'
 
 export function AuditStart({ onReady, overlay = false, onClose }: { onReady: (scope: AuditScope) => void; overlay?: boolean; onClose?: () => void }) {
   const [reviewStart, setReviewStart] = useState(DEFAULT_REVIEW_START)
@@ -64,12 +70,16 @@ export function AuditStart({ onReady, overlay = false, onClose }: { onReady: (sc
 
     setSubmitting(true)
     try {
-      onReady(await createScope({
+      const created = await createAuditReview({
         reviewStart,
         reviewEnd,
         contextBufferKm: Number(contextBuffer),
-        file,
-      }))
+      })
+      const uploaded = file
+        ? await uploadAuditScope(created.audit_id, file)
+        : await uploadAuditScopeGeometry(created.audit_id, DEFAULT_MANAGEMENT_UNIT_GEOMETRY)
+      const handoff = await buildFireHistory(uploaded.audit_id)
+      onReady({ ...uploaded, status: handoff.status, historyBuild: handoff })
     } catch (error) {
       setSubmitError(errorMessage(error))
     } finally {

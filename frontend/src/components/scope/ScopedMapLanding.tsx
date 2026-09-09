@@ -1,14 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Layer, Map, Source, type MapLayerMouseEvent } from 'react-map-gl/maplibre'
-import type { Feature, FeatureCollection, GeoJsonProperties, Geometry, LineString, Point } from 'geojson'
+import type { Feature, FeatureCollection, Geometry, LineString, Point } from 'geojson'
 import type { AuditEventSummary, AuditScope, EventEvidenceResponse, InvestigationMap } from '../../api/types'
-import { fetchAuditEventEvidence, fetchAuditRegister, fetchInvestigationMap } from '../../api/client'
-import { useFirms } from '../../api/hooks'
-import { AUDIT_EVENT_COLORS, AUDIT_SCOPE_BOUNDARY_COLOR, AUDIT_SCOPE_BUFFER_COLOR, LAYER_COLORS } from '../../lib/layerColors'
-import { BORNEO_BOUNDS, UNSCOPED_CENTER, UNSCOPED_MAX_BOUNDS, UNSCOPED_MIN_ZOOM } from '../../lib/scope'
+import { fetchAuditRegister, fetchInvestigationBundle, fetchInvestigationMap } from '../../api/client'
+import { AUDIT_EVENT_COLORS, AUDIT_SCOPE_BOUNDARY_COLOR, AUDIT_SCOPE_BUFFER_COLOR } from '../../lib/layerColors'
 import { useAppStore } from '../../store/useAppStore'
 import { Button } from '../ui/Button'
-import { LayerControlPanel } from '../map/LayerControlPanel'
 import { EvidenceDrawer } from '../audit/EvidenceDrawer'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
@@ -66,21 +63,13 @@ function scopeFeature(geometry: unknown): Feature<Geometry> | null {
   return geometry ? { type: 'Feature', geometry: geometry as Geometry, properties: {} } : null
 }
 
-export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onOpenContext }: { scope: AuditScope | null; onOpenScope: () => void; onOpenRegister: () => void; onOpenContext: () => void }) {
-  // `scope` is null only for the first moments after load, while the default
-  // audit is created against the real API. The map paints Borneo immediately
-  // rather than holding a spinner; everything scope-derived below stays inert
-  // until the real scope lands.
-  const auditId = scope?.audit_id ?? ''
-  const bufferBbox = scope?.buffer_bbox ?? null
+export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister }: { scope: AuditScope; onOpenScope: () => void; onOpenRegister: () => void }) {
   const [events, setEvents] = useState<AuditEventSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const positionedForAudit = useRef('')
-  const firmsVisible = useAppStore((state) => state.layerVisibility.firms)
-  const staticFirms = useFirms(scope?.review_start ?? '', firmsVisible && !!scope)
-  const boundary = useMemo(() => scopeFeature(scope?.geometry), [scope?.geometry])
-  const buffer = useMemo(() => scopeFeature(scope?.buffer_geometry), [scope?.buffer_geometry])
+  const boundary = useMemo(() => scopeFeature(scope.geometry), [scope.geometry])
+  const buffer = useMemo(() => scopeFeature(scope.buffer_geometry), [scope.buffer_geometry])
 
   // Table multi-select ("INVESTIGATE ON MAP") hands off through this store
   // field rather than a prop -- App.tsx just flips viewMode, it does not
@@ -91,48 +80,58 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onOpenCon
   const [focusEventIds, setFocusEventIds] = useState<string[]>([])
   const seededFocusForAudit = useRef('')
   useEffect(() => {
-    if (!auditId || seededFocusForAudit.current === auditId) return
-    seededFocusForAudit.current = auditId
+    if (seededFocusForAudit.current === scope.audit_id) return
+    seededFocusForAudit.current = scope.audit_id
     if (registerSelection.length) setFocusEventIds(registerSelection)
-  }, [auditId, registerSelection])
+  }, [scope.audit_id, registerSelection])
 
   const [graph, setGraph] = useState<InvestigationMap>()
   const [graphError, setGraphError] = useState('')
   useEffect(() => {
-    if (!auditId || !focusEventIds.length) { setGraph(undefined); setGraphError(''); return }
+    // A one-event selection receives this graph with its evidence in the
+    // investigation bundle below. Multi-select remains a graph-only action.
+    if (focusEventIds.length <= 1) {
+      if (!focusEventIds.length) setGraph(undefined)
+      setGraphError('')
+      return
+    }
     let active = true
     setGraphError('')
-    fetchInvestigationMap(auditId, focusEventIds)
+    fetchInvestigationMap(scope.audit_id, focusEventIds)
       .then((result) => { if (active) setGraph(result) })
       .catch((reason) => { if (active) setGraphError(reason instanceof Error ? reason.message : 'Related FireEvents could not be loaded.') })
     return () => { active = false }
-  }, [auditId, focusEventIds])
+  }, [scope.audit_id, focusEventIds])
 
-  // Owned here, not by EvidenceDrawer -- the same fetch also supplies the
-  // "connecting FIRMS observations" map layer below, so one request serves
-  // both the drawer and the map instead of each fetching it separately.
+  // A single bundled request supplies the drawer, its graph, and the raw
+  // observations layer. This avoids a click producing two independent 404
+  // opportunities against a just-created audit.
   const drawerEventId = focusEventIds.length === 1 ? focusEventIds[0] : undefined
   const [evidence, setEvidence] = useState<EventEvidenceResponse>()
   const [evidenceLoading, setEvidenceLoading] = useState(false)
   const [evidenceError, setEvidenceError] = useState('')
   const [showObservations, setShowObservations] = useState(true)
+  const [showPeatland, setShowPeatland] = useState(false)
   const [evidenceReloadToken, setEvidenceReloadToken] = useState(0)
   useEffect(() => {
-    if (!auditId || !drawerEventId) { setEvidence(undefined); setEvidenceError(''); return }
+    if (!drawerEventId) { setEvidence(undefined); setEvidenceError(''); return }
     setShowObservations(true)
     let active = true
     setEvidenceLoading(true)
     setEvidenceError('')
-    fetchAuditEventEvidence(auditId, drawerEventId)
-      .then((result) => { if (active) setEvidence(result) })
+    fetchInvestigationBundle(scope.audit_id, drawerEventId)
+      .then((result) => {
+        if (!active) return
+        setEvidence(result.event)
+        setGraph(result.graph ?? undefined)
+      })
       .catch((reason) => { if (active) setEvidenceError(reason instanceof Error ? reason.message : 'Evidence could not be loaded.') })
       .finally(() => { if (active) setEvidenceLoading(false) })
     return () => { active = false }
-  }, [auditId, drawerEventId, evidenceReloadToken])
+  }, [scope.audit_id, drawerEventId, evidenceReloadToken])
   const observations = useMemo(() => observationPoints(evidence), [evidence])
 
   useEffect(() => {
-    if (!scope) return
     let active = true
     setLoading(true)
     setError('')
@@ -141,25 +140,11 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onOpenCon
       .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : 'FireEvents could not be loaded.') })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [scope])
+  }, [scope.audit_id, scope.review_start, scope.review_end, scope.buffer_bbox])
 
   const points = useMemo(() => mapPoints(events, graph), [events, graph])
   const edges = useMemo(() => graphEdges(graph), [graph])
-  const scopedFirms = useMemo(() => {
-    if (!staticFirms || !bufferBbox) return null
-    const { minLon, minLat, maxLon, maxLat } = bufferBbox
-    const features = staticFirms.features.filter((feature) => {
-      const geometry = feature.geometry as { type?: string; coordinates?: unknown }
-      if (geometry.type !== 'Point' || !Array.isArray(geometry.coordinates)) return false
-      const [lon, lat] = geometry.coordinates
-      return typeof lon === 'number' && typeof lat === 'number' && lon >= minLon && lon <= maxLon && lat >= minLat && lat <= maxLat
-    })
-    return {
-      ...staticFirms,
-      features,
-    } as unknown as FeatureCollection<Geometry, GeoJsonProperties>
-  }, [bufferBbox, staticFirms])
-  const center = useMemo<[number, number]>(() => scope?.centroid ?? UNSCOPED_CENTER, [scope?.centroid])
+  const center = useMemo<[number, number]>(() => scope.centroid ?? [116.25, -3.8], [scope.centroid])
 
   // Carto's basemap tiles now require a key on every request. The style JSON
   // stays key-free and committed; the key is appended here so it never lands
@@ -176,12 +161,10 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onOpenCon
     }
   }, [cartoApiKey])
 
-  // Before a scope exists the first frame is Borneo, fitted to the island's
-  // own box so it lands whole on any container. Once one does, the frame is
-  // the audit footprint.
   const initialViewState = useMemo(() => {
-    if (!bufferBbox) return { bounds: BORNEO_BOUNDS, fitBoundsOptions: { padding: 24 } }
-    const span = Math.max(bufferBbox.maxLon - bufferBbox.minLon, bufferBbox.maxLat - bufferBbox.minLat, 0.01)
+    const span = scope.buffer_bbox
+      ? Math.max(scope.buffer_bbox.maxLon - scope.buffer_bbox.minLon, scope.buffer_bbox.maxLat - scope.buffer_bbox.minLat, 0.01)
+      : 1
     return {
       longitude: center[0],
       latitude: center[1],
@@ -190,11 +173,7 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onOpenCon
       // detection-browser state.
       zoom: Math.max(7, Math.min(13, 8 - Math.log2(span))),
     }
-  }, [center, bufferBbox])
-
-  // The zoom the audit frame wants, kept separate because initialViewState
-  // carries no zoom in the unscoped case -- it carries a box.
-  const scopedZoom = 'zoom' in initialViewState ? initialViewState.zoom : undefined
+  }, [center, scope.buffer_bbox])
 
   function handleMapClick(event: MapLayerMouseEvent) {
     const feature = event.features?.[0]
@@ -204,12 +183,8 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onOpenCon
 
   return <div className="relative flex h-full w-full flex-col bg-bg text-text">
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-border-strong bg-panel px-5">
-      <div><div className="text-sm font-semibold tracking-wide">Environmental Assurance Console</div><div className="text-[10px] uppercase tracking-[0.2em] text-text-faint">{scope ? `Scoped FireEvent review · ${scope.review_start} → ${scope.review_end}` : 'Preparing the default demo scope…'}</div></div>
-      <div className="flex items-center gap-2">
-        {scope && <span className="rounded border border-status-good/50 px-2 py-1 text-[10px] uppercase tracking-wider text-status-good">Real derived events</span>}
-        <Button onClick={onOpenContext}>WHAT IS THIS?</Button>
-        <Button onClick={onOpenScope} disabled={!scope}>EDIT SCOPE</Button>
-      </div>
+      <div><div className="text-sm font-semibold tracking-wide">Environmental Assurance Console</div><div className="text-[10px] uppercase tracking-[0.2em] text-text-faint">Scoped FireEvent review · {scope.review_start} → {scope.review_end}</div></div>
+      <div className="flex items-center gap-2"><span className="rounded border border-status-good/50 px-2 py-1 text-[10px] uppercase tracking-wider text-status-good">Real derived events</span><Button onClick={onOpenScope}>EDIT SCOPE</Button></div>
     </header>
     <div className="relative flex min-h-0 flex-1">
       <div className="relative min-w-0 flex-1">
@@ -223,30 +198,24 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onOpenCon
           mapStyle="/scoped-map-style.json"
           transformRequest={transformRequest}
           initialViewState={initialViewState}
-          minZoom={scope ? 5 : UNSCOPED_MIN_ZOOM}
+          minZoom={5}
           maxZoom={15}
-          maxBounds={bufferBbox ? [bufferBbox.minLon, bufferBbox.minLat, bufferBbox.maxLon, bufferBbox.maxLat] : UNSCOPED_MAX_BOUNDS}
+          maxBounds={scope.buffer_bbox ? [scope.buffer_bbox.minLon, scope.buffer_bbox.minLat, scope.buffer_bbox.maxLon, scope.buffer_bbox.maxLat] : undefined}
           interactiveLayerIds={['audit-event-points']}
           onClick={handleMapClick}
           cursor="default"
           onLoad={(event) => {
-            // Nothing to correct while unscoped: the fitted Borneo box is
-            // already the frame, and jumping to a zoom we did not compute
-            // would undo it.
-            if (scopedZoom !== undefined) event.target.jumpTo({ center, zoom: scopedZoom })
+            event.target.jumpTo({ center, zoom: initialViewState.zoom })
           }}
           onIdle={(event) => {
-            if (!auditId || positionedForAudit.current === auditId) return
-            positionedForAudit.current = auditId
-            // First frame the real scope lands: ease rather than jump, so the
-            // viewer sees the regional frame narrow to the audit footprint
-            // instead of the map appearing to reload.
-            event.target.easeTo({ center, zoom: scopedZoom, duration: 900 })
+            if (positionedForAudit.current === scope.audit_id) return
+            positionedForAudit.current = scope.audit_id
+            event.target.jumpTo({ center, zoom: initialViewState.zoom })
           }}
         >
           {buffer && <Source id="audit-context-buffer" type="geojson" data={buffer}><Layer id="audit-context-buffer-line" type="line" paint={{ 'line-color': AUDIT_SCOPE_BUFFER_COLOR, 'line-width': 1.5, 'line-dasharray': [2, 2], 'line-opacity': 0.9 }} /></Source>}
           {boundary && <Source id="audit-scope-boundary" type="geojson" data={boundary}><Layer id="audit-scope-fill" type="fill" paint={{ 'fill-color': AUDIT_SCOPE_BOUNDARY_COLOR, 'fill-opacity': 0.08 }} /><Layer id="audit-scope-line" type="line" paint={{ 'line-color': AUDIT_SCOPE_BOUNDARY_COLOR, 'line-width': 2 }} /></Source>}
-          {scopedFirms && <Source id="static-firms-archive" type="geojson" data={scopedFirms}><Layer id="static-firms-archive-points" type="circle" paint={{ 'circle-radius': 3, 'circle-color': LAYER_COLORS.firms, 'circle-opacity': 0.55 }} /></Source>}
+          {showPeatland && <Source id="peatland-context" type="geojson" data="/peatland-indonesia.geojson"><Layer id="peatland-context-fill" type="fill" paint={{ 'fill-color': '#a855f7', 'fill-opacity': 0.22 }} /><Layer id="peatland-context-line" type="line" paint={{ 'line-color': '#c084fc', 'line-width': 0.7, 'line-opacity': 0.7 }} /></Source>}
           {edges.features.length > 0 && <Source id="fireevent-graph" type="geojson" data={edges}><Layer id="fireevent-graph-line" type="line" paint={{ 'line-color': GRAPH_LINE_COLOR, 'line-width': 2, 'line-dasharray': [1, 1] }} layout={{ 'line-cap': 'round' }} /></Source>}
           {showObservations && observations.features.length > 0 && <Source id="fireevent-observations" type="geojson" data={observations}><Layer id="fireevent-observations-points" type="circle" paint={{ 'circle-radius': 3, 'circle-color': OBSERVATION_COLOR, 'circle-opacity': 0.85, 'circle-stroke-color': '#0a0d12', 'circle-stroke-width': 1 }} /></Source>}
           <Source id="audit-events" type="geojson" data={points}>
@@ -268,19 +237,16 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onOpenCon
         <div className="border-b border-border-strong p-4">
           <div className="text-xs uppercase tracking-[0.16em] text-accent">Audit scope map</div>
           <h1 className="mt-1 text-sm font-semibold">FireEvents in scope + context</h1>
-          <p className="mt-2 text-xs leading-5 text-text-muted">{scope
-            ? `Only the private audit boundary and its ${scope.context_buffer_km} km context buffer are framed. Geographic intersection is context, not responsibility.`
-            : 'Borneo, before a scope exists. No detections are drawn at this zoom — FireEvents appear only inside an audit boundary and its context buffer.'}</p>
-          <div className="mt-3 grid grid-cols-2 gap-2 text-xs"><div className="rounded border border-border bg-bg p-2"><div className="text-text-faint">EVENTS SHOWN</div><div className="mt-1 text-lg font-semibold text-accent">{loading ? '…' : events.length.toLocaleString()}</div></div><div className="rounded border border-border bg-bg p-2"><div className="text-text-faint">SOURCE</div><div className="mt-1 text-status-good">{scope ? 'API artifact' : '—'}</div></div></div>
-          <div className="mt-3 space-y-1 text-[11px] text-text-muted"><div><span className="mr-2 text-status-good">●</span>LIKELY_FIRE</div><div><span className="mr-2 text-status-moderate">●</span>AMBIGUOUS</div><div><span className="mr-2 text-text-muted">●</span>LIKELY_NON_FIRE</div><div className="mt-2"><span className="mr-2 text-accent">—</span>Audit boundary <span className="ml-2 text-status-moderate">- -</span> Context buffer</div>{edges.features.length > 0 && <div><span className="mr-2 text-[#f97316]">┄</span>Candidate relationship</div>}{showObservations && observations.features.length > 0 && <div><span className="mr-2 text-[#fbbf24]">●</span>Connecting FIRMS observations</div>}</div>
-          <p className="mt-3 text-[10px] leading-4 text-text-faint">Click a FireEvent to open its evidence and draw any candidate relationships to nearby events. A candidate edge is a relationship for review, not a shared cause.</p>
+          <p className="mt-2 text-xs leading-5 text-text-muted">Review scoped FireEvents and optional peat context.</p>
+          <div className="mt-3 grid grid-cols-2 gap-2 text-xs"><div className="rounded border border-border bg-bg p-2"><div className="text-text-faint">EVENTS SHOWN</div><div className="mt-1 text-lg font-semibold text-accent">{loading ? '…' : events.length.toLocaleString()}</div></div><div className="rounded border border-border bg-bg p-2"><div className="text-text-faint">SOURCE</div><div className="mt-1 text-status-good">API artifact</div></div></div>
+          <p className="mt-3 text-[10px] leading-4 text-text-faint">Peat is environmental context, not cause. Compare it with selected-event evidence and candidate links.</p>
           {error && <div role="alert" className="mt-3 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-xs text-red-200">{error}</div>}
           {graphError && <div role="alert" className="mt-3 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-xs text-red-200">{graphError}</div>}
-          {loading && <div role="status" className="mt-3 text-xs text-text-muted">{scope ? 'Loading real audit FireEvents…' : 'Creating the default demo scope against the API…'}</div>}
+          {loading && <div role="status" className="mt-3 text-xs text-text-muted">Loading real audit FireEvents…</div>}
           {!loading && !error && events.length === 0 && <div className="mt-3 text-xs text-text-muted">No events intersect this audit scope and buffer.</div>}
-          <Button variant="primary" className="mt-4 w-full" onClick={onOpenRegister} disabled={!scope}>OPEN FIRE REGISTER</Button>
+          <Button variant="primary" className="mt-4 w-full" onClick={onOpenRegister}>OPEN FIRE REGISTER</Button>
+          <Button className="mt-2 w-full" onClick={() => setShowPeatland((shown) => !shown)}>{showPeatland ? 'HIDE PEATLAND' : 'SHOW PEATLAND'}</Button>
         </div>
-        <div className="p-3"><LayerControlPanel scoped /></div>
       </aside>
       {drawerEventId && (
         <EvidenceDrawer
@@ -290,8 +256,8 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onOpenCon
           data={evidence}
           graph={graph}
           graphError={graphError || undefined}
-          reviewStart={scope?.review_start ?? ''}
-          reviewEnd={scope?.review_end ?? ''}
+          reviewStart={scope.review_start}
+          reviewEnd={scope.review_end}
           showObservations={showObservations}
           onToggleObservations={() => setShowObservations((value) => !value)}
           observationCount={observations.features.length || undefined}

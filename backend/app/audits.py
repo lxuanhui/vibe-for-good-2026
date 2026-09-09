@@ -13,6 +13,8 @@ from math import cos, isfinite, radians
 from secrets import token_urlsafe
 from typing import Any
 
+from app import audit_store
+
 DEFAULT_CONTEXT_BUFFER_KM = 25.0
 MAX_CONTEXT_BUFFER_KM = 1_000.0
 _EPSILON = 1e-12
@@ -20,7 +22,21 @@ _EPSILON = 1e-12
 # This is deliberately an adapter seam, not a pretend durable database. A
 # warm Lambda can serve the next request by audit ID; a later storage issue can
 # replace this mapping without changing the frontend contract.
+# Kept as a compatibility cache for a few local callers.  The source of
+# truth is audit_store, which becomes DynamoDB in Lambda.
 AUDIT_SESSIONS: dict[str, dict[str, Any]] = {}
+
+
+def _save(session: dict[str, Any]) -> None:
+    AUDIT_SESSIONS[session["audit_id"]] = session
+    audit_store.put(session)
+
+
+def _load(audit_id: str) -> dict[str, Any] | None:
+    session = audit_store.get(audit_id)
+    if session is not None:
+        AUDIT_SESSIONS[audit_id] = session
+    return session
 
 
 class AuditValidationError(ValueError):
@@ -94,18 +110,18 @@ def create_audit(payload: Any) -> dict[str, Any]:
         "buffer_geometry": None,
         "_geometry": None,
     }
-    AUDIT_SESSIONS[audit_id] = session
+    _save(session)
     return _public_session(session)
 
 
 def get_audit(audit_id: str) -> dict[str, Any] | None:
-    session = AUDIT_SESSIONS.get(audit_id)
+    session = _load(audit_id)
     return _public_session(session) if session else None
 
 
 def get_scope_geometry(audit_id: str) -> Any:
     """Private geometry access for server-side spatial classification only."""
-    session = AUDIT_SESSIONS.get(audit_id)
+    session = _load(audit_id)
     return session.get("_geometry") if session else None
 
 
@@ -227,7 +243,7 @@ def _buffer_geometry(bbox: tuple[float, float, float, float], buffer_km: float) 
 
 
 def upload_scope(audit_id: str, geojson: Any) -> dict[str, Any] | None:
-    session = AUDIT_SESSIONS.get(audit_id)
+    session = _load(audit_id)
     if session is None:
         return None
 
@@ -246,14 +262,16 @@ def upload_scope(audit_id: str, geojson: Any) -> dict[str, Any] | None:
             "_geometry": original,
         }
     )
+    _save(session)
     return _public_session(session) | {"geometry": original}
 
 
 def build_history(audit_id: str) -> dict[str, Any] | None:
-    session = AUDIT_SESSIONS.get(audit_id)
+    session = _load(audit_id)
     if session is None:
         return None
     if session["status"] != "SCOPE_READY":
         raise AuditValidationError("upload a valid management-unit GeoJSON before building history")
     session["status"] = "HISTORY_BUILD_READY"
+    _save(session)
     return {"audit_id": audit_id, "scope_id": session["scope_id"], "status": session["status"]}

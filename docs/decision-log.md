@@ -6,6 +6,87 @@ more valuable half.
 
 ---
 
+## 2026-09-09 - Audit session state goes in DynamoDB; the scope-first landing wins over the map-first one
+
+**Status:** done - PR #131
+
+**Decision (persistence).** Audit session state - the audit record, its
+uploaded scope GeoJSON, and evidence-pack selections - persists in a
+PAY_PER_REQUEST DynamoDB table (`aws_dynamodb_table.audit_state`).
+`backend/app/audit_store.py` keeps using process memory locally and switches
+to the table only when `AUDIT_STATE_TABLE` is set, so local development gains
+no AWS dependency.
+
+**Why.** `POST /api/audits` returned an audit id that later register, graph,
+evidence and pack calls then used. On Lambda those later calls are routinely
+served by a *different* warm container, whose process-local dict has never
+heard of that id - so an audit created successfully would 404 moments later.
+This is not a caching nicety; the flow was broken in the deployed
+configuration and worked only locally, which is exactly the class of bug the
+single-process dev server hides.
+
+**What this does and does not settle.** `CLAUDE.md` reserved §8's persistence
+roles, saying not to quietly settle them by writing DynamoDB or S3 into the
+spec. This settles exactly one of the three: *durable/queryable metadata*, and
+only for session state. Bulky immutable evidence and the disposable cache
+remain unchosen - the FIRMS artifact is still packaged and immutable, and
+nothing writes to it. CLAUDE.md has been updated to say so rather than to keep
+claiming nothing persists.
+
+**Rejected: sticky sessions or a single-container Lambda.** Pinning a caller
+to one container (reserved concurrency of 1) would have "fixed" it without new
+infrastructure, at the cost of serialising every request in the demo and still
+losing state on any cold start. It trades a correctness bug for a throughput
+bug.
+
+**Rejected: putting the scope in the client and re-posting it.** Would remove
+the server-side store entirely, but the uploaded management-unit boundary is
+private audit-scope data (spec 6.2-6.3); round-tripping it through the browser
+on every call enlarges its exposure for no benefit.
+
+**Not done: a TTL.** The table has no expiry policy. Rows are few and small,
+and choosing a TTL means deciding how long an audit session may be resumed -
+a product question nobody has answered. The Terraform comment says so instead
+of implying an expiry that does not exist. Encryption at rest is DynamoDB's
+default (AWS-owned key); no explicit KMS key was declared.
+
+**Decision (landing surface).** The console lands on
+`components/scope/AuditLanding.tsx` - an event-free regional Indonesia map
+with a START AUDIT button - not on the Borneo map with an auto-created default
+scope that PR #126 shipped two days earlier.
+
+**Why, and what was reversed.** #126 and this PR made opposite choices about
+the same screen, and both were on `main`-bound branches at once. The
+scope-first flow won on the product boundary: the console must not draw
+FireEvents before an authorised scope exists, and #126's auto-bootstrapped
+"default demo scope" put real events on screen for a user who had defined no
+audit at all. The map-first landing's own rationale - that a form is a poor
+first impression - is answered by making the landing a map that simply draws
+no events.
+
+**Consequences.** `lib/bootstrapScope.ts` was deleted: it existed only to
+share a scope-creation path between the auto-bootstrap and the form, and with
+no auto-bootstrap nothing imported it. `AuditStart.tsx` calls the endpoints
+directly again. The first-load explainer from #124 was *kept* and rewired -
+`ConsoleContextModal` now opens over the landing, reached from a link under
+the START AUDIT button - because what it explains (what the console refuses to
+conclude) is what a first-time user needs before defining a scope, not after.
+Leaving it unmounted would have made it the orphan CLAUDE.md forbids.
+
+**Open.** How much regional context the pre-scope screen should carry is
+issue #127, deliberately not settled here.
+
+**Also fixed in passing: CRLF on `main`.** Merging this branch produced 15
+conflicts, of which four were whole-file line-ending conflicts -
+`backend/app/audit_events.py`, `data_pipeline/README.md`,
+`data_pipeline/imagery/scene_selection.py` and
+`data_pipeline/sources/open_meteo.py` had landed on `main` as CRLF via the
+earlier PR #129 merge from a Windows checkout. Two of those four had *zero*
+real content difference. The merge normalises all four back to LF. The repo
+has no `.gitattributes` to stop this recurring - see issue for that.
+
+---
+
 ## 2026-09-09 - Weather and imagery-scene evidence: spatial grid, local checkpoint, not a new database
 
 **Status:** implemented, `data_pipeline/enrich_audit_events.py`

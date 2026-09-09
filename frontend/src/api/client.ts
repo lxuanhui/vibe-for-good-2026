@@ -1,5 +1,5 @@
 import type { FeatureCollection } from './geojson'
-import type { AuditEventSummary, AuditPackReview, AuditProgression, AuditReport, AuditScope, BBox, DemoDatasetSummary, EventEvidenceResponse, EventStatus, FireEvent, InvestigationMap, InvestigationReport, OverlayLayerId } from './types'
+import type { AuditEventSummary, AuditPackReview, AuditProgression, AuditReport, AuditScope, BBox, DemoDatasetSummary, EventEvidenceResponse, EventStatus, FireEvent, InvestigationBundle, InvestigationMap, InvestigationReport, OverlayLayerId } from './types'
 import { getOverlay, isLayerAvailable } from './fixtures/overlays'
 import { REPORTS } from './fixtures/reports'
 
@@ -16,12 +16,27 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
 
 const LATENCY_MS = 220
 
+function apiUnavailable(error: unknown): Error {
+  // Vite reports a proxy connection refusal as a fetch TypeError/502, which
+  // otherwise reads like a malformed GeoJSON submission. The audit form can
+  // give the operator an actionable local-development diagnosis instead.
+  if (error instanceof TypeError) {
+    return new Error('The local API is unavailable. Start the Flask server on http://127.0.0.1:5001, then try again.')
+  }
+  return error instanceof Error ? error : new Error('The API request failed.')
+}
+
 function delay<T>(value: T, ms = LATENCY_MS): Promise<T> {
   return new Promise((resolve) => setTimeout(() => resolve(value), ms))
 }
 
 async function apiGet<T>(path: string): Promise<T> {
-  const response = await fetch(`${API_BASE}/api${path}`)
+  let response: Response
+  try {
+    response = await fetch(`${API_BASE}/api${path}`)
+  } catch (error) {
+    throw apiUnavailable(error)
+  }
   if (!response.ok) {
     throw new Error(`GET /api${path} failed with ${response.status}`)
   }
@@ -29,7 +44,12 @@ async function apiGet<T>(path: string): Promise<T> {
 }
 
 async function apiPost<T>(path: string, body: BodyInit | null, headers?: HeadersInit): Promise<T> {
-  const response = await fetch(`${API_BASE}/api${path}`, { method: 'POST', body, headers })
+  let response: Response
+  try {
+    response = await fetch(`${API_BASE}/api${path}`, { method: 'POST', body, headers })
+  } catch (error) {
+    throw apiUnavailable(error)
+  }
   if (!response.ok) {
     const details = (await response.json().catch(() => null)) as { error?: string } | null
     throw new Error(details?.error ?? `POST /api${path} failed with ${response.status}`)
@@ -114,6 +134,10 @@ export async function fetchInvestigationMap(auditId: string, eventIds: string[])
 
 export async function fetchAuditEventEvidence(auditId: string, eventId: string): Promise<EventEvidenceResponse> {
   return apiGet<EventEvidenceResponse>(`/audits/${encodeURIComponent(auditId)}/events/${encodeURIComponent(eventId)}/evidence`)
+}
+
+export async function fetchInvestigationBundle(auditId: string, eventId: string): Promise<InvestigationBundle> {
+  return apiGet<InvestigationBundle>(`/audits/${encodeURIComponent(auditId)}/events/${encodeURIComponent(eventId)}/investigation`)
 }
 
 export async function addToAuditPack(auditId: string, eventId: string, review: Partial<Pick<AuditPackReview, 'note' | 'disposition'>> = {}): Promise<AuditPackReview> {
