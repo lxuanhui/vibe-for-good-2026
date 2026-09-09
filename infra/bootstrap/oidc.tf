@@ -139,6 +139,22 @@ data "aws_iam_policy_document" "github_actions" {
     resources = ["arn:${data.aws_partition.current.partition}:amplify:*:${data.aws_caller_identity.current.account_id}:apps/*"]
   }
 
+  # api.tf's aws_dynamodb_table.audit_state needs the CI role to be able to
+  # create/manage the table itself -- separate from aws_iam_role_policy.audit_state
+  # in api.tf, which grants the Lambda's own execution role read/write on
+  # table *items* at request time. Table-lifecycle actions have no
+  # fine-grained resource condition beyond the ARN, same reason Lambda above
+  # is scoped by name prefix rather than to individual functions.
+  statement {
+    sid = "DynamoDb"
+    actions = [
+      "dynamodb:CreateTable", "dynamodb:DeleteTable", "dynamodb:DescribeTable",
+      "dynamodb:UpdateTable", "dynamodb:TagResource", "dynamodb:UntagResource",
+      "dynamodb:ListTagsOfResource",
+    ]
+    resources = ["arn:${data.aws_partition.current.partition}:dynamodb:*:${data.aws_caller_identity.current.account_id}:table/${var.project}-*"]
+  }
+
   statement {
     sid = "Logs"
     actions = [
