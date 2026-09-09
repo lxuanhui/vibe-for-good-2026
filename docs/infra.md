@@ -47,9 +47,11 @@ Only three things, in order of likelihood:
    `ap-southeast-1` rates: ~$1.42 per million writes, ~$0.28 per million
    reads, ~$0.285/GB-month. Verify against the AWS calculator before relying
    on them.
-3. **Lambda duration** if the Investigator/Skeptic loop starts calling an LLM
-   per event. That is a model-provider bill first and a Lambda bill second,
-   and neither is in this table yet.
+3. **Claude analysis calls.** Investigator/Skeptic analysis now makes two
+   explicit, structured provider rounds per auditor request. That is a
+   model-provider bill first and a Lambda bill second; it is deliberately not
+   estimated here because usage is controlled by human requests and provider
+   pricing must be checked at deployment time.
 
 Nothing here is always-on. There is no NAT gateway, no load balancer, no RDS,
 no provisioned concurrency — the four usual ways a serverless project starts

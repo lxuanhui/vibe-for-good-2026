@@ -13,6 +13,7 @@ when changing that subsystem.
 | API state | Audit IDs and scope state persist in DynamoDB in deployed environments; in-memory state is local development only. | 2026-09-09, audit session / landing |
 | Derived data | Clustered events, weather, imagery selection, peat context, and prepared graph data are offline artifacts, not request-time Lambda work. | 2026-09-09, graph; weather and imagery; 2026-09-08, clustering |
 | Investigation | Scores, review routing, graph edges, and propagation are separate deterministic evidence outputs; none establishes causation. | 2026-09-09, graph; review routing; 2026-09-08, triage / graph / surface growth |
+| AI interpretation | Claude runs only after an explicit auditor request, receives bounded EvidenceObjects plus graph summaries, and returns schema-validated Investigator/Skeptic findings retained with the audit session. | 2026-09-09, structured analysis |
 | Map and imagery | Camera fitting is bounds-driven; map context is not an unscoped fire browser. Satellite display processing is deterministic and provenance-preserving. | 2026-09-09, audit session / landing; 2026-09-08, Copernicus scenes |
 | Infrastructure | Flask runs on Lambda behind API Gateway; Terraform owns the deployed configuration; CORS is Flask-owned. | 2026-09-09, Amplify; 2026-09-07, Lambda / CORS |
 | Service selection | DynamoDB and S3 are authorised without a fresh argument each time; every service switched on gets a cost row in `docs/infra.md` in the same PR. | 2026-09-09, DynamoDB and S3 are authorised |
@@ -20,6 +21,20 @@ when changing that subsystem.
 **Use this log:** entries retain the original diagnosis, rejected alternatives,
 and historical context. A later entry can supersede an earlier one; do not
 apply an older decision without checking the entries above it.
+
+---
+
+## 2026-09-09 - Investigator/Skeptic analysis is explicit, evidence-bound, and durable
+
+**Status:** done Â· issue #64
+
+**Decision.** The real audit path uses `POST /api/audits/{audit_id}/events/{event_id}/analyse` to invoke Claude Sonnet 5 only after the auditor presses **GENERATE INVESTIGATION ANALYSIS**. The provider receives structured, provenance-bearing EvidenceObjects and deterministic FireEventGraph relationship summaries, not raw point dumps. The existing pipeline validates every returned hypothesis and evidence reference before the result is stored with the audit session in DynamoDB (or local memory in development).
+
+**Interpretation boundary.** The fixed H1-H6 mechanism set covers local ignition, surface propagation, peat-mediated persistence/propagation, related land-management ignitions, shared-condition regional events, and other mechanisms. Evidence sufficiency is separate from support. The provider prompt and the pipeline prohibit company identity, intent, blame, legal, and responsibility inference; output is compact findings, evidence IDs, limitations, disagreement, and targeted human verification questions, never a transcript or chain-of-thought.
+
+**Report behaviour.** The engagement package reads persisted output for analysed selected events and labels every other selected event as **not run**. It does not infer or fabricate an empty event’s assessment. Weather, peat, imagery, and surface-propagation evidence remain deterministic inputs shown separately from the AI interpretation.
+
+**Cost / failure behaviour.** The provider is Amazon Bedrock, authenticated by the Lambda role's narrowly scoped `bedrock:InvokeModel` permission; `BEDROCK_MODEL_ID` is a Terraform-controlled model/profile setting, not a browser value or API key. Provider failure returns a truthful 503 and preserves the existing evidence view; it does not retry automatically. Calls are explicit and bounded (two structured rounds), so model cost scales with deliberate auditor actions rather than map clicks.
 
 ---
 

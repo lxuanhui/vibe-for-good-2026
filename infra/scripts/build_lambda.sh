@@ -67,6 +67,12 @@ echo "==> Vendoring dependencies for python$PYTHON_VERSION/$PLATFORM"
 
 echo "==> Adding application source"
 cp -R "$BACKEND_DIR/app" "$BUILD_DIR/app"
+# The API calls the canonical, provider-agnostic Investigator/Skeptic module
+# from data_pipeline. Package only that pure-Python namespace rather than
+# copying the source-fetching and offline enrichment tools into Lambda.
+mkdir -p "$BUILD_DIR/data_pipeline"
+cp "$REPO_ROOT/data_pipeline/__init__.py" "$BUILD_DIR/data_pipeline/__init__.py"
+cp -R "$REPO_ROOT/data_pipeline/analysis" "$BUILD_DIR/data_pipeline/analysis"
 # wsgi.py is the local dev server and has no place in the bundle.
 cp "$BACKEND_DIR/lambda_handler.py" "$BUILD_DIR/lambda_handler.py"
 

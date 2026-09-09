@@ -289,9 +289,44 @@ export interface EventEvidenceResponse {
   provenance: { source: Record<string, unknown>; algorithmVersions: string[] }
 }
 
+export interface StructuredAnalysisQuestion {
+  question: string
+  evidence_ids: string[]
+  reason?: string
+}
+
+export interface StructuredAnalysisFinding {
+  hypothesis_id: string
+  support_score: number
+  evidence_sufficiency: 'SUFFICIENT' | 'PARTIAL' | 'INSUFFICIENT'
+  supporting_evidence_ids: string[]
+  contradicting_evidence_ids: string[]
+  summary: string
+  verification_questions: StructuredAnalysisQuestion[]
+}
+
+export interface StructuredAnalysisAssessment {
+  role: 'INVESTIGATOR' | 'SKEPTIC'
+  round: number
+  phase: 'INDEPENDENT_ASSESSMENT' | 'REBUTTAL' | 'FINAL_ASSESSMENT'
+  findings: StructuredAnalysisFinding[]
+  unresolved_questions: StructuredAnalysisQuestion[]
+}
+
+export interface StructuredAnalysis {
+  event_id: string
+  status: string
+  algorithm_version: string
+  evidence_ids: string[]
+  rounds: { round: number; phase: string; investigator: StructuredAnalysisAssessment; skeptic: StructuredAnalysisAssessment; unresolved_questions: StructuredAnalysisQuestion[] }[]
+  final_assessment: { investigator: StructuredAnalysisAssessment; skeptic: StructuredAnalysisAssessment }
+  unresolved_questions: StructuredAnalysisQuestion[]
+}
+
 export interface InvestigationBundle {
   event: EventEvidenceResponse
   graph: InvestigationMap | null
+  analysis: StructuredAnalysis | null
 }
 
 // The committed real dataset, described without building an audit. Narrower
@@ -341,9 +376,10 @@ export interface AuditReport {
   chronology: { eventId: string; firstDetection: string; lastDetection: string }[]
   deterministicEvidence: { eventId: string; observed: EvidenceObject[]; derived: EvidenceObject[] }[]
   graphRelationships: InvestigationMap['edges']
-  aiAnalysis: unknown[]
-  unresolvedQuestions: unknown[]
-  verificationRecommendations: unknown[]
+  aiAnalysis: { eventId: string; analysis: StructuredAnalysis }[]
+  analysisNotRunEventIds: string[]
+  unresolvedQuestions: ({ eventId: string } & StructuredAnalysisQuestion)[]
+  verificationRecommendations: ({ eventId: string } & StructuredAnalysisQuestion)[]
   limitations: string[]
   provenance: { source: Record<string, unknown>; algorithmVersions: string[] }
   humanNotes: AuditPackReview[]

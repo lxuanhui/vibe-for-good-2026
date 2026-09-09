@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Layer, Map, Source, type MapLayerMouseEvent } from 'react-map-gl/maplibre'
 import type { Feature, FeatureCollection, Geometry, LineString, Point, Polygon } from 'geojson'
-import type { AuditEventSummary, AuditScope, EventEvidenceResponse, InvestigationMap, InvestigationMapNode } from '../../api/types'
-import { addToAuditPack, fetchAuditRegister, fetchInvestigationBundle, fetchInvestigationMap, removeFromAuditPack } from '../../api/client'
+import type { AuditEventSummary, AuditScope, EventEvidenceResponse, InvestigationMap, InvestigationMapNode, StructuredAnalysis } from '../../api/types'
+import { addToAuditPack, fetchAuditRegister, fetchInvestigationBundle, fetchInvestigationMap, generateInvestigationAnalysis } from '../../api/client'
 import { AUDIT_EVENT_COLORS, AUDIT_SCOPE_BOUNDARY_COLOR, AUDIT_SCOPE_BUFFER_COLOR, SURFACE_FIRE_ENVELOPE_COLOR } from '../../lib/layerColors'
 import { useAppStore } from '../../store/useAppStore'
 import { Button } from '../ui/Button'
@@ -98,6 +98,10 @@ function scopeFeature(geometry: unknown): Feature<Geometry> | null {
 export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewReport }: { scope: AuditScope; onOpenScope: () => void; onOpenRegister: () => void; onViewReport: () => void }) {
   const [events, setEvents] = useState<AuditEventSummary[]>([])
   const [packed, setPacked] = useState<string[]>([])
+  // Package selection belongs to this sidebar. It is deliberately separate
+  // from Fire Register selection, which drives the relationship graph and
+  // should not force an auditor to put every compared event in the report.
+  const [candidateIds, setCandidateIds] = useState<string[]>([])
   const [packError, setPackError] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -146,13 +150,16 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
   const [evidence, setEvidence] = useState<EventEvidenceResponse>()
   const [evidenceLoading, setEvidenceLoading] = useState(false)
   const [evidenceError, setEvidenceError] = useState('')
+  const [analysis, setAnalysis] = useState<StructuredAnalysis>()
+  const [analysisLoading, setAnalysisLoading] = useState(false)
+  const [analysisError, setAnalysisError] = useState('')
   const [focusGraph, setFocusGraph] = useState<InvestigationMap>()
   const [focusGraphError, setFocusGraphError] = useState('')
   const [showObservations, setShowObservations] = useState(true)
   const [showPeatland, setShowPeatland] = useState(false)
   const [evidenceReloadToken, setEvidenceReloadToken] = useState(0)
   useEffect(() => {
-    if (!drawerEventId) { setEvidence(undefined); setEvidenceError(''); setFocusGraph(undefined); setFocusGraphError(''); return }
+    if (!drawerEventId) { setEvidence(undefined); setEvidenceError(''); setFocusGraph(undefined); setFocusGraphError(''); setAnalysis(undefined); setAnalysisError(''); return }
     setShowObservations(true)
     let active = true
     setEvidenceLoading(true)
@@ -163,6 +170,7 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
         if (!active) return
         setEvidence(result.event)
         setFocusGraph(result.graph ?? undefined)
+        setAnalysis(result.analysis ?? undefined)
       })
       .catch((reason) => {
         if (!active) return
@@ -174,6 +182,15 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
     return () => { active = false }
   }, [scope.audit_id, drawerEventId, evidenceReloadToken])
   const observations = useMemo(() => observationPoints(evidence), [evidence])
+
+  async function generateAnalysis() {
+    if (!drawerEventId) return
+    setAnalysisLoading(true)
+    setAnalysisError('')
+    try { setAnalysis(await generateInvestigationAnalysis(scope.audit_id, drawerEventId)) }
+    catch (reason) { setAnalysisError(reason instanceof Error ? reason.message : 'Investigation analysis could not be generated.') }
+    finally { setAnalysisLoading(false) }
+  }
 
   // One rolled-together graph for the map: every node either source contains,
   // and every edge tagged by which source it came from so the paint
@@ -202,29 +219,36 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
     setLoading(true)
     setError('')
     fetchAuditRegister(scope.audit_id, { since: scope.review_start, until: scope.review_end, bbox: scope.buffer_bbox ?? undefined })
-      .then((result) => { if (active) { setEvents(result.events); setPacked(result.progression.selectedEventIds) } })
+      .then((result) => { if (active) { setEvents(result.events); setPacked(result.progression.selectedEventIds); setCandidateIds([]) } })
       .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : 'FireEvents could not be loaded.') })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [scope.audit_id, scope.review_start, scope.review_end, scope.buffer_bbox])
 
-  // Register-selection is who the sidebar offers as pack candidates: it is
-  // "what he selected in the Fire Register", not the map's own click-to-focus
-  // state, which can diverge from it (issue #101 -- investigation focus and
-  // evidence-pack inclusion are deliberately kept distinct, not conflated).
-  async function addToPack(eventId: string) {
-    try {
-      await addToAuditPack(scope.audit_id, eventId)
-      setPacked((ids) => ids.includes(eventId) ? ids : [...ids, eventId])
-    } catch (reason) { setPackError(reason instanceof Error ? reason.message : 'Could not add event to pack.') }
-  }
-  async function removeFromPack(eventId: string) {
-    try {
-      await removeFromAuditPack(scope.audit_id, eventId)
-      setPacked((ids) => ids.filter((id) => id !== eventId))
-    } catch (reason) { setPackError(reason instanceof Error ? reason.message : 'Could not remove event from pack.') }
+  function toggleCandidate(eventId: string) {
+    setCandidateIds((ids) => ids.includes(eventId) ? ids.filter((id) => id !== eventId) : [...ids, eventId])
   }
 
+  async function addFocusedEventToPack() {
+    if (!drawerEventId || packed.includes(drawerEventId)) return
+    setPackError('')
+    try {
+      await addToAuditPack(scope.audit_id, drawerEventId)
+      setPacked((ids) => ids.includes(drawerEventId) ? ids : [...ids, drawerEventId])
+    } catch (reason) { setPackError(reason instanceof Error ? reason.message : 'Could not add the open FireEvent to the audit report.') }
+  }
+
+  async function addCandidatesToPack() {
+    const additions = candidateIds.filter((id) => !packed.includes(id))
+    if (!additions.length) return
+    setPackError('')
+    const results = await Promise.allSettled(additions.map((id) => addToAuditPack(scope.audit_id, id)))
+    const added = additions.filter((_, index) => results[index].status === 'fulfilled')
+    const failed = additions.filter((_, index) => results[index].status === 'rejected')
+    if (added.length) setPacked((ids) => [...ids, ...added.filter((id) => !ids.includes(id))])
+    setCandidateIds(failed)
+    if (failed.length) setPackError(`Could not add ${failed.length} selected FireEvent${failed.length === 1 ? '' : 's'} to the audit report.`)
+  }
   const points = useMemo(() => mapPoints(events, graphNodes), [events, graphNodes])
   const edges = useMemo(() => graphEdges(graphNodes, taggedEdges), [graphNodes, taggedEdges])
   const envelopes = useMemo(() => envelopePolygons(taggedEdges), [taggedEdges])
@@ -347,27 +371,18 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
         </div>
         <div className="p-4">
           <div className="flex items-center justify-between">
-            <div className="text-xs uppercase tracking-[0.16em] text-accent">Audit package</div>
-            <span className="rounded border border-border px-1.5 py-0.5 text-[10px] text-text-muted">{packed.length} PACKED</span>
+            <div className="text-xs uppercase tracking-[0.16em] text-accent">Investigation candidates</div>
+            <span className="rounded border border-border px-1.5 py-0.5 text-[10px] text-text-muted">{packed.length} IN REPORT</span>
           </div>
-          <p className="mt-2 text-xs leading-5 text-text-muted">FireEvents selected in the Fire Register are candidates here -- add the ones that belong in the engagement report.</p>
+          <p className="mt-2 text-xs leading-5 text-text-muted">Select one or more scoped FireEvents to add them to the audit report. This is independent from Fire Register selection used for map comparison.</p>
           {packError && <div role="alert" className="mt-2 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-xs text-red-200">{packError}</div>}
-          {registerSelection.length === 0 ? (
-            <p className="mt-3 text-[11px] text-text-faint">No FireEvents selected. Open the Fire Register and select rows to add candidates here.</p>
-          ) : (
-            <ul className="mt-3 space-y-1.5">
-              {registerSelection.map((id) => {
-                const inPack = packed.includes(id)
-                return (
-                  <li key={id} className="flex items-center justify-between gap-2 rounded border border-border bg-bg px-2 py-1.5 text-[11px]">
-                    <span className="truncate font-mono text-text-muted">{id}</span>
-                    <Button className="shrink-0 whitespace-nowrap text-[10px]" onClick={() => void (inPack ? removeFromPack(id) : addToPack(id))}>{inPack ? 'REMOVE' : 'ADD'}</Button>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-          <Button variant="primary" className="mt-3 w-full" onClick={onViewReport}>{`VIEW AUDIT PACKAGE (${packed.length})`}</Button>
+          <Button className="mt-3 w-full" disabled={!drawerEventId || packed.includes(drawerEventId)} onClick={() => void addFocusedEventToPack()}>{drawerEventId ? packed.includes(drawerEventId) ? 'OPEN FIRE EVENT IS IN REPORT' : `ADD OPEN FIRE EVENT (${drawerEventId})` : 'OPEN A FIRE EVENT TO ADD IT'}</Button>
+          {!loading && events.length === 0 ? <p className="mt-3 text-[11px] text-text-faint">No scoped FireEvents are available to add.</p> : <ul className="mt-3 max-h-64 space-y-1.5 overflow-y-auto pr-1">{events.map((event) => {
+            const inReport = packed.includes(event.eventId)
+            return <li key={event.eventId} className="rounded border border-border bg-bg px-2 py-1.5 text-[11px]"><label className="flex cursor-pointer items-center gap-2"><input aria-label={`Add ${event.eventId} to audit report`} type="checkbox" checked={candidateIds.includes(event.eventId)} disabled={inReport} onChange={() => toggleCandidate(event.eventId)} /><span className="min-w-0 flex-1 truncate font-mono text-text-muted">{event.eventId}</span><span className="shrink-0 text-[10px] text-text-faint">{inReport ? 'IN REPORT' : event.investigationPriority}</span></label></li>
+          })}</ul>}
+          <Button className="mt-3 w-full" disabled={!candidateIds.length} onClick={() => void addCandidatesToPack()}>{`ADD SELECTED TO REPORT (${candidateIds.length})`}</Button>
+          <Button variant="primary" className="mt-3 w-full" onClick={onViewReport}>{`VIEW AUDIT REPORT (${packed.length})`}</Button>
         </div>
       </aside>
       {drawerEventId && (
@@ -385,6 +400,10 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
           observationCount={observations.features.length || undefined}
           onClose={() => setFocusedEventId(undefined)}
           onRetry={() => setEvidenceReloadToken((value) => value + 1)}
+          analysis={analysis}
+          analysisLoading={analysisLoading}
+          analysisError={analysisError || undefined}
+          onGenerateAnalysis={() => void generateAnalysis()}
         />
       )}
     </div>
