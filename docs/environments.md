@@ -17,7 +17,7 @@ nobody has to go digging. Nothing on this page is a credential.
 | Terraform state | `s3://vibe-for-good-2026-tfstate-apse1/infra/terraform.tfstate`, native `use_lockfile` |
 | CI role | `vibe-for-good-2026-github-actions` (assumed over OIDC) |
 | Console | Amplify app `vibe-for-good-2026-dev-console`, id `dz8w2n4hd2d22`. Terraform creates the app; the repository, the `main` branch and previews are connected by hand (see below). |
-| Console URL | `https://main.dz8w2n4hd2d22.amplifyapp.com` — 404s until the repository is connected and `main` has built. |
+| Console URL | `https://main.dz8w2n4hd2d22.amplifyapp.com` (live) |
 
 The `environment` Terraform variable defaults to `dev` and feeds every
 resource name, so a second environment is `-var environment=staging` plus a
@@ -99,6 +99,39 @@ root:
 
 Terraform ignores later changes to `repository` and the token attributes, so
 the next plan does not strip any of this.
+
+## After any Amplify console change: re-apply, then rebuild
+
+The connect-repository wizard replaced the app's entire environment-variable
+map with its own defaults. `VITE_API_BASE_URL` disappeared, the Node pin was
+overwritten with Amplify CLI `latest`, and the build that followed shipped a
+console that loaded correctly and could not reach the API at all —
+`client.ts` falls back to `API_BASE = ''`, so every request went to the Amplify
+origin and 404'd. A green build serving an inert app is the worst shape this
+failure could take, because nothing looks wrong.
+
+So, after touching anything in the Amplify console:
+
+```bash
+gh workflow run Infra --ref main        # restores the Terraform-managed settings
+aws amplify start-job --region ap-southeast-1 \
+  --app-id dz8w2n4hd2d22 --branch-name main --job-type RELEASE
+```
+
+The second command is not optional. Vite bakes `VITE_*` in at build time, so
+restoring the variable does nothing until something rebuilds. The repository
+connection survives the apply — `ignore_changes` covers `repository` and the
+token attributes.
+
+To check it actually worked, look for the API host in the shipped bundle
+rather than trusting the build status:
+
+```bash
+curl -s https://main.dz8w2n4hd2d22.amplifyapp.com/ \
+  | grep -oE '/assets/[A-Za-z0-9._-]+\.js'         # find the bundle
+curl -s https://main.dz8w2n4hd2d22.amplifyapp.com/assets/<that>.js \
+  | grep -o 'execute-api[^"]*'                      # must not be empty
+```
 
 ## GitHub configuration
 
