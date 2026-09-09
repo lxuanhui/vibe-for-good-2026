@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { fetchDemoDatasetSummary } from '../../api/client'
+import type { RefObject } from 'react'
 import type { DemoDatasetSummary } from '../../api/types'
 
 function Chevron() {
@@ -48,7 +49,7 @@ function ProgressionChain({ summary }: { summary: DemoDatasetSummary }) {
   )
 }
 
-export function ConsoleContextPanel({ onDismiss }: { onDismiss: () => void }) {
+export function ConsoleContextPanel({ onDismiss, closeRef }: { onDismiss: () => void; closeRef?: RefObject<HTMLButtonElement | null> }) {
   const [summary, setSummary] = useState<DemoDatasetSummary | null>(null)
   const [failed, setFailed] = useState(false)
 
@@ -61,10 +62,7 @@ export function ConsoleContextPanel({ onDismiss }: { onDismiss: () => void }) {
   }, [])
 
   return (
-    <section
-      aria-labelledby="console-context-heading"
-      className="rounded-xl border border-border-strong bg-panel p-6 shadow-2xl"
-    >
+    <div className="p-6">
       <div className="flex items-start justify-between gap-6">
         <div className="max-w-[68ch]">
           <h2 id="console-context-heading" className="text-lg font-semibold tracking-tight">
@@ -82,6 +80,7 @@ export function ConsoleContextPanel({ onDismiss }: { onDismiss: () => void }) {
           </p>
         </div>
         <button
+          ref={closeRef}
           type="button"
           onClick={onDismiss}
           className="shrink-0 rounded border border-border-strong px-3 py-1.5 text-xs font-medium text-text-muted transition-colors hover:bg-panel-raised hover:text-text"
@@ -141,6 +140,43 @@ export function ConsoleContextPanel({ onDismiss }: { onDismiss: () => void }) {
           </div>
         </dl>
       </div>
-    </section>
+    </div>
+  )
+}
+
+/**
+ * The explanation as a closable dialog over the map. A modal rather than an
+ * inline band because the map has to be the first thing on screen, and an
+ * inline explainer would push it below the fold -- the whole reason this
+ * moved. Closing is unconditional: it never gates the workflow.
+ */
+export function ConsoleContextModal({ onClose }: { onClose: () => void }) {
+  const closeRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    closeRef.current?.focus()
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-bg/45 p-4 sm:p-8"
+      // Backdrop only: a click that started inside the dialog and ended here
+      // (a drag over text) must not close it.
+      onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="console-context-heading"
+        className="relative my-auto w-full max-w-4xl rounded-xl border border-border-strong bg-panel shadow-2xl"
+      >
+        <ConsoleContextPanel onDismiss={onClose} closeRef={closeRef} />
+      </div>
+    </div>
   )
 }

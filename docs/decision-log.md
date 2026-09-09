@@ -6,6 +6,57 @@ more valuable half.
 
 ---
 
+## 2026-09-09 - The console opens on the map, framed on Borneo, with the explanation as a modal
+
+**Status:** done · issue #125
+
+**Decision.** The first surface on a cold load is the MapLibre canvas itself,
+fitted to Borneo's own bounding box, with no FireEvents drawn. The #124
+first-load explanation moved from a band above the map into a closable dialog
+over it, reopenable from the header. A default demo scope is bootstrapped in
+the background through the real `POST /api/audits` → scope upload → history
+build sequence, and the camera eases from the Borneo frame to the audit
+footprint when it lands.
+
+**Why.** #75 made the scoped map the landing *route* but not the first thing
+on screen: a form still rendered above it, and #124 then added an explanation
+band above that. The only surface in this build showing real derived data was
+below the fold on the frame that decides whether anyone keeps looking.
+
+**What this does not reverse.** The register stays the primary screening
+surface, the regional FIRMS archive stays behind its own toggle, and the
+unscoped Borneo frame is a *basemap only* — the anti-goal in #57/#58 is an
+Indonesia-wide detection browser, and no detection is drawn until a real
+scope bounds them. Same boundary #75 argued, one frame earlier.
+
+**Rejected: a hardcoded centre and zoom.** `{longitude: 114, latitude: 1.4,
+zoom: 6.2}` framed Borneo on the viewport it was tuned against and cropped
+South Kalimantan off the bottom on another — how many degrees a zoom spans
+depends on the container. `initialViewState={{bounds, fitBoundsOptions}}`
+makes MapLibre solve for the zoom from the container it actually has.
+
+**Rejected: reinstating a hardcoded `DEMO_SCOPE` object.** PR #118 removed one
+because a hand-built scope diverged from what the API returns and hid a bbox
+shape bug. `lib/bootstrapScope.ts` gives the automatic bootstrap and the scope
+form one shared path through the real endpoints instead.
+
+**maxBounds has to stay much wider than the viewport.** MapLibre clamps the
+camera to fit `maxBounds` and will silently override the frame you asked for,
+with no error — so the unscoped bounds are wide regional guard rails rather
+than a tight box around the island.
+
+**A hidden Chrome tab cannot verify a MapLibre change.** Most of the debugging
+time here went to a basemap that rendered as a flat olive rectangle in the
+automation browser: no tiles requested, no console error, `onLoad` never
+firing. The cause was `document.visibilityState === "hidden"` in the
+extension's tab — `requestAnimationFrame` never fires there, and MapLibre v6
+resolves a vector source declared with an inline `tiles` array by awaiting a
+frame (`browser.frameAsync` inside `loadTileJson`), so the source never
+loads. Nothing was wrong with the app, the style, or the Carto key. A forced
+screenshot yields one frame, so a *second* screenshot shows the real render.
+If a map ever looks blank through browser automation, check
+`document.visibilityState` before suspecting the code.
+
 ## 2026-09-09 - Review routing is calibrated separately from priority and sufficiency
 
 **Status:** implemented · issue #85

@@ -114,12 +114,16 @@ persists yet: no module touches a database, an S3 bucket, or any store.
 The console consumes them. `components/scope/ScopedMapLanding.tsx` is the
 map-first landing surface for the bounded demo scope, and
 `components/audit/HistoricalInvestigation.tsx` is the register, investigation
-map, evidence drawer and pack view. `components/scope/AuditStart.tsx` is the
-first screen: `App.tsx` renders it full-screen until a scope exists, and again
-as an overlay when the scope is changed later. On that first full-screen load
-`components/scope/ConsoleContextPanel.tsx` sits above the form and states what
-the console does, what it refuses to conclude, and which parts of this build
-are real — dismissed per browser, reopened from the header. Events are typed
+map, evidence drawer and pack view. The map is the *first* thing on screen:
+`App.tsx` renders `ScopedMapLanding` immediately, framed on Borneo as a
+basemap with no events drawn, while a default demo scope is bootstrapped in
+the background through the real endpoints (`lib/bootstrapScope.ts` — never a
+hardcoded scope object; PR #118 removed one of those). `AuditStart.tsx` is now
+only an overlay, for entering or changing a scope by hand.
+`ConsoleContextPanel.tsx` exports both the panel and `ConsoleContextModal`,
+the dialog over the map that states what the console does, what it refuses to
+conclude, and which parts of this build are real — dismissed per browser,
+reopened from the header. Events are typed
 `AuditEventSummary`, deliberately **not** `FireEvent` — that type
 requires `location`, `peatClassification` and `currentConditions`, none of
 which FIRMS-only data can honestly supply, and widening it with optionals
