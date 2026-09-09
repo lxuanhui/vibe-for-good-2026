@@ -2,7 +2,11 @@ import { create } from 'zustand'
 import type { OverlayLayerId, RasterLayerId } from '../api/types'
 import { TIMELINE_DATES } from '../api/fixtures/dates'
 
-export type ViewMode = 'map' | 'table' | 'report'
+// 'map' is the register's own selected-events + graph investigation view
+// (HistoricalInvestigation); 'scoped-map' is the separate all-events scoped
+// landing (ScopedMapLanding), reachable from the register rather than shown
+// before it -- canonical spec §5/§11/§28: table first, map second.
+export type ViewMode = 'table' | 'map' | 'report' | 'scoped-map'
 
 type LayerId = OverlayLayerId | RasterLayerId
 
@@ -33,7 +37,7 @@ interface AppState {
 }
 
 export const useAppStore = create<AppState>((set) => ({
-  viewMode: 'map',
+  viewMode: 'table',
   setViewMode: (mode) => set({ viewMode: mode }),
 
   selectedEventId: null,

@@ -10,21 +10,6 @@ import { Button } from '../ui/Button'
 import { LayerControlPanel } from '../map/LayerControlPanel'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
-export const DEMO_SCOPE: AuditScope = {
-  audit_id: 'demo-2019-haze',
-  scope_id: 'demo-scope',
-  review_start: '2019-09-01',
-  review_end: '2019-09-05',
-  context_buffer_km: 25,
-  status: 'HISTORY_BUILD_READY',
-  bbox: { minLon: 116.0, minLat: -4.05, maxLon: 116.5, maxLat: -3.55 },
-  centroid: [116.25, -3.8],
-  buffer_bbox: { minLon: 115.75, minLat: -4.28, maxLon: 116.75, maxLat: -3.32 },
-  buffer_geometry: { type: 'Polygon', coordinates: [[[115.75, -4.28], [116.75, -4.28], [116.75, -3.32], [115.75, -3.32], [115.75, -4.28]]] },
-  geometry: { type: 'Polygon', coordinates: [[[116.0, -4.05], [116.5, -4.05], [116.5, -3.55], [116.0, -3.55], [116.0, -4.05]]] },
-  historyBuild: { duration_ms: 0, dataset_mode: 'cached-real-artifact' },
-}
-
 function eventPoints(events: AuditEventSummary[]): FeatureCollection<Point> {
   return { type: 'FeatureCollection', features: events.map((event) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [event.centroid.lon, event.centroid.lat] }, properties: { state: event.triage.state, id: event.eventId } })) }
 }

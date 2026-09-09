@@ -57,6 +57,17 @@ def _context_buffer(payload: dict[str, Any]) -> float:
     return value
 
 
+def _bbox_dict(bbox: tuple[float, float, float, float] | list[float]) -> dict[str, float]:
+    """`{minLon, minLat, maxLon, maxLat}` -- the shape the frontend's BBox
+    type expects everywhere else (fetchEvents, fetchAuditRegister,
+    buildScopePreview's client-side preview). The canonical spec's §25
+    AuditScope sketch uses a raw tuple, but that is a suggestion, and every
+    real consumer of this field in this repo is already the object shape.
+    """
+    min_lon, min_lat, max_lon, max_lat = bbox
+    return {"minLon": min_lon, "minLat": min_lat, "maxLon": max_lon, "maxLat": max_lat}
+
+
 def _public_session(session: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in session.items() if key != "_geometry"}
 
@@ -228,9 +239,9 @@ def upload_scope(audit_id: str, geojson: Any) -> dict[str, Any] | None:
     session.update(
         {
             "status": "SCOPE_READY",
-            "bbox": list(bbox),
+            "bbox": _bbox_dict(bbox),
             "centroid": centroid,
-            "buffer_bbox": buffer_bbox,
+            "buffer_bbox": _bbox_dict(buffer_bbox),
             "buffer_geometry": buffer_geometry,
             "_geometry": original,
         }
