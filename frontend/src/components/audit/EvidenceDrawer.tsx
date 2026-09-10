@@ -399,7 +399,6 @@ export function EvidenceDrawer({
         <div className="grid grid-cols-2 gap-2 text-xs"><div><span className="text-text-muted">Scope relation</span><div>{data.scopeRelation}</div></div><div><span className="text-text-muted">Sufficiency</span><div>{data.evidenceSufficiency.value}</div></div><div><span className="text-text-muted">Investigation priority</span><div>{data.investigationPriority}</div></div><div><span className="text-text-muted">Human workflow</span><div>{data.reviewState}</div></div><div><span className="text-text-muted">Chronology</span><div>{data.event.firstDetection.slice(0, 16)} → {data.event.lastDetection.slice(0, 16)}</div></div><div><span className="text-text-muted">Observations</span><div>{data.event.observationCount} · max FRP {data.event.maxFrp?.toFixed(2) ?? 'n/a'} MW</div></div></div>
         <DetectionWindow firstDetection={data.event.firstDetection} lastDetection={data.event.lastDetection} reviewStart={reviewStart} reviewEnd={reviewEnd} />
         <p className="mt-2 text-[10px] text-text-muted">{data.evidenceSufficiency.reason}</p>
-        <p className="mt-1 text-[10px] text-text-muted">Priority and workflow are deterministic routing aids; neither establishes cause, responsibility, or exoneration.</p>
         <p className="mt-1 text-[10px] text-text-muted">Sourced from NASA FIRMS, quality {((data.observedEvidence[0]?.quality ?? 0.82) * 100).toFixed(0)}%. Full observed-evidence provenance is in the exported PDF.</p>
         <div className="mt-3 print:hidden">
           <Toggle

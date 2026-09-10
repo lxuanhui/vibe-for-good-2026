@@ -78,6 +78,16 @@ describe('EvidenceDrawer sidebar hierarchy', () => {
     expect(headings).not.toContain('Provenance')
   })
 
+  it('omits the deterministic-routing disclaimer while keeping routing values visible', () => {
+    render(<EvidenceDrawer {...{ eventId: 'FE-1', loading: false, data: evidence, showObservations: false, onToggleObservations: () => undefined, onClose: () => undefined, onRetry: () => undefined, analysisLoading: false, onGenerateAnalysis: () => undefined }} />)
+
+    expect(screen.queryByText('Priority and workflow are deterministic routing aids; neither establishes cause, responsibility, or exoneration.')).toBeNull()
+    expect(screen.getByText('Investigation priority')).toBeTruthy()
+    expect(screen.getByText('Human workflow')).toBeTruthy()
+    expect(screen.getByText('HIGH')).toBeTruthy()
+    expect(screen.getByText('REVIEW_RECOMMENDED')).toBeTruthy()
+  })
+
   it('keeps available and unavailable states explicit', () => {
     render(<EvidenceDrawer {...{ eventId: 'FE-1', loading: false, data: {
       ...evidence,
