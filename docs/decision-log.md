@@ -32,7 +32,7 @@ apply an older decision without checking the entries above it.
 
 ## 2026-09-10 - If the pipeline ever runs in-request it runs as a Lambda container image, not a bigger zip and not EC2
 
-**Status:** decided, nothing built · PR #TBD · Closes #89
+**Status:** decided, nothing built · PR #217 · Closes #89
 
 **Decision.** The committed artifact stays the served path (the 2026-09-08
 clustering entry, unchanged in substance). The day a scope-driven derivation
@@ -1590,7 +1590,7 @@ on every ruleset call.
 
 **Status:** done · PR #74
 
-> **Qualified 2026-09-10 by PR #TBD (#89).** The "about 200 MB" below was
+> **Qualified 2026-09-10 by PR #217 (#89).** The "about 200 MB" below was
 > measured at ~258 MB unzipped for the full pipeline dependency set, so the
 > zip does not fit at all, not merely "to the edge". The rejection of a
 > container is now conditional rather than open-ended: when the derivation
