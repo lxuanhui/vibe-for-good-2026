@@ -358,40 +358,40 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
       </div>
       <aside className="scoped-map-print-hide flex w-80 shrink-0 flex-col overflow-y-auto border-l border-border-strong bg-panel">
         <div className="border-b border-border-strong p-4">
-          <div className="text-xs uppercase tracking-[0.16em] text-accent">Audit scope map</div>
-          <h1 className="mt-1 text-sm font-semibold">FireEvents in scope + context</h1>
-          <p className="mt-2 text-xs leading-5 text-text-muted">Review scoped FireEvents and optional peat context.</p>
-          <div className="mt-3 rounded border border-border bg-bg p-2 text-xs"><div className="text-text-faint">EVENTS SHOWN</div><div className="mt-1 text-lg font-semibold text-accent">{loading ? '…' : visibleEvents.length.toLocaleString()}</div></div>
+          <div className="text-sm uppercase tracking-[0.16em] text-accent">Audit scope map</div>
+          <h1 className="mt-1 text-base font-semibold">FireEvents in scope + context</h1>
+          <p className="mt-2 text-sm leading-5 text-text-muted">Review scoped FireEvents and optional peat context.</p>
+          <div className="mt-3 rounded border border-border bg-bg p-2.5 text-sm"><div className="text-text-faint">EVENTS SHOWN</div><div className="mt-1 text-xl font-semibold text-accent">{loading ? '…' : visibleEvents.length.toLocaleString()}</div></div>
           <div className="mt-3 rounded border border-border bg-bg p-3" aria-label="Temporal observation scrubber">
-            <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.12em] text-text-faint"><span>OBSERVATION DAY</span><span className="text-accent">{activeDay ?? 'ALL DAYS'}</span></div>
+            <div className="flex items-center justify-between text-xs uppercase tracking-[0.12em] text-text-faint"><span>OBSERVATION DAY</span><span className="text-accent">{activeDay ?? 'ALL DAYS'}</span></div>
             <div className="mt-2 grid grid-cols-3 gap-1.5">
-              <button type="button" aria-pressed={activeDay === null} onClick={() => setSelectedDay(null)} className={`rounded border px-2 py-1.5 text-[10px] font-semibold ${activeDay === null ? 'border-accent bg-accent/15 text-accent' : 'border-border-strong text-text-muted'}`}>ALL DAYS</button>
-              {days.map((day) => <button key={day} type="button" aria-label={`Show observations for ${day}`} aria-pressed={activeDay === day} onClick={() => setSelectedDay(day)} className={`rounded border px-2 py-1.5 text-[10px] font-semibold ${activeDay === day ? 'border-accent bg-accent/15 text-accent' : 'border-border-strong text-text-muted'}`}>{day.slice(8)}</button>)}
+              <button type="button" aria-pressed={activeDay === null} onClick={() => setSelectedDay(null)} className={`rounded border px-2 py-1.5 text-xs font-semibold ${activeDay === null ? 'border-accent bg-accent/15 text-accent' : 'border-border-strong text-text-muted'}`}>ALL DAYS</button>
+              {days.map((day) => <button key={day} type="button" aria-label={`Show observations for ${day}`} aria-pressed={activeDay === day} onClick={() => setSelectedDay(day)} className={`rounded border px-2 py-1.5 text-xs font-semibold ${activeDay === day ? 'border-accent bg-accent/15 text-accent' : 'border-border-strong text-text-muted'}`}>{day.slice(8)}</button>)}
             </div>
-            <p className="mt-2 text-[10px] leading-4 text-text-faint">Recorded FIRMS observations for the selected UTC day. Event points remain while their detection window overlaps that day.</p>
+            <p className="mt-2 text-xs leading-4 text-text-faint">FIRMS observations for the selected UTC day. Event points remain when their detection window overlaps.</p>
           </div>
-          <p className="mt-3 text-[10px] leading-4 text-text-faint">Peat is environmental context, not cause. Compare it with selected-event evidence and candidate links.</p>
-          {taggedEdges.length > 0 && <p className="mt-2 text-[10px] leading-4 text-text-faint">Relationship lines are limited to {SCOPED_MAP_RELATIONSHIP_DISTANCE_KM} km for local map readability. <span className="text-accent">Bright lines</span> are the open FireEvent's stronger candidates; weaker or unresolved links are deliberately subdued. <span className="opacity-60">Fainter lines</span> belong to other FireEvents selected in the Fire Register.</p>}
-          {envelopes.features.length > 0 && <p className="mt-2 text-[10px] leading-4 text-text-faint">Dashed outline: a first-order wind-oriented surface-spread compatibility estimate for a candidate FireEvent pair -- not a validated fire-behaviour forecast, and not a claim about what happened.</p>}
-          {error && <div role="alert" className="mt-3 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-xs text-red-200">{error}</div>}
-          {selectionGraphError && <div role="alert" className="mt-3 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-xs text-red-200">{selectionGraphError}</div>}
-          {loading && <div role="status" className="mt-3 text-xs text-text-muted">Loading real audit FireEvents…</div>}
-          {!loading && !error && events.length === 0 && <div className="mt-3 text-xs text-text-muted">No events intersect this audit scope and buffer.</div>}
+          <p className="mt-3 text-xs leading-5 text-text-faint">Peat is environmental context, not cause; compare it with event evidence.</p>
+          {taggedEdges.length > 0 && <p className="mt-2 text-xs leading-5 text-text-faint">Lines are limited to {SCOPED_MAP_RELATIONSHIP_DISTANCE_KM} km. <span className="text-accent">Bright</span> lines are stronger candidates for the open FireEvent; weaker or unresolved links recede. <span className="opacity-60">Faint</span> lines belong to other FireEvents selected in the Fire Register.</p>}
+          {envelopes.features.length > 0 && <p className="mt-2 text-xs leading-5 text-text-faint">Dashed outline: first-order wind-oriented surface-spread compatibility estimate — not a validated forecast or claim about what happened.</p>}
+          {error && <div role="alert" className="mt-3 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-sm text-red-200">{error}</div>}
+          {selectionGraphError && <div role="alert" className="mt-3 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-sm text-red-200">{selectionGraphError}</div>}
+          {loading && <div role="status" className="mt-3 text-sm text-text-muted">Loading real audit FireEvents…</div>}
+          {!loading && !error && events.length === 0 && <div className="mt-3 text-sm text-text-muted">No events intersect this audit scope and buffer.</div>}
           <Button variant="primary" className="mt-4 w-full" onClick={onOpenRegister}>OPEN FIRE REGISTER</Button>
           <Button className="mt-2 w-full" onClick={() => setShowPeatland((shown) => !shown)}>{showPeatland ? 'HIDE PEATLAND' : 'SHOW PEATLAND'}</Button>
           {envelopes.features.length > 0 && <Button className="mt-2 w-full" onClick={() => setShowSpreadEnvelopes((shown) => !shown)}>{showSpreadEnvelopes ? 'HIDE SPREAD ENVELOPES' : 'SHOW SPREAD ENVELOPES'}</Button>}
         </div>
         <div className="p-4">
           <div className="flex items-center justify-between">
-            <div className="text-xs uppercase tracking-[0.16em] text-accent">Investigation candidates</div>
-            <span className="rounded border border-border px-1.5 py-0.5 text-[10px] text-text-muted">{packed.length} IN REPORT</span>
+            <div className="text-sm uppercase tracking-[0.16em] text-accent">Investigation candidates</div>
+            <span className="rounded border border-border px-1.5 py-0.5 text-xs text-text-muted">{packed.length} IN REPORT</span>
           </div>
-          <p className="mt-2 text-xs leading-5 text-text-muted">Select one or more scoped FireEvents to add them to the audit report. This is independent from Fire Register selection used for map comparison.</p>
-          {packError && <div role="alert" className="mt-2 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-xs text-red-200">{packError}</div>}
+          <p className="mt-2 text-sm leading-5 text-text-muted">Select scoped FireEvents for the audit report; this is separate from Fire Register map comparison.</p>
+          {packError && <div role="alert" className="mt-2 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-sm text-red-200">{packError}</div>}
           <Button className="mt-3 w-full" disabled={!drawerEventId || packed.includes(drawerEventId)} onClick={() => void addFocusedEventToPack()}>{drawerEventId ? packed.includes(drawerEventId) ? 'OPEN FIRE EVENT IS IN REPORT' : `ADD OPEN FIRE EVENT (${drawerEventId})` : 'OPEN A FIRE EVENT TO ADD IT'}</Button>
-          {!loading && events.length === 0 ? <p className="mt-3 text-[11px] text-text-faint">No scoped FireEvents are available to add.</p> : <ul className="mt-3 max-h-64 space-y-1.5 overflow-y-auto pr-1">{events.map((event) => {
+          {!loading && events.length === 0 ? <p className="mt-3 text-sm text-text-faint">No scoped FireEvents are available to add.</p> : <ul className="mt-3 max-h-64 space-y-1.5 overflow-y-auto pr-1">{events.map((event) => {
             const inReport = packed.includes(event.eventId)
-            return <li key={event.eventId} className="rounded border border-border bg-bg px-2 py-1.5 text-[11px]"><label className="flex cursor-pointer items-center gap-2"><input aria-label={`Add ${event.eventId} to audit report`} type="checkbox" checked={candidateIds.includes(event.eventId)} disabled={inReport} onChange={() => toggleCandidate(event.eventId)} /><span className="min-w-0 flex-1 truncate font-mono text-text-muted">{event.eventId}</span><span className="shrink-0 text-[10px] text-text-faint">{inReport ? 'IN REPORT' : event.investigationPriority}</span></label></li>
+            return <li key={event.eventId} className="rounded border border-border bg-bg px-2 py-1.5 text-sm"><label className="flex cursor-pointer items-center gap-2"><input aria-label={`Add ${event.eventId} to audit report`} type="checkbox" checked={candidateIds.includes(event.eventId)} disabled={inReport} onChange={() => toggleCandidate(event.eventId)} /><span className="min-w-0 flex-1 truncate font-mono text-text-muted">{event.eventId}</span><span className="shrink-0 text-xs text-text-faint">{inReport ? 'IN REPORT' : event.investigationPriority}</span></label></li>
           })}</ul>}
           <Button className="mt-3 w-full" disabled={!candidateIds.length} onClick={() => void addCandidatesToPack()}>{`ADD SELECTED TO REPORT (${candidateIds.length})`}</Button>
           <Button variant="primary" className="mt-3 w-full" onClick={onViewReport}>{`VIEW AUDIT REPORT (${packed.length})`}</Button>
