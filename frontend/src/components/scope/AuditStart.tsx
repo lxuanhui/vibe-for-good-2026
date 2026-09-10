@@ -27,12 +27,12 @@ function parseCoverage(window: string): { start: string; end: string } | null {
   return match ? { start: match[1], end: match[2] } : null
 }
 
-export function AuditStart({ onReady, overlay = false, fullScreen = false, onClose }: { onReady: (scope: AuditScope) => void; overlay?: boolean; fullScreen?: boolean; onClose?: () => void }) {
-  const [reviewStart, setReviewStart] = useState(DEFAULT_REVIEW_START)
-  const [reviewEnd, setReviewEnd] = useState(DEFAULT_REVIEW_END)
-  const [contextBuffer, setContextBuffer] = useState('25')
+export function AuditStart({ onReady, overlay = false, fullScreen = false, onClose, initialScope }: { onReady: (scope: AuditScope) => void; overlay?: boolean; fullScreen?: boolean; onClose?: () => void; initialScope?: AuditScope }) {
+  const [reviewStart, setReviewStart] = useState(initialScope?.review_start ?? DEFAULT_REVIEW_START)
+  const [reviewEnd, setReviewEnd] = useState(initialScope?.review_end ?? DEFAULT_REVIEW_END)
+  const [contextBuffer, setContextBuffer] = useState(String(initialScope?.context_buffer_km ?? 25))
   const [file, setFile] = useState<File | null>(null)
-  const [geometry, setGeometry] = useState<unknown>(DEFAULT_MANAGEMENT_UNIT_GEOMETRY)
+  const [geometry, setGeometry] = useState<unknown>(initialScope?.geometry ?? DEFAULT_MANAGEMENT_UNIT_GEOMETRY)
   const [fileError, setFileError] = useState('')
   const [submitError, setSubmitError] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -67,8 +67,10 @@ export function AuditStart({ onReady, overlay = false, fullScreen = false, onClo
     setFile(nextFile)
     setFileError('')
     if (!nextFile) {
-      // No upload -- fall back to the default area rather than an empty preview.
-      setGeometry(DEFAULT_MANAGEMENT_UNIT_GEOMETRY)
+      // Clearing the picker does not reset an existing scope. A replacement
+      // can be selected explicitly, while navigating back keeps the current
+      // private geometry available for another history build.
+      if (!initialScope) setGeometry(DEFAULT_MANAGEMENT_UNIT_GEOMETRY)
       return
     }
     try {
@@ -114,7 +116,7 @@ export function AuditStart({ onReady, overlay = false, fullScreen = false, onClo
       })
       const uploaded = file
         ? await uploadAuditScope(created.audit_id, file)
-        : await uploadAuditScopeGeometry(created.audit_id, DEFAULT_MANAGEMENT_UNIT_GEOMETRY)
+        : await uploadAuditScopeGeometry(created.audit_id, geometry ?? DEFAULT_MANAGEMENT_UNIT_GEOMETRY)
       const handoff = await buildFireHistory(uploaded.audit_id)
       onReady({ ...uploaded, status: handoff.status, historyBuild: handoff })
     } catch (error) {
@@ -141,6 +143,7 @@ export function AuditStart({ onReady, overlay = false, fullScreen = false, onClo
           <p className="mt-3 text-sm leading-6 text-text-muted">
             Set the review period and upload the private boundary authorised for this engagement. No company identity or public concession lookup is required.
           </p>
+          {initialScope && <p className="mt-3 rounded border border-accent/30 bg-accent/10 px-3 py-2 text-xs leading-5 text-text-muted">Existing dates, buffer, and boundary are preserved. Choose a new GeoJSON file to replace the boundary and rebuild Fire History.</p>}
 
           <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
             <div className="space-y-2">
