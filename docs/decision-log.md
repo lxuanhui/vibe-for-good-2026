@@ -34,6 +34,18 @@ apply an older decision without checking the entries above it.
 
 **Status:** done · PR #246 · Refs #186
 
+> **Measured 2026-09-10 by PR #PRNUM: the cache works, the cold start did
+> not move.** After the apply, a cold container serves the route from the
+> shared object with no warning logged, in 2,455 to 2,686 ms of handler time
+> plus 556 to 737 ms of init; observed time-to-first-byte 3.2 to 3.9 s,
+> against 2.86 s quoted in #186 before the change. The API log shows cold
+> handler durations of 2.3 to 7.5 s on this route before the apply and 2.5
+> to 2.7 s after: the long tail from upstream FIRMS is gone, the floor is
+> unchanged. So #186's acceptance criterion is not met and the issue stays
+> open; the saving is FIRMS transactions and duplicate fetches, not the
+> cold wait, and the remaining cost sits inside the Lambda, not the
+> network. Attribution and candidate fixes are in #ISSUENUM.
+
 **Decision.** `GET /api/firms/live` keeps its process-local 15-minute cache as
 a first level and adds a second: one gzipped JSON object,
 `firms-live/current.json.gz`, in a new bucket `aws_s3_bucket.cache`. A cold
@@ -88,13 +100,24 @@ bucket, which keeps its object-only grant. The trade is stated in that
 file: a PR merged to `main` can widen CI's own permissions, in the open,
 with a plan comment. Bootstrap now holds only what CI cannot give itself.
 
-**Open.** The post-deploy cold-start time-to-first-byte has not been measured
-yet; #186 stays open until it is quoted.
+**Open.** The cold-start time-to-first-byte is quoted above and is not
+materially below the pre-change figure. #186 stays open, and #ISSUENUM
+carries the next step: where the ~2.5 s goes inside a cold handler that no
+longer waits on FIRMS.
 ---
 
 ## 2026-09-10 - The shared evidence prefix is sent behind a Bedrock cache point; round 1 stays parallel, so the saving is two reads, not three
 
-**Status:** done, measurement pending · PRs #245, #247 · Refs #147
+**Status:** done · PRs #245, #247, measured by PR #PRNUM · Closes #147
+
+> **Measured 2026-09-10 by PR #PRNUM.** Through the production adapter with
+> the real 128-object pack (Haiku 4.5, four calls): uncached 152,422 fresh
+> input tokens, ~$0.20; first cached assessment 7,526 fresh + 72,488 written
+> + 72,488 read, ~$0.15; a second assessment inside the 5-minute TTL 7,446
+> fresh + 144,976 read, ~$0.07. Two writes and two reads per assessment, as
+> predicted. The prefix is ~36k tokens per call, not the ~19k the estimate
+> below assumed, so the uncached baseline was understated. Full table in
+> `docs/infra.md`.
 
 **Decision.** `AgentInput.to_dict()` serializes the fields all four provider
 calls share (event id, evidence pack, evidence IDs, hypotheses) before the
@@ -133,10 +156,10 @@ reorder to be its own PR with the evidence-framing rules re-checked, because
 it changes the text the model receives. #245 is that PR: key order only, no
 wording, no field added or removed.
 
-**Open.** The measured before/after `usage` figures. They need a deployed
-run: one assessment with the default and one with `BEDROCK_PROMPT_CACHE=0`
-on the worker, four `Bedrock usage` lines each in the worker's log group.
-`docs/infra.md` carries the estimate until then, and #147 stays open.
+**Open.** The figures above are local runs through the deployed code path,
+not the worker's own log. The first deployed assessments log `usage` at
+INFO in the worker's log group and should agree with the table; if they do
+not, the table is wrong, not the log.
 
 ---
 

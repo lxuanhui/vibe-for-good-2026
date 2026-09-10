@@ -33,6 +33,9 @@ CDSE_CLIENT_SECRET = os.environ.get("CDSE_CLIENT_SECRET", "")
 # see sources/future/.
 GFW_API_KEY = os.environ.get("GFW_API_KEY", "")
 BMKG_API_KEY = os.environ.get("BMKG_API_KEY", "")
+# NASA Earthdata Login bearer token for the SMAP L4 PEATCLSM granules NSIDC
+# serves (#240). Like the CDSE pair: run once by hand, artifact committed.
+NASA_EARTHDATA_KEY = os.environ.get("NASA_EARTHDATA_KEY", "")
 
 # --- Indonesian points of interest --------------------------------------
 # Real peat-fire-prone locations, used everywhere instead of a country
