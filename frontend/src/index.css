@@ -48,3 +48,63 @@ body {
 .maplibregl-popup .maplibregl-popup-tip {
   display: none;
 }
+
+/* The engagement report is exported through the browser's print-to-PDF flow
+   (#144). Two things break there and neither shows on screen.
+
+   The report scrolls inside the console shell, and the shell is what clips:
+   `relative h-screen overflow-hidden` in App.tsx. Releasing height and
+   overflow on the report itself leaves the ancestor cutting the page off at
+   one viewport, so an eight-section evidence pack exports as one page. It is
+   released here, at the shell, because that is where the constraint is.
+
+   And every colour token is picked for a near-black ground. Browsers drop
+   background colours when printing, so those tokens land on white paper:
+   `--color-accent` carries the compression figures at 1.8:1 against white,
+   and `--color-text-muted` carries most of the body copy at 3.0:1. The
+   palette is re-pointed at ink on paper once, here, rather than as `print:`
+   variants on each element -- the components already read the tokens, which
+   is both what makes a single override possible and the repo's one
+   colour-scheme rule. Backgrounds are deliberately left to drop: borders and
+   text carry the structure on paper, and forcing dark panel fills onto it
+   with print-color-adjust is worse than letting them go.
+
+   Unlayered on purpose. Tailwind's utilities and its @theme both live in
+   cascade layers, and an unlayered rule beats a layered one whatever the
+   specificity, so none of this needs !important. */
+@media print {
+  :root {
+    --color-bg: #ffffff;
+    --color-panel: #ffffff;
+    --color-panel-raised: #ffffff;
+    --color-border: #c3c9d4;
+    --color-border-strong: #98a1b0;
+    --color-text: #10141a;
+    --color-text-muted: #464f5e;
+    --color-text-faint: #6b7382;
+
+    /* Same hue, taken to 6.2:1 on white. Keeping the accent rather than
+       flattening it to black is what stops the figures reading as body copy. */
+    --color-accent: #0b6b7d;
+    --color-accent-muted: #0a5768;
+  }
+
+  @page {
+    margin: 12mm;
+  }
+
+  html,
+  body,
+  #root {
+    height: auto;
+    overflow: visible;
+  }
+
+  .h-screen {
+    height: auto;
+  }
+
+  .overflow-hidden {
+    overflow: visible;
+  }
+}
