@@ -117,6 +117,84 @@ def _prompt(agent_input: AgentInput) -> str:
     return _PROMPT + json.dumps(agent_input.to_dict(), separators=(",", ":"), default=str)
 
 
+# --- Prompt caching (#147) ---------------------------------------------------
+#
+# All four provider calls in one assessment (two roles, two rounds) share the
+# system framing, the evidence pack, its ID list and the hypotheses: ~19k of
+# the ~19.5k input tokens each call sends. Bedrock bills a cached prefix at
+# $0.10/1M against $1.00/1M fresh, so the shared part is sent as its own text
+# block followed by a cache point, and only the per-call tail (role, round,
+# phase, prior and opponent assessments) is fresh input.
+#
+# The split must not change what the model reads. `AgentInput.to_dict()`
+# serializes the shared fields first (#245), and the two blocks below are the
+# one JSON document `_prompt` builds, cut just before the first per-call key:
+# block one ends after the hypotheses, block two starts with `,"role":`.
+# Joined, they are byte-for-byte the uncached string. A test pins that.
+#
+# Two facts about the arithmetic, so nobody re-derives them:
+# - Both roles in a round run in parallel (investigator_skeptic.py), and a
+#   cache entry is readable only once the response that wrote it has begun,
+#   so the two round-1 calls both write and the two round-2 calls both read.
+#   Per assessment that is two writes at 1.25x and two reads at 0.1x rather
+#   than one write and three reads: roughly $0.13 instead of $0.15, with the
+#   ~3.5k output tokens per call now the larger share. Sequential round 1
+#   would reach ~$0.10 for ~9s more wall time on a job the auditor already
+#   waits ~51s for. Not taken; see the decision log.
+# - Haiku 4.5's minimum cacheable prefix is 4,096 tokens. A sparse pack
+#   under that is ignored by Bedrock without an error and bills as before.
+#
+# BEDROCK_PROMPT_CACHE=0 sends the same text as one block with no cache
+# point. It exists to measure before and after on the same pack, and as the
+# switch if a model or region turns out not to accept cache points; a
+# ValidationException naming the cache point is also retried once without it,
+# so a provider that rejects it degrades to today's cost, not to a failure.
+_CACHE_POINT = {"cachePoint": {"type": "default"}}
+
+
+def _prompt_cache_enabled() -> bool:
+    return os.environ.get("BEDROCK_PROMPT_CACHE", "1").strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _prompt_blocks(agent_input: AgentInput) -> tuple[str, str]:
+    """The serialized input cut at the first per-call key: (shared, per_call).
+
+    `shared + per_call` is exactly the string `_prompt` builds. The cut is
+    found by serializing the shared fields alone and dropping their closing
+    brace, so it cannot land inside an evidence value that happens to contain
+    a key called "role". If the serialization ever stops matching, the whole
+    text is returned as the shared part with an empty tail and no cache point
+    is sent, which is today's behaviour rather than a wrong prompt.
+    """
+    text = _prompt(agent_input)
+    payload = agent_input.to_dict()
+    shared = json.dumps(
+        {key: payload[key] for key in AgentInput.SHARED_FIELDS}, separators=(",", ":"), default=str
+    )
+    head = _PROMPT + shared[:-1]
+    if not text.startswith(head) or not text[len(head):].startswith(',"'):
+        return text, ""
+    return head, text[len(head):]
+
+
+def _message_content(agent_input: AgentInput) -> list[dict[str, Any]]:
+    if not _prompt_cache_enabled():
+        return [{"text": _prompt(agent_input)}]
+    shared, per_call = _prompt_blocks(agent_input)
+    if not per_call:
+        return [{"text": shared}]
+    return [{"text": shared}, dict(_CACHE_POINT), {"text": per_call}]
+
+
+def _without_cache_point(content: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [{"text": "".join(block.get("text", "") for block in content if "text" in block)}]
+
+
+def _rejects_cache_point(exc: Exception) -> bool:
+    error = getattr(exc, "response", {}).get("Error", {}) if hasattr(exc, "response") else {}
+    return error.get("Code") == "ValidationException" and "cache" in str(error.get("Message", "")).lower()
+
+
 def _unfenced(text: str) -> str:
     """Strip a markdown code fence the model wraps JSON in despite the prompt.
 
@@ -142,21 +220,52 @@ def bedrock_runner(agent_input: AgentInput) -> Mapping[str, Any]:
     except ModuleNotFoundError as exc:
         raise AnalysisProviderUnavailable("Bedrock support is unavailable in this local Python environment.") from exc
     model_id = os.environ.get("BEDROCK_MODEL_ID", DEFAULT_MODEL_ID)
-    try:
-        response = _bedrock_client().converse(
+
+    def converse(content: list[dict[str, Any]]) -> Mapping[str, Any]:
+        return _bedrock_client().converse(
             modelId=model_id,
-            messages=[{"role": "user", "content": [{"text": _prompt(agent_input)}]}],
+            messages=[{"role": "user", "content": content}],
             # 2200 truncated a real four-hypothesis pack mid-array
             # (stopReason max_tokens), which surfaced only as a JSON parse
             # error. A full assessment measures ~3.5k output tokens.
             inferenceConfig={"maxTokens": 6000, "temperature": 0},
         )
+
+    content = _message_content(agent_input)
+    try:
+        try:
+            response = converse(content)
+        except ClientError as exc:
+            if len(content) == 1 or not _rejects_cache_point(exc):
+                raise
+            # Same text, one block, no cache point: the cost of before #147,
+            # not a failed assessment the auditor pays to retry.
+            logger.warning(
+                "Bedrock rejected the prompt cache point for model %s; retrying uncached", model_id
+            )
+            content = _without_cache_point(content)
+            response = converse(content)
     except (BotoCoreError, ClientError) as exc:
         # The caller gets a deliberately generic message, but discarding the
         # cause entirely made a 503 unreadable in CloudWatch: a missing model
         # entitlement, a throttle and an IAM denial all looked identical.
         logger.exception("Bedrock Converse failed for model %s", model_id)
         raise AnalysisProviderUnavailable("Bedrock could not generate investigation analysis.") from exc
+    # The only place the cache's effect is observable. Read and write token
+    # counts are what turn the cost estimate in docs/infra.md into a measured
+    # figure; both are absent from the response when nothing was cached.
+    usage = response.get("usage", {}) or {}
+    logger.info(
+        "Bedrock usage model=%s role=%s round=%s cached=%s input=%s output=%s cache_read=%s cache_write=%s",
+        model_id,
+        agent_input.role.value,
+        agent_input.round_number,
+        len(content) > 1,
+        usage.get("inputTokens"),
+        usage.get("outputTokens"),
+        usage.get("cacheReadInputTokens"),
+        usage.get("cacheWriteInputTokens"),
+    )
     if response.get("stopReason") == "max_tokens":
         # Truncated output parses as invalid JSON, which reads like a model
         # fault rather than a budget one. Name the real cause.
