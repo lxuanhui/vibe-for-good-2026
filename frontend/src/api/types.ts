@@ -14,7 +14,8 @@ export type EventStatus =
 
 export type PeatClassification = 'protected_dome' | 'production_zone' | 'not_applicable'
 
-export type OverlayLayerId = 'firms' | 'sar-backscatter' | 'khg' | 'concessions' | 'fire-complex-links'
+export type HydrologyLayerId = 'groundwater' | 'peatclsm' | 'soil-moisture'
+export type OverlayLayerId = 'firms' | 'sar-backscatter' | 'khg' | 'concessions' | 'fire-complex-links' | HydrologyLayerId
 
 export type RasterLayerId = 's2-quicklook' | 'sar-visualization'
 
@@ -200,6 +201,11 @@ export interface AuditScope {
   review_end: string
   context_buffer_km: number
   status: 'AWAITING_SCOPE' | 'SCOPE_READY' | 'HISTORY_BUILD_READY'
+  // How the boundary was supplied, recorded server-side so a predefined area
+  // can never be shown as something the auditor uploaded (#87).
+  scope_source?: 'upload' | 'point_radius' | 'demo' | null
+  scope_label?: string | null
+  scope_point?: { latitude: number; longitude: number; radius_km: number } | null
   bbox: BBox | null
   centroid: [number, number] | null
   buffer_bbox: BBox | null
@@ -322,6 +328,7 @@ export interface StructuredAnalysisFinding {
   evidence_sufficiency: 'SUFFICIENT' | 'PARTIAL' | 'INSUFFICIENT'
   supporting_evidence_ids: string[]
   contradicting_evidence_ids: string[]
+  mixed_evidence_ids?: string[]
   summary: string
   verification_questions: StructuredAnalysisQuestion[]
 }
@@ -337,6 +344,8 @@ export interface StructuredAnalysisAssessment {
 export interface StructuredAnalysis {
   event_id: string
   status: string
+  validation_status?: 'VALID' | 'VALID_WITH_AMBIGUITY' | 'REPAIRED' | 'FAILED'
+  repaired?: boolean
   algorithm_version: string
   evidence_ids: string[]
   rounds: { round: number; phase: string; investigator: StructuredAnalysisAssessment; skeptic: StructuredAnalysisAssessment; unresolved_questions: StructuredAnalysisQuestion[] }[]
@@ -358,6 +367,7 @@ export interface AnalysisJob {
   startedAt?: string | null
   completedAt?: string | null
   pollAfterSeconds?: number
+  stage?: string | null
 }
 
 export interface InvestigationBundle {
@@ -450,4 +460,14 @@ export interface LiveFirmsDetections {
 export interface OverlayAvailability {
   date: string
   layers: Partial<Record<OverlayLayerId | RasterLayerId, boolean>>
+}
+
+export interface HydrologyOverlayMetadata {
+  layer: HydrologyLayerId
+  status: 'available' | 'unavailable'
+  unit: string | null
+  source: string
+  coverage: { start: string; end: string; bbox: [number, number, number, number] } | null
+  reason: string
+  limitations: string[]
 }

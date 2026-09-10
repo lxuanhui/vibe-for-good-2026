@@ -9,7 +9,7 @@ when changing that subsystem.
 | Area | Current decision | Detail |
 |---|---|---|
 | Product boundary | Evidence supports human review; it never establishes blame, intent, or legal responsibility. | Standing constraints |
-| Audit flow | Scope-first: create an audit from uploaded GeoJSON before rendering FireEvents. The regional landing may show labelled FIRMS context only. | 2026-09-09, audit session / landing |
+| Audit flow | Scope-first: create an audit from a chosen boundary (labelled demo area, point and radius, or uploaded GeoJSON) before rendering FireEvents. The regional landing may show labelled FIRMS context only; the scoped map pans freely but the register stays cut to scope plus buffer. | 2026-09-10, scoped map pans freely; 2026-09-09, audit session / landing |
 | API state | Audit IDs and scope state persist in DynamoDB in deployed environments; in-memory state is local development only. Every write is revision-checked — there is no unconditional write path — and both backends implement the same compare-and-set. | 2026-09-09, audit session / landing; 2026-09-10, conditional writes |
 | Derived data | Clustered events, weather, imagery selection, peat context, and prepared graph data are offline artifacts, not request-time Lambda work. | 2026-09-09, graph; weather and imagery; 2026-09-08, clustering |
 | Investigation | Scores, review routing, graph edges, and propagation are separate deterministic evidence outputs; none establishes causation. | 2026-09-09, graph; review routing; 2026-09-08, triage / graph / surface growth |
@@ -22,6 +22,7 @@ when changing that subsystem.
 | Service selection | DynamoDB and S3 are authorised without a fresh argument each time; every service switched on gets a cost row in `docs/infra.md` in the same PR. | 2026-09-09, DynamoDB and S3 are authorised |
 | Frontend tests | Vitest + jsdom + Testing Library, run in CI. They guard behaviours the product boundary depends on — explicit trigger, honest not-run state, no chain-of-thought — not the map, which jsdom cannot draw. | 2026-09-10, frontend test runner |
 | Review period | The session's review period filters the register server-side, end-of-day inclusive, and every scope count is recomputed from the filtered set. The scope form's date pickers stay bounded to the coverage the artifact declares in `source.window`. | 2026-09-10, review period is a filter; review period bounds |
+| Brand | The console is `atmosclear.ai`; name, descriptor and description live in `frontend/src/lib/brand.ts`, the earth mark in `components/brand/EarthMark.tsx`, mirrored by hand in `public/favicon.svg` and `index.html`. | 2026-09-10, atmosclear.ai |
 | Line endings | `.gitattributes` normalises all text to LF in the repository and on checkout; binary artifacts are declared explicitly rather than left to git's heuristic. | 2026-09-10, line endings |
 
 **Use this log:** entries retain the original diagnosis, rejected alternatives,
@@ -67,12 +68,383 @@ unconditional.
 propagation-compatible edge, an unresolved edge, and rendered Sentinel
 scenes. The event used for the cost measurements (#147) has no edges and
 was rejected for the map step.
+---
+
+## 2026-09-10 - The console is named atmosclear.ai, and its mark is a graticule earth held in one component
+
+**Status:** done · PR #269 · Closes #257
+
+**Decision.** The product name is `atmosclear.ai`, chosen by the team on
+2026-09-10. It replaces the provisional "Environmental Assurance Console",
+which survives only as the descriptor line under the wordmark
+(`APP_DESCRIPTOR`). The name, descriptor and one-paragraph description live
+in `frontend/src/lib/brand.ts`, and every header renders them through
+`components/brand/Brand.tsx`, so a rename is one constant. The mark is
+`components/brand/EarthMark.tsx`: a line-drawn globe made of a circle, one
+meridian ellipse and three parallels, inheriting `currentColor` so it takes
+the accent token like everything else. `public/favicon.svg` and
+`public/apple-touch-icon.png` (rendered from it at 180 px) repeat the same
+geometry by hand with the dark ground and accent hex baked in, because a
+static asset cannot read Tailwind tokens. `index.html` repeats the name and
+description by hand too, because Vite's entry is static and cannot import
+`brand.ts`; both places carry a comment naming the other.
+
+**Why.** #257 asked for the name, an earth logo and filled HTML headers the
+day before the demo, and the strings had been scattered across seven
+components as literals. Putting them behind one module was the only way to
+change the name in the same PR without missing a header, and it is what
+makes the next rename cheap.
+
+**Rejected: a coastline globe.** A recognisable Indonesia outline at 16 px
+is a blob, and a globe that reads as a specific landmass invites the
+reading that the product covers that landmass and nothing else. The
+graticule reads as "earth" at every size the console uses, from the favicon
+to the report eyebrow, and says nothing about jurisdiction.
+
+**Rejected: importing brand.ts into index.html.** Vite only processes
+`<script type="module">` in the entry; the `<title>` and `<meta>` tags are
+static. A plugin to template them was not worth adding for two strings.
+
+**Open.** The colour palette is still provisional (PRODUCT.md, Brand
+Commitments). The mark is drawn in the accent teal; if the palette changes,
+`favicon.svg` and the touch icon must be re-rendered by hand.
+
+---
+
+## 2026-09-10 - The scoped map pans freely inside regional guard rails, and the boundary is chosen in the scope panel, never defaulted
+
+**Status:** done · PR #267 · Closes #249 · Refs #87 (console half), #127
+
+**Decision.** `ScopedMapLanding` no longer pins MapLibre's `maxBounds` to
+the audit's context-buffer bbox. Both console maps share one set of wide
+regional guard rails (`lib/regionalBounds.ts`, roughly Indian Ocean to
+Papua). The register request is unchanged: it is still fetched for scope
+plus buffer only, so dragging away from the audit shows basemap, not more
+FireEvents. The area of focus is changed in the scope panel, which now
+offers the three boundary sources the API records as `scope_source`:
+the server-owned demo study area (the default, labelled as a demo), a
+point and radius (centre typed or placed by clicking the preview map,
+radius in km, mirrored client-side as the same 64-vertex circle the API
+stores), and a GeoJSON upload. The upload path refuses to build without a
+file rather than substituting an area the auditor never chose.
+
+**Why.** #249: the scoped map could not be dragged at all, because
+MapLibre clamps the camera to `maxBounds` and the buffer bbox was smaller
+than the viewport, and the only no-file path was a rectangle hard-coded in
+the console and posted through `/scope/upload` as if it were the auditor's.
+The backend half of #87 (PR #216) had already added the point and demo
+endpoints; nothing in the console called them.
+
+**Rejected: make the register follow the viewport.** Dragging the map to
+a new area and having events appear there is the Indonesia-wide fire
+browser #127 rejected on purpose. The camera is for looking; the scope
+panel is for choosing, and the session records what was chosen.
+
+**Rejected: change the default geometry to a circle.** The imagery and
+wind-oriented spread edges are precomputed for the 16 events inside the
+demo rectangle plus buffer. A circle of similar size would shift the
+in-scope set at the corners the night before the demo, for no gain. The
+demo area stays the same rectangle, now set through `/scope/demo` so the
+session says so.
+
+**Open.** A moved scope gets a register and triage anywhere in the archive
+(Sumatra and Kalimantan, 2019 haze window) but no imagery and only
+distance-only graph edges outside the enriched 16; the evidence drawer
+already says imagery is unavailable. Drawing a polygon on the map (#87's
+optional path) is not built; upload covers it.
+
+---
+
+## 2026-09-10 - Scoped Map hydrology reads the PEATCLSM cache as sparse heatmap points
+
+**Status.** done · #241
+
+**Decision.** Add audit-scoped `groundwater`, `peatclsm`, and `soil-moisture`
+overlay routes. They read only the deployable SMAP L4 PEATCLSM CSV and
+metadata produced by #240, return sparse point features for MapLibre heatmap
+rendering, and include source, units, coverage, limitations, and availability
+metadata. When #240 has only catalogued CMR or a variable has no valid rows,
+the route returns an empty collection with an explicit unavailable reason.
+
+**Why.** The cache is gridded context, not a collection of interactive events;
+rendering each cell as a feature would add unnecessary map work. An empty
+response without metadata would also look like no hydrology exists, so missing
+coverage must be visible. The layers remain independent and are not used for
+fire-cause or company-level scoring.
+
+**Rejected: frontend fixtures or derived groundwater.** Fixtures would violate
+the real-cache requirement, while deriving a water table from soil moisture
+would contradict #240's source limitation.
+
+---
+
+## 2026-09-10 - SMAP L4 PEATCLSM cache records peat water level explicitly
+
+**Status:** done · #240
+
+**Decision.** Cache the bounded Kalimantan demo query against NASA SMAP L4
+SPL4SMGP Version 7 for 2019-09-01..2019-09-10. The adapter records surface
+and root-zone soil moisture and, when present in a pre-clipped HDF5 subset,
+PEATCLSM's `depth_to_water_table_from_surface_in_peat` variable. It always
+writes a provenance record for groundwater/water-table depth; that record is
+explicitly unavailable when the source variable is absent or invalid.
+
+**Why.** NSIDC documents Version 7 as 3-hourly, 9 km EASE-Grid data whose
+Catchment model includes PEATCLSM. The user guide identifies the peat-specific
+water-level variable, measured relative to the mean peat-surface elevation.
+That model output is useful hydrology context but is not a well observation;
+the pipeline does not derive or fabricate a value when it is not supplied.
+
+**Rejected: downloading global HDF5 granules.** The demo only needs a small
+geography and window. The cache job catalogs the exact CMR records and accepts
+only a pre-clipped subset for materialization, avoiding an enormous global
+download and making the processing boundary explicit.
+
+**Open.** A future authenticated server-side subset can populate the compact
+CSV without a local HDF5 staging file. A separate in-situ groundwater product
+would need its own source and validation.
+
+---
+
+## 2026-09-10 - A scene is selected for an event only if its footprint contains the event centroid, and the check is recorded in provenance
+
+**Status:** done · PR #253 · Closes #193 · Refs #171
+
+**Decision.** `scene_selection.select_scenes()` takes the event's location
+(explicitly, or from a FireEvent-like mapping's `centroid`) and drops every
+catalogue item whose footprint does not contain that point before choosing
+the closest in time. The test runs against the STAC item's `geometry`
+(Polygon or MultiPolygon, holes respected) and falls back to its `bbox`; an
+item with neither is treated as not covering. Each selected scene's
+`provenance.footprint_check` says what was checked, against what, and how
+(`geometry` or `bbox`); a selection made without a location says
+`performed: false` rather than implying a check that never ran. The
+algorithm version is `copernicus-scene-selector-v2`. `enrich_audit_events.py`
+passes every event's centroid, refuses a catalogue page at the search limit
+or with a `next` link instead of silently working from a truncated candidate
+list, and has a `--reselect-imagery` mode that redoes only scene selection
+for events that already carry imagery evidence and rewrites that evidence in
+place, leaving weather alone.
+
+**Why.** The two catalogue searches are over the whole scope bounding box
+(one per collection, see 2026-09-09 "weather and imagery"), so they return
+every product that touches the box. The selector then chose by time and
+cloud alone, and closest-in-time was the same product for every event: all
+sixteen demo events were named the Sentinel-2 tile T50MLB for the post scene
+and T50MMA for the pre scene, whichever sorted first among four tiles with
+identical timestamps, and the same two Sentinel-1 frames. The renderer pins
+by time range, not product id, and the Process API mosaics whatever tiles
+exist at that time, so ten events still rendered fine while the evidence
+named a tile that did not contain them. The four events nearest the scope's
+western and eastern edges did not: their nearest-in-time products stop short
+of them, and six of their images came back with 0-4 % data. After the
+footprint check every one of the sixteen events names a product that
+contains its centroid; the six sidecar-recorded gaps change to scenes from
+adjacent orbits (Sentinel-1 2019-08-23 instead of 08-30, Sentinel-2 relative
+orbit R046 on 08-29 and 09-13 instead of R003) that do cover them, at the
+cost of a few more days' temporal distance, which the scene metadata
+records.
+
+**Rejected: intersecting the 10 km render AOI instead of the centroid.** A
+tile clipping one corner of the AOI would pass and still leave most of the
+image empty; the centroid is what the renderer centres on and what the
+auditor is looking at. The AOI's own coverage fraction is still measured at
+render time and a scene below `MIN_COVERAGE_FRACTION` is still recorded as
+missing.
+
+**Rejected: searching per event with the event's own bbox.** It would make
+the footprint question disappear, at 16 (or 3,610) searches instead of two
+and a rate-limited catalogue. Two searches plus a pure in-memory point test
+is the same answer without the network cost, and the selection stays
+reproducible from the frozen response.
+
+**Rejected: a geodesic point-in-polygon.** Sentinel footprints are tens of
+kilometres across and nowhere near the antimeridian in this project's scope;
+a planar ray cast on lon/lat degrees is exact enough that any scene whose
+edge passes within metres of the centroid is not a useful scene either way.
+
+**Open.** The check is a point test. An event whose detections spread across
+a tile boundary can be named a scene that covers its centroid but not all of
+its detections; the rendered image's coverage fraction is the honest measure
+of that and is already in the manifest.
+
+---
+
+## 2026-09-10 - An analysis job is claimed inside the store's compare-and-set, and every claim carries a job id its worker must present to write
+
+**Status:** done · PR #252 · Closes #189 · Refs #146, #143
+
+**Decision.** `analysis_jobs.dispatch` no longer reads the job row and then
+calls `start`. It calls `claim`, whose mutation runs inside
+`audit_store.update`: it sees the row as it was just read, gives up without
+writing if that row is a live `RUNNING` job, and otherwise writes the
+`RUNNING` transition with a fresh `jobId`. Because `update` re-reads and
+re-runs the mutation when it loses the revision check, the loser of a race
+sees the winner's row on its second pass and returns it. Two requests that
+arrive together get two responses describing one job, and one worker
+invocation. The worker is handed the `jobId` in its payload and presents it
+on every write: a stage note or a terminal outcome whose id no longer
+matches the row raises `JobSuperseded` and is dropped with a warning,
+rather than landing on a job that was re-dispatched after the old one went
+stale.
+
+**Why.** The old guard was a read followed by a write with nothing between
+them, so two presses that both read `NOT_RUN` both invoked the worker and
+billed the same two Bedrock rounds twice, about $0.20 at the measured pack
+size (#147). The revision check from #146 did not close this: it stops a
+write from being *lost*, and here neither write was lost, both landed. The
+job id exists because the revision check has the same blind spot on the
+other side: a re-claimed stale row has a new revision, but `update` retries
+the dead worker's `COMPLETE` against it, so without an identity to compare
+the late outcome would overwrite the live job. The test that proves the
+race parks both requests on a barrier between the evidence check and the
+claim and counts worker invocations: two against the read-then-act, one
+after.
+
+**Rejected: a lock around dispatch.** Serialises every request through one
+Lambda container, and there is more than one container, so it only works
+locally, which is where the race matters least.
+
+**Rejected: a `PutItem` with `attribute_not_exists` as the claim.** It is
+the natural DynamoDB idiom and it cannot express "or the existing job is
+stale", which the endpoint needs so a dead worker does not wedge it
+(2026-09-10, async job). The `update` loop already gives the conditional
+transition with the stale rule inside it, in both backends, without a
+second write path in the store.
+
+**Rejected: treating a late write from a superseded worker as an error.**
+The assessment it computed is already on the session, persisted by
+`analyse_event` before the job row is touched, so nothing is lost by
+dropping the row write. Raising would fail a worker invocation that did its
+work, for a Lambda with no caller to tell.
+
+**Open.** An invocation queued before this change carries no `jobId` and
+writes unconditionally, which is the old behaviour for the length of one
+deploy. Nothing to do; noted so the `None` branch in `run` is not tidied
+away.
+
+---
+
+## 2026-09-10 - The thermal-lobe radius is the clustering module's 1 km and is refused at or above the clustering radius; no served artifact carried the metric
+
+**Status:** done · PR #254 · Closes #213 · Refs #86, #214
+
+**Decision.** `complexity/fire_complexity.py` no longer has a lobe radius of
+its own. It imports `DEFAULT_LOBE_DISTANCE_KM` (1 km) from
+`clustering/firms_clustering.py`, the same value `event_lobes` and the
+diagnostics CLI use, and `compute_fire_complexity()` raises if the lobe
+radius it is given is not strictly below the spatial threshold of the
+`ClusteringParameters` it is given (the defaults when none are). The field's
+`details` record both radii, so a value is self-describing.
+
+**Why.** Every pair the clustering linked is within the clustering radius,
+so a spatial-only connectivity pass at that same radius returns one
+component for every event, whatever the event looks like. With the module's
+old 2 km default `distinct_thermal_lobes` was 1 for all 1,842
+multi-observation events in the 2019 window, and the priority normaliser
+(`min(max(value - 1, 0) / 4, 1)`) turned that into a feature that
+contributed exactly 0 to every score. At 1 km the five largest events
+resolve into 6, 2, 10, 2 and 3 lobes (`python -m
+data_pipeline.clustering.diagnostics --start 2019-09-01 --end 2019-09-05`,
+before and after: the diagnostics already used 1 km, so its output is the
+same; the complexity module now agrees with it). Run through
+`compute_fire_complexity()` itself over the same window, 562 of the 1,842
+multi-observation events now have more than one lobe, against 0 before.
+
+**Finding: nothing needed regenerating.** #213 asked for the detail
+artifact to be regenerated because the served field changes. It does not
+exist to change: neither `audit_events.json.gz` nor
+`audit_triage_detail.json.gz` carries any complexity field, and
+`backend/app/audit_events.py` emits every one of the thirteen as a
+"not evaluated" placeholder with `value: null`. Running the complexity
+module over the artifact and serving its output is #214's work, and this
+fix is what makes that output worth serving.
+
+**Rejected: bumping the algorithm version to v2.** The version string is
+also the one the API's placeholders cite, no artifact holds a v1 value that
+a v2 could be confused with, and the field records its own radius. Bump it
+when #214 first writes real values.
+
+**Rejected: replacing `_spatial_components` with `event_lobes`.** Same
+computation, but `event_lobes` returns lobes as `FireEvent`s with derived
+ids, which the complexity module has no use for and which would invite
+treating a lobe as an event. The count is all it needs.
 
 ---
 
 ## 2026-09-10 - The live FIRMS cache is shared across Lambda containers as one S3 object, filling the disposable-cache role
 
 **Status:** done · PR #246 · Refs #186
+
+> **Corrected 2026-09-10 by PR #261 (#251).** The 2.5 s handler floor
+> below was almost certainly the upstream FIRMS fetch on a shared entry
+> that had aged past 15 minutes, which runs with no warning by design, not
+> anything inside the Lambda; the paragraph after this one has the
+> measurement that shows it. Read the figures below as the stale-entry
+> case.
+
+> **Measured 2026-09-10 by PR #250: the cache works, the cold start did
+> not move.** After the apply, a cold container serves the route from the
+> shared object with no warning logged, in 2,455 to 2,686 ms of handler time
+> plus 556 to 737 ms of init; observed time-to-first-byte 3.2 to 3.9 s,
+> against 2.86 s quoted in #186 before the change. The API log shows cold
+> handler durations of 2.3 to 7.5 s on this route before the apply and 2.5
+> to 2.7 s after: the long tail from upstream FIRMS is gone, the floor is
+> unchanged. So #186's acceptance criterion is not met and the issue stays
+> open; the saving is FIRMS transactions and duplicate fetches, not the
+> cold wait, and the remaining cost sits inside the Lambda, not the
+> network. Attribution and candidate fixes are in #251.
+
+> **Measured on the deployed function 2026-09-10 after PR #256, and the
+> attribution below is corrected (#251, #186).** Three bursts against the
+> API with the new stage lines in CloudWatch:
+>
+> | Burst | Shared entry | Cold handler | Init | Cold TTFB |
+> |---|---|---|---|---|
+> | 12 wide, entry 15 min old | stale | 3,082 to 3,184 ms, 10 of 10 | 1,188 to 1,550 ms | 3.7 to 5.8 s |
+> | 12 wide, entry 2 s old | fresh | 237 to 340 ms, 7 cold | 1,164 to 1,592 ms | 2.9 to 4.0 s, client contended |
+> | 4 wide, entry 10 s old | fresh | 261 to 298 ms, 2 cold | 1,254 to 1,596 ms | 2.08 and 2.50 s |
+>
+> Warm requests answered in 0.47 to 0.69 s throughout. In the stale burst
+> every stage line shows the S3 read at 107 to 218 ms and then a 2.9 s gap
+> before the encode line: that gap is the FIRMS fetch, and all ten
+> containers made it and rewrote the object. So the ~2.5 s floor #250
+> measured, and the local first-connection figures quoted below, were
+> the wrong cause: on Lambda the client builds in 127 to 162 ms, the
+> warm-up HEAD takes 50 to 58 ms, the GET 36 to 156 ms, the decode 31 to
+> 79 ms and the encode 62 to 101 ms, together 0.3 to 0.5 s. With a fresh
+> entry a cold request is 2.1 to 2.5 s to first byte, against 3.2 to 3.9 s
+> in #250, so #186's criterion is met for the case it describes and both
+> issues close. What #256 itself bought is small: about 0.2 s of handler
+> moved into init, and init grew from 0.56 to 0.74 s to 1.16 to 1.6 s
+> because `boto3` is now imported and the connection opened there; the
+> stage lines are the durable part of that PR. The remaining cold cost is
+> init, and the remaining slow path is whoever arrives first after the
+> entry expires, which #259 carries (refresh ahead of expiry). Two of
+> twelve burst requests were throttled to 503 by the account's Lambda
+> concurrency limit of 10; #260.
+
+> **Attributed 2026-09-10 by PR #256 (#251): the cost is the first S3
+> connection, not the decode or the encode.** *(Superseded by the
+> paragraph above: the laptop figures here are real, but the first
+> connection is not what the deployed handler was spending its time on.)* Staged on a laptop through
+> the same code against the real bucket, profile `kino`: `import boto3`
+> 129 ms, client construction 84 to 86 ms, the first `get_object` of the
+> 75 KB object 5,308 ms against 996 ms for the second, gunzip 1 ms,
+> `json.loads` of the 1.1 MB payload 24 ms, `jsonify` 12 to 17 ms. Every
+> CPU stage together is under 150 ms; the first request carries the
+> credential resolution and TLS handshake, and on a 512 MB handler that
+> work runs on a fraction of a vCPU. The fix is the issue's first
+> candidate, taken alone: `create_app()` now builds the S3 client and
+> opens its connection with a HEAD of the cache key, which on Lambda is
+> the init phase. Measured locally, the warm-up absorbs 3,530 ms and the
+> first request then takes 325 ms end to end (GET 292 ms, decode 14 ms,
+> encode 17 ms). The read logs one INFO line with those stages, so the
+> deployed split is read from CloudWatch rather than inferred. The cold
+> TTFB after the deploy is not quoted here yet: this PR is the deploy, so
+> the figure is taken after the merge, on #251, with the burst in that
+> issue. `lambda_memory_mb` stays at 512 until that figure says the
+> handler is still CPU-bound.
 
 **Decision.** `GET /api/firms/live` keeps its process-local 15-minute cache as
 a first level and adds a second: one gzipped JSON object,
@@ -128,13 +500,26 @@ bucket, which keeps its object-only grant. The trade is stated in that
 file: a PR merged to `main` can widen CI's own permissions, in the open,
 with a plan comment. Bootstrap now holds only what CI cannot give itself.
 
-**Open.** The post-deploy cold-start time-to-first-byte has not been measured
-yet; #186 stays open until it is quoted.
+**Open.** ~~The cold-start time-to-first-byte is quoted above and is not
+materially below the pre-change figure. #186 stays open, and #251
+carries the next step: where the ~2.5 s goes inside a cold handler that no
+longer waits on FIRMS.~~ Resolved 2026-09-10, see the measured paragraph
+above: 2.1 to 2.5 s cold with a fresh entry. Still open: the first request
+after the entry expires pays the FIRMS fetch, #259.
 ---
 
 ## 2026-09-10 - The shared evidence prefix is sent behind a Bedrock cache point; round 1 stays parallel, so the saving is two reads, not three
 
-**Status:** done, measurement pending · PRs #245, #247 · Refs #147
+**Status:** done · PRs #245, #247, measured by PR #250 · Closes #147
+
+> **Measured 2026-09-10 by PR #250.** Through the production adapter with
+> the real 128-object pack (Haiku 4.5, four calls): uncached 152,422 fresh
+> input tokens, ~$0.20; first cached assessment 7,526 fresh + 72,488 written
+> + 72,488 read, ~$0.15; a second assessment inside the 5-minute TTL 7,446
+> fresh + 144,976 read, ~$0.07. Two writes and two reads per assessment, as
+> predicted. The prefix is ~36k tokens per call, not the ~19k the estimate
+> below assumed, so the uncached baseline was understated. Full table in
+> `docs/infra.md`.
 
 **Decision.** `AgentInput.to_dict()` serializes the fields all four provider
 calls share (event id, evidence pack, evidence IDs, hypotheses) before the
@@ -173,10 +558,10 @@ reorder to be its own PR with the evidence-framing rules re-checked, because
 it changes the text the model receives. #245 is that PR: key order only, no
 wording, no field added or removed.
 
-**Open.** The measured before/after `usage` figures. They need a deployed
-run: one assessment with the default and one with `BEDROCK_PROMPT_CACHE=0`
-on the worker, four `Bedrock usage` lines each in the worker's log group.
-`docs/infra.md` carries the estimate until then, and #147 stays open.
+**Open.** The figures above are local runs through the deployed code path,
+not the worker's own log. The first deployed assessments log `usage` at
+INFO in the worker's log group and should agree with the table; if they do
+not, the table is wrong, not the log.
 
 ---
 
@@ -256,6 +641,8 @@ behaviour; no console route is shaped that way.
 ## 2026-09-10 - A scope can be a point and radius or the server-owned demo area, and the session records which
 
 **Status:** done · PR #216 · Refs #87 (backend half; the console half is open)
+
+> **Console half landed 2026-09-10 by PR #267 (#249).** The scope panel now offers all three sources and calls these endpoints; see the entry of that date.
 
 **Decision.** Two more ways to set an audit scope, both server-side:
 `POST /api/audits/{id}/scope/point` takes latitude, longitude and a radius
@@ -462,6 +849,12 @@ always 1 for every event in the artifact (0 of 1,842 multi-observation
 events have more). That is #213, not fixed here because it
 changes a served metric and so needs regeneration.
 
+> **Fixed 2026-09-10 by PR #254 (#213).** The complexity module now uses
+> the clustering module's 1 km lobe radius and refuses one at or above the
+> clustering radius. No regeneration was due: no committed artifact carries
+> the metric, and the API serves every complexity field as "not evaluated"
+> until #214. See the entry of that date.
+
 ---
 
 ## 2026-09-10 - Analysis findings get a register and a word cap in the prompt, not a second model to rewrite them
@@ -618,6 +1011,12 @@ attached the same four products to every event, so events at the western edge
 of the scope are told their scene is a tile that does not reach them. That is
 #193; the manifest records the gaps honestly rather than filling them from
 another date.
+
+> **Corrected 2026-09-10 by PR #253 (#193).** The selector did run per
+> event; what it lacked was a footprint test, so closest-in-time picked the
+> same products for everyone. The selector now requires a product to contain
+> the event centroid, and the six gaps are filled by scenes from adjacent
+> orbits. See the entry of that date.
 
 **Open.** #171 builds the drawer surface that reads `manifest.json`. Folding
 each image into the evidence response as a display attribute of its source
@@ -1129,6 +1528,11 @@ job rows were separated; it no longer describes a live hazard.
 it records an outcome would otherwise leave a job running forever, which the
 console cannot tell from slow work and which blocks every retry. A job whose
 `startedAt` is older than Lambda's 900s ceiling is treated as startable.
+
+> **Tightened 2026-09-10 by PR #252 (#189).** The stale rule now runs
+> inside the store's compare-and-set rather than before a separate write,
+> and a re-claimed job gets a new `jobId` that the dead worker's late writes
+> cannot match. Same behaviour for the auditor; the race is gone.
 
 **Local development runs the job inline.** With `ANALYSIS_WORKER_FUNCTION`
 unset there is no second function to invoke and no 30s cap to fit under, so

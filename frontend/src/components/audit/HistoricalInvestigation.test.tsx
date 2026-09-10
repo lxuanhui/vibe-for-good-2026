@@ -107,6 +107,21 @@ test('the register shows the count the chosen period returned, not the dataset t
   expect(screen.getByText(/2019-09-02 → 2019-09-03/)).toBeTruthy()
 })
 
+test('keeps scope editing beside the scoped-map navigation in one register control area', async () => {
+  fetchAuditRegisterMock.mockResolvedValue({ events: [], progression: progression(0) })
+  const onOpenScope = vi.fn()
+  const onOpenScopedMap = vi.fn()
+
+  render(<HistoricalInvestigation scope={scope('2019-09-02', '2019-09-03')} onOpenScope={onOpenScope} onOpenScopedMap={onOpenScopedMap} />)
+
+  const controls = screen.getByRole('button', { name: 'EDIT SCOPE' }).parentElement
+  expect(controls?.querySelectorAll('button')).toHaveLength(3)
+  fireEvent.click(screen.getByRole('button', { name: 'EDIT SCOPE' }))
+  fireEvent.click(screen.getByRole('button', { name: 'VIEW SCOPED MAP' }))
+  expect(onOpenScope).toHaveBeenCalledOnce()
+  expect(onOpenScopedMap).toHaveBeenCalledOnce()
+})
+
 test('the period is not re-sent as a query filter, so the closing day survives', async () => {
   fetchAuditRegisterMock.mockResolvedValue({ events: [event('fe-1', '2019-09-03T10:00:00Z')], progression: progression(1) })
 
@@ -168,12 +183,25 @@ test('reports human-review routing for the current register population', () => {
   expect(screen.getByRole('heading', { name: 'Observation derivation' })).toBeTruthy()
   expect(screen.getByText('20,471')).toBeTruthy()
   expect(screen.getAllByText('3,610').length).toBeGreaterThan(0)
+  expect(screen.queryByText('5.7 observations per FireEvent on average. This is clustering, not a review queue.')).toBeNull()
   expect(screen.getByText('Count includes the configured context buffer: 16 of 3,610 FireEvents.')).toBeTruthy()
   expect(screen.getByRole('heading', { name: 'Scoped routing diagnostic' })).toBeTruthy()
   expect(screen.getByText('ROUTED TO HUMAN REVIEW IN CURRENT REGISTER')).toBeTruthy()
   expect(screen.getByText('11.0% of 3,610 FireEvents in this register.')).toBeTruthy()
   expect(screen.queryByText(/Global routing diagnostics/)).toBeNull()
   expect(screen.queryByText('observations → FireEvents → in scope + buffer → human review')).toBeNull()
+})
+
+test('presents derivation, scope, and routing as one connected flow', () => {
+  render(<RegisterSummary progression={summaryProgression} />)
+
+  const summary = screen.getByRole('region', { name: 'Historical register population summary' })
+  expect(summary.querySelector('[aria-label="Register processing flow"]')).toBeTruthy()
+  expect(summary.querySelectorAll('[data-flow-stage]')).toHaveLength(3)
+  expect(summary.querySelectorAll('[data-flow-arrow]')).toHaveLength(2)
+  expect(summary.className).not.toContain('bg-border')
+  expect(summary.querySelector('[data-flow-stage="current-audit-scope"]')?.textContent).toContain('16')
+  expect(summary.querySelector('[data-flow-stage="scoped-routing"]')?.textContent).toContain('396')
 })
 
 test('shows zero scoped routing without falling back to global numbers', () => {
@@ -197,6 +225,38 @@ test('provides contextual help for clustering and routing dimensions', () => {
   expect(screen.getByText(/you control filtering/)).toBeTruthy()
 })
 
+test('keeps observation derivation help inside the viewport near the bottom-right edge', () => {
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 })
+  Object.defineProperty(window, 'innerHeight', { configurable: true, value: 768 })
+  Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { configurable: true, value: 256 })
+  Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, value: 120 })
+
+  render(<RegisterSummary progression={summaryProgression} />)
+  const helpButton = screen.getByRole('button', { name: 'About observation derivation' })
+  vi.spyOn(helpButton, 'getBoundingClientRect').mockReturnValue({
+    x: 980, y: 740, top: 740, right: 996, bottom: 756, left: 980, width: 16, height: 16,
+    toJSON: () => ({}),
+  })
+
+  fireEvent.click(helpButton)
+
+  const popover = screen.getByRole('note')
+  expect(popover.getAttribute('style')).toContain('top: 612px')
+  expect(popover.getAttribute('style')).toContain('left: 740px')
+})
+
+test('dismisses contextual help with Escape and returns focus to its trigger', () => {
+  render(<RegisterSummary progression={summaryProgression} />)
+  const helpButton = screen.getByRole('button', { name: 'About observation derivation' })
+
+  fireEvent.click(helpButton)
+  expect(screen.getByRole('note')).toBeTruthy()
+  fireEvent.keyDown(document, { key: 'Escape' })
+
+  expect(screen.queryByRole('note')).toBeNull()
+  expect(document.activeElement).toBe(helpButton)
+})
+
 test('keeps routing explanation out of the normal register layout', () => {
   render(<RegisterSummary progression={summaryProgression} />)
 
@@ -211,6 +271,6 @@ test('offers a direct action to edit the audit scope', async () => {
 
   render(<HistoricalInvestigation scope={scope('2019-09-02', '2019-09-03')} onOpenScope={onOpenScope} />)
 
-  fireEvent.click(await screen.findByRole('button', { name: 'EDIT AUDIT SCOPE' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'EDIT SCOPE' }))
   expect(onOpenScope).toHaveBeenCalledTimes(1)
 })

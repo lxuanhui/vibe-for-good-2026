@@ -23,7 +23,7 @@ export const TIMELINE_DATES: string[] = Array.from(new Set([...MOCK_FIRMS_DATES,
 // rebuild that against this same set if a scrubber returns.
 export const FIRMS_AVAILABLE_DATES = new Set(TIMELINE_DATES)
 
-// Sentinel-1 nominal ~6-day revisit — sparse by design, not a UI simplification.
+// Sentinel-1 nominal ~6-day revisit: sparse by design, not a UI simplification.
 export const SAR_AVAILABLE_DATES = new Set(['2026-08-29', '2026-09-04'])
 
 // Cloud-free Sentinel-2 passes are intermittent.

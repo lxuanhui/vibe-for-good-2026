@@ -139,7 +139,7 @@ export function DataVisualizations({ fwiKbdi, sarTrend, fireGrowth }: DataVisual
           </ResponsiveContainer>
           {sarTrend.length <= 2 && (
             <p className="mt-1 text-[11px] text-text-faint">
-              Only {sarTrend.length} SAR pass(es) in this window — ~6-day revisit cadence, not a UI gap.
+              Only {sarTrend.length} SAR pass(es) in this window. Revisit cadence is about six days, not a UI gap.
             </p>
           )}
         </div>

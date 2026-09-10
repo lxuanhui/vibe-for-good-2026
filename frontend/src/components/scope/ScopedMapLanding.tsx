@@ -1,19 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Layer, Map, Source, type MapLayerMouseEvent } from 'react-map-gl/maplibre'
 import type { Feature, FeatureCollection, Geometry, LineString, Point } from 'geojson'
-import type { AuditEventSummary, AuditScope, EventEvidenceResponse, InvestigationMap, InvestigationMapNode, StructuredAnalysis } from '../../api/types'
+import type { AnalysisJob, AuditEventSummary, AuditScope, EventEvidenceResponse, InvestigationMap, InvestigationMapNode, StructuredAnalysis } from '../../api/types'
 import { addToAuditPack, fetchAuditRegister, fetchInvestigationBundle, fetchInvestigationMap, generateInvestigationAnalysis } from '../../api/client'
-import { AUDIT_EVENT_COLORS, AUDIT_SCOPE_BOUNDARY_COLOR, AUDIT_SCOPE_BUFFER_COLOR, SOLAR_NIGHT_COLOR, SURFACE_FIRE_ENVELOPE_COLOR } from '../../lib/layerColors'
+import { AUDIT_SCOPE_BOUNDARY_COLOR, AUDIT_SCOPE_BUFFER_COLOR, FIRE_EVENT_COLORS, FIRMS_HOTSPOT_COLORS, HYDROLOGY_RAMP_COLORS, LAYER_COLORS, SOLAR_NIGHT_COLOR, SURFACE_FIRE_ENVELOPE_COLOR } from '../../lib/layerColors'
+import { REGIONAL_MAP_BOUNDS } from '../../lib/regionalBounds'
+import { Brand } from '../brand/Brand'
 import { useAppStore } from '../../store/useAppStore'
+import { useScopedOverlay } from '../../api/hooks'
 import { Button } from '../ui/Button'
 import { EvidenceDrawer } from '../audit/EvidenceDrawer'
+import { LayerControlPanel } from '../map/LayerControlPanel'
 import { envelopePolygons } from './propagationEnvelopes'
 import { eventOverlapsDay, observationDays, observationsForDay, type ScopedMapDay } from './temporalScrubber'
 import { illuminationReference, nightCoverage } from '../../lib/illumination'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
 const GRAPH_LINE_COLOR = '#f97316'
-const OBSERVATION_COLOR = '#fbbf24'
 const SCOPED_MAP_RELATIONSHIP_DISTANCE_KM = 10
 const CLOCK_REFRESH_MS = 60 * 1000
 const TIMELINE_STEP_MS = 750
@@ -152,6 +155,8 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
   const [evidenceError, setEvidenceError] = useState('')
   const [analysis, setAnalysis] = useState<StructuredAnalysis>()
   const [analysisLoading, setAnalysisLoading] = useState(false)
+  const [analysisStartedAt, setAnalysisStartedAt] = useState<string>()
+  const [analysisStage, setAnalysisStage] = useState<string | null>(null)
   const [analysisError, setAnalysisError] = useState('')
   const [focusGraph, setFocusGraph] = useState<InvestigationMap>()
   const [focusGraphError, setFocusGraphError] = useState('')
@@ -160,6 +165,14 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
   const [selectedDay, setSelectedDay] = useState<ScopedMapDay>(null)
   const days = useMemo(() => observationDays(events, scope.review_start, scope.review_end), [events, scope.review_start, scope.review_end])
   const activeDay = selectedDay && days.includes(selectedDay) ? selectedDay : null
+  const firmsVisible = useAppStore((state) => state.layerVisibility.firms)
+  const firmsOverlay = useScopedOverlay(scope.audit_id, 'firms', activeDay, scope.buffer_bbox, firmsVisible)
+  const groundwaterVisible = useAppStore((state) => state.layerVisibility.groundwater)
+  const groundwaterOverlay = useScopedOverlay(scope.audit_id, 'groundwater', activeDay, scope.buffer_bbox, groundwaterVisible)
+  const peatclsmVisible = useAppStore((state) => state.layerVisibility.peatclsm)
+  const peatclsmOverlay = useScopedOverlay(scope.audit_id, 'peatclsm', activeDay, scope.buffer_bbox, peatclsmVisible)
+  const soilMoistureVisible = useAppStore((state) => state.layerVisibility['soil-moisture'])
+  const soilMoistureOverlay = useScopedOverlay(scope.audit_id, 'soil-moisture', activeDay, scope.buffer_bbox, soilMoistureVisible)
   const [isPlaying, setIsPlaying] = useState(false)
   const [showPeatland, setShowPeatland] = useState(false)
   const [evidenceReloadToken, setEvidenceReloadToken] = useState(0)
@@ -219,7 +232,9 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
     if (!drawerEventId) return
     setAnalysisLoading(true)
     setAnalysisError('')
-    try { setAnalysis(await generateInvestigationAnalysis(scope.audit_id, drawerEventId)) }
+    setAnalysisStartedAt(new Date().toISOString())
+    setAnalysisStage('Starting')
+    try { setAnalysis(await generateInvestigationAnalysis(scope.audit_id, drawerEventId, (job: AnalysisJob) => { setAnalysisStage(job.stage ?? 'Starting'); if (job.startedAt) setAnalysisStartedAt(job.startedAt) })) }
     catch (reason) { setAnalysisError(reason instanceof Error ? reason.message : 'Investigation analysis could not be generated.') }
     finally { setAnalysisLoading(false) }
   }
@@ -295,7 +310,7 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
   const visibleGraphNodes = useMemo(() => graphNodes.filter((node) => eventOverlapsDay(node, activeDay)), [graphNodes, activeDay])
   const points = useMemo(() => mapPoints(visibleEvents, visibleGraphNodes), [visibleEvents, visibleGraphNodes])
   const edges = useMemo(() => graphEdges(visibleGraphNodes, taggedEdges), [visibleGraphNodes, taggedEdges])
-  const envelopes = useMemo(() => envelopePolygons(taggedEdges, registerSelection), [taggedEdges, registerSelection])
+  const envelopes = useMemo(() => envelopePolygons(taggedEdges, registerSelection, focusedEventId), [taggedEdges, registerSelection, focusedEventId])
   const [showSpreadEnvelopes, setShowSpreadEnvelopes] = useState(true)
   const [showNightShade, setShowNightShade] = useState(true)
   const center = useMemo<[number, number]>(() => scope.centroid ?? [116.25, -3.8], [scope.centroid])
@@ -375,15 +390,20 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
 
   return <div className="scoped-map-print-root relative flex h-full w-full flex-col bg-bg text-text">
     <header className="scoped-map-print-hide flex h-14 shrink-0 items-center justify-between border-b border-border-strong bg-panel px-5">
-      <div><div className="text-sm font-semibold tracking-wide">Environmental Assurance Console</div><div className="text-[10px] uppercase tracking-[0.2em] text-text-faint">Scoped FireEvent review · {scope.review_start} → {scope.review_end}</div></div>
-      <div className="flex items-center gap-2"><Button onClick={onOpenScope}>EDIT SCOPE</Button></div>
+      <Brand subtitle={<>{scope.review_start} → {scope.review_end}</>} />
+      <div className="flex flex-wrap items-center gap-2"><Button onClick={onOpenScope}>EDIT SCOPE</Button><Button onClick={onOpenRegister}>OPEN FIRE REGISTER</Button></div>
     </header>
     <div className="scoped-map-print-hide border-b border-border-strong bg-panel px-5 py-2.5" aria-label="Observation timeline">
       <div className="flex items-center gap-3">
-        <div className="min-w-28 text-[10px] uppercase tracking-[0.16em] text-text-faint">Observation date <span className="ml-1 text-accent">{activeDay ?? 'ALL DAYS'}</span></div>
-        <button type="button" aria-label={isPlaying ? 'Pause timeline' : 'Play timeline'} onClick={toggleTimelinePlayback} disabled={!days.length} className="rounded border border-accent px-2 py-1 text-xs font-semibold text-accent hover:bg-accent/15 disabled:cursor-not-allowed disabled:opacity-40">{isPlaying ? 'PAUSE' : 'PLAY'}</button>
+        <div className="min-w-28 text-[10px] uppercase tracking-[0.16em] text-text-faint" aria-live="polite">Observation date <span className="ml-1 rounded border border-accent/50 bg-accent/10 px-1.5 py-0.5 font-semibold text-accent">{activeDay ?? 'ALL DAYS'}</span></div>
+        <button type="button" aria-label={isPlaying ? 'Pause timeline' : 'Play timeline'} title={isPlaying ? 'Pause timeline' : 'Play timeline'} onClick={toggleTimelinePlayback} disabled={!days.length} className="rounded border border-accent p-1.5 text-accent hover:bg-accent/15 disabled:cursor-not-allowed disabled:opacity-40">
+          {isPlaying ? <svg data-icon="pause" aria-hidden="true" viewBox="0 0 16 16" className="h-4 w-4 fill-current"><rect x="3" y="2" width="3" height="12" rx="0.5" /><rect x="10" y="2" width="3" height="12" rx="0.5" /></svg> : <svg data-icon="play" aria-hidden="true" viewBox="0 0 16 16" className="h-4 w-4 fill-current"><path d="M4 2.5v11l9-5.5-9-5.5Z" /></svg>}
+        </button>
         <div className="flex min-w-0 flex-1 items-end gap-1" role="list" aria-label="Available observation dates">
-          {days.map((day) => <button key={day} type="button" aria-label={`Show observations for ${day}`} aria-pressed={activeDay === day} onClick={() => selectTimelineDay(day)} className={`group flex min-w-8 flex-1 flex-col items-center gap-1 text-[10px] text-text-faint ${activeDay === day ? 'text-accent' : 'hover:text-text-muted'}`}><span className={`h-2.5 w-px ${activeDay === day ? 'bg-accent' : 'bg-border-strong group-hover:bg-text-muted'}`} /><span>{day.slice(5)}</span></button>)}
+          {days.map((day) => {
+            const active = activeDay === day
+            return <button key={day} type="button" aria-label={`Show observations for ${day}`} aria-pressed={active} aria-current={active ? 'date' : undefined} title={`Show observations for ${day}`} onClick={() => selectTimelineDay(day)} className={`group flex min-h-10 min-w-8 flex-1 flex-col items-center justify-end gap-1 rounded-md border px-1 py-1 text-[10px] transition-colors ${active ? 'border-accent bg-accent/15 font-semibold text-accent ring-1 ring-accent' : 'border-transparent text-text-faint hover:border-border-strong hover:bg-panel-raised hover:text-text-muted'}`}><span className={`rounded-full ${active ? 'h-4 w-1.5 bg-accent shadow-[0_0_8px_currentColor]' : 'h-2.5 w-px bg-border-strong group-hover:bg-text-muted'}`} /><span>{day.slice(5)}</span></button>
+          })}
         </div>
         <button type="button" aria-pressed={activeDay === null} onClick={() => selectTimelineDay(null)} className={`shrink-0 rounded border px-2 py-1 text-xs font-semibold ${activeDay === null ? 'border-accent bg-accent/15 text-accent' : 'border-border-strong text-text-muted'}`}>ALL DAYS</button>
       </div>
@@ -402,7 +422,13 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
           initialViewState={initialViewState}
           minZoom={5}
           maxZoom={15}
-          maxBounds={scope.buffer_bbox ? [scope.buffer_bbox.minLon, scope.buffer_bbox.minLat, scope.buffer_bbox.maxLon, scope.buffer_bbox.maxLat] : undefined}
+          // Regional guard rails, not the buffer: pinning maxBounds to the
+          // buffer bbox made the map refuse to drag at all (#249). Dragging
+          // away shows basemap only, because the register is still fetched
+          // for scope plus buffer and nothing else (#127: no regional
+          // FireEvent browser). Changing the area of focus is the scope
+          // panel's job, not the camera's.
+          maxBounds={REGIONAL_MAP_BOUNDS}
           interactiveLayerIds={['audit-event-points', 'fireevent-observations-points']}
           onClick={handleMapClick}
           cursor="default"
@@ -429,6 +455,9 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
           {buffer && <Source id="audit-context-buffer" type="geojson" data={buffer}><Layer id="audit-context-buffer-line" type="line" paint={{ 'line-color': AUDIT_SCOPE_BUFFER_COLOR, 'line-width': 1.5, 'line-dasharray': [2, 2], 'line-opacity': 0.9 }} /></Source>}
           {boundary && <Source id="audit-scope-boundary" type="geojson" data={boundary}><Layer id="audit-scope-fill" type="fill" paint={{ 'fill-color': AUDIT_SCOPE_BOUNDARY_COLOR, 'fill-opacity': 0.08 }} /><Layer id="audit-scope-line" type="line" paint={{ 'line-color': AUDIT_SCOPE_BOUNDARY_COLOR, 'line-width': 2 }} /></Source>}
           {showPeatland && <Source id="peatland-context" type="geojson" data="/peatland-indonesia.geojson"><Layer id="peatland-context-fill" type="fill" paint={{ 'fill-color': '#a855f7', 'fill-opacity': 0.22 }} /><Layer id="peatland-context-line" type="line" paint={{ 'line-color': '#c084fc', 'line-width': 0.7, 'line-opacity': 0.7 }} /></Source>}
+          {groundwaterVisible && groundwaterOverlay && <Source id="scoped-groundwater" type="geojson" data={groundwaterOverlay}><Layer id="scoped-groundwater-points" type="circle" paint={{ 'circle-radius': 13, 'circle-blur': 0.8, 'circle-color': ['interpolate', ['linear'], ['get', 'value'], -5, HYDROLOGY_RAMP_COLORS.groundwaterLow, -1, HYDROLOGY_RAMP_COLORS.groundwaterMid, 0.15, HYDROLOGY_RAMP_COLORS.groundwaterHigh], 'circle-opacity': 0.5 }} /></Source>}
+          {peatclsmVisible && peatclsmOverlay && <Source id="scoped-peatclsm" type="geojson" data={peatclsmOverlay}><Layer id="scoped-peatclsm-points" type="circle" paint={{ 'circle-radius': 13, 'circle-blur': 0.8, 'circle-color': LAYER_COLORS.peatclsm, 'circle-opacity': 0.45 }} /></Source>}
+          {soilMoistureVisible && soilMoistureOverlay && <Source id="scoped-soil-moisture" type="geojson" data={soilMoistureOverlay}><Layer id="scoped-soil-moisture-points" type="circle" paint={{ 'circle-radius': 13, 'circle-blur': 0.8, 'circle-color': ['interpolate', ['linear'], ['get', 'value'], 0, HYDROLOGY_RAMP_COLORS.soilMoistureLow, 0.2, HYDROLOGY_RAMP_COLORS.soilMoistureMid, 0.45, HYDROLOGY_RAMP_COLORS.soilMoistureHigh], 'circle-opacity': 0.5 }} /></Source>}
           {edges.features.length > 0 && <Source id="fireevent-graph" type="geojson" data={edges}><Layer id="fireevent-graph-line" type="line" paint={{
             'line-color': GRAPH_LINE_COLOR,
             // Use the deterministic relationship state already supplied by
@@ -448,22 +477,24 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
               not a solid wash; the dashed outline (not subject to the same
               compounding) carries the actual boundary. */}
           {showSpreadEnvelopes && envelopes.features.length > 0 && <Source id="fireevent-spread-envelope" type="geojson" data={envelopes}><Layer id="fireevent-spread-envelope-fill" type="fill" paint={{ 'fill-color': SURFACE_FIRE_ENVELOPE_COLOR, 'fill-opacity': 0.05 }} /><Layer id="fireevent-spread-envelope-line" type="line" paint={{ 'line-color': SURFACE_FIRE_ENVELOPE_COLOR, 'line-width': 1.5, 'line-dasharray': [3, 3] }} /></Source>}
-          {showObservations && observations.features.length > 0 && <Source id="fireevent-observations" type="geojson" data={observations}><Layer id="fireevent-observations-points" type="circle" paint={{ 'circle-radius': 2.5, 'circle-color': OBSERVATION_COLOR, 'circle-opacity': 0.62, 'circle-stroke-color': '#0a0d12', 'circle-stroke-width': 1 }} /></Source>}
+          {firmsVisible && firmsOverlay && <Source id="scoped-firms-hotspots" type="geojson" data={firmsOverlay}><Layer id="scoped-firms-hotspot-points" type="circle" paint={{ 'circle-radius': 3.5, 'circle-color': FIRMS_HOTSPOT_COLORS.point, 'circle-opacity': 0.82, 'circle-stroke-color': FIRMS_HOTSPOT_COLORS.stroke, 'circle-stroke-width': 1 }} /></Source>}
+          {showObservations && observations.features.length > 0 && <Source id="fireevent-observations" type="geojson" data={observations}><Layer id="fireevent-observations-points" type="circle" paint={{ 'circle-radius': 5, 'circle-color': FIRMS_HOTSPOT_COLORS.core, 'circle-opacity': 0.95, 'circle-stroke-color': FIRMS_HOTSPOT_COLORS.stroke, 'circle-stroke-width': 1.5 }} /></Source>}
           <Source id="audit-events" type="geojson" data={points}>
             <Layer
               id="audit-event-points"
               type="circle"
               paint={{
                 'circle-radius': ['match', ['get', 'focus'], 'SELECTED', 8, 'EXTERNAL_CONTEXT', 6, 5],
-                'circle-color': ['match', ['get', 'state'], 'LIKELY_FIRE', AUDIT_EVENT_COLORS.LIKELY_FIRE, 'LIKELY_NON_FIRE', AUDIT_EVENT_COLORS.LIKELY_NON_FIRE, AUDIT_EVENT_COLORS.AMBIGUOUS],
+                'circle-color': FIRE_EVENT_COLORS.point,
                 'circle-opacity': 0.9,
-                'circle-stroke-color': ['match', ['get', 'focus'], 'SELECTED', GRAPH_LINE_COLOR, AUDIT_SCOPE_BOUNDARY_COLOR],
+                'circle-stroke-color': ['match', ['get', 'focus'], 'SELECTED', FIRE_EVENT_COLORS.focused, AUDIT_SCOPE_BOUNDARY_COLOR],
                 'circle-stroke-width': ['match', ['get', 'focus'], 'SELECTED', 2.5, 'EXTERNAL_CONTEXT', 1.5, 0.75],
               }}
             />
           </Source>
         </Map>
-        {selectedObservation && <div role="status" aria-label="FIRMS observation details" className="pointer-events-auto absolute top-4 left-4 w-56 rounded-lg border border-amber-300/50 bg-panel/95 p-3 text-xs shadow-lg backdrop-blur">
+        <div className="pointer-events-none absolute left-4 top-4 z-[2]"><LayerControlPanel scoped /></div>
+        {selectedObservation && <div role="status" aria-label="FIRMS observation details" className="pointer-events-auto absolute bottom-4 left-4 w-56 rounded-lg border border-amber-300/50 bg-panel/95 p-3 text-xs shadow-lg backdrop-blur">
           <div className="flex items-center justify-between gap-2"><div className="font-semibold text-amber-300">FIRMS observation</div><button type="button" className="text-[10px] text-text-muted hover:text-text" onClick={() => setSelectedObservation(undefined)} aria-label="Close observation details">CLOSE</button></div>
           <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-text-muted">
             <dt>Observed</dt><dd className="text-right text-text">{selectedObservation.acqDate}</dd>
@@ -477,25 +508,23 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
       <aside className="scoped-map-print-hide flex w-80 shrink-0 flex-col overflow-y-auto border-l border-border-strong bg-panel">
         <div className="border-b border-border-strong p-4">
           <div className="text-sm uppercase tracking-[0.16em] text-accent">Audit scope map</div>
+          {scope.scope_label && <p className="mt-2 text-[11px] leading-4 text-text-faint">Boundary: {scope.scope_label}</p>}
           <p className="mt-3 text-xs text-text-muted">Events shown <span className="font-semibold text-accent">{loading ? '…' : visibleEvents.length.toLocaleString()}</span></p>
           <p className="mt-2 text-[11px] leading-4 text-text-faint">Large circles are FireEvents. Smaller amber points are selected-event FIRMS observations.</p>
-          <p className="mt-3 text-xs leading-5 text-text-faint">Peat is environmental context, not cause; compare it with event evidence.</p>
           {taggedEdges.length > 0 && <p className="mt-2 text-xs leading-5 text-text-faint">Lines are limited to {SCOPED_MAP_RELATIONSHIP_DISTANCE_KM} km. <span className="text-accent">Bright</span> lines are stronger candidates for the open FireEvent; weaker or unresolved links recede. <span className="opacity-60">Faint</span> lines belong to other FireEvents selected in the Fire Register.</p>}
-          {envelopes.features.length > 0 && <p className="mt-2 text-xs leading-5 text-text-faint">Dashed outline: first-order wind-oriented surface-spread compatibility estimate — not a validated forecast or claim about what happened.</p>}
+          {envelopes.features.length > 0 && <p className="mt-2 text-xs leading-5 text-text-faint">Dashed outline: first-order wind-oriented surface-spread compatibility estimate. This is not a validated forecast or claim about what happened.</p>}
           {error && <div role="alert" className="mt-3 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-sm text-red-200">{error}</div>}
           {selectionGraphError && <div role="alert" className="mt-3 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-sm text-red-200">{selectionGraphError}</div>}
           {loading && <div role="status" className="mt-3 text-sm text-text-muted">Loading real audit FireEvents…</div>}
           {!loading && !error && events.length === 0 && <div className="mt-3 text-sm text-text-muted">No events intersect this audit scope and buffer.</div>}
-          <Button variant="primary" className="mt-4 w-full" onClick={onOpenRegister}>OPEN FIRE REGISTER</Button>
           <Button className="mt-2 w-full" onClick={() => setShowPeatland((shown) => !shown)}>{showPeatland ? 'HIDE PEATLAND' : 'SHOW PEATLAND'}</Button>
           <Button className="mt-2 w-full" onClick={() => setShowNightShade((shown) => !shown)}>{showNightShade ? 'HIDE NIGHT SHADE' : 'SHOW NIGHT SHADE'}</Button>
-          <p className="mt-2 text-[11px] leading-4 text-text-faint">Night shade shows the estimated sunlit side for the selected date or current time. It is visual orientation only, not fire evidence.</p>
+          {(groundwaterVisible && groundwaterOverlay?.metadata?.status === 'unavailable' || peatclsmVisible && peatclsmOverlay?.metadata?.status === 'unavailable' || soilMoistureVisible && soilMoistureOverlay?.metadata?.status === 'unavailable') && <div role="status" className="mt-2 rounded border border-border bg-bg p-2 text-[11px] leading-4 text-text-faint">Hydrology coverage is unavailable for the selected cache. No values are being substituted.</div>}
           {envelopes.features.length > 0 && <Button className="mt-2 w-full" onClick={() => setShowSpreadEnvelopes((shown) => !shown)}>{showSpreadEnvelopes ? 'HIDE SPREAD ENVELOPES' : 'SHOW SPREAD ENVELOPES'}</Button>}
         </div>
         <div className="p-4">
           <div className="flex items-center justify-between">
             <div className="text-sm uppercase tracking-[0.16em] text-accent">Investigation candidates</div>
-            <span className="rounded border border-border px-1.5 py-0.5 text-xs text-text-muted">{packed.length} IN REPORT</span>
           </div>
           <p className="mt-2 text-sm leading-5 text-text-muted">Select scoped FireEvents for the audit report.</p>
           {packError && <div role="alert" className="mt-2 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-sm text-red-200">{packError}</div>}
@@ -525,6 +554,8 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
           onRetry={() => setEvidenceReloadToken((value) => value + 1)}
           analysis={analysis}
           analysisLoading={analysisLoading}
+          analysisStartedAt={analysisStartedAt}
+          analysisStage={analysisStage}
           analysisError={analysisError || undefined}
           onGenerateAnalysis={() => void generateAnalysis()}
         />

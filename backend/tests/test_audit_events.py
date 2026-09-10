@@ -176,6 +176,52 @@ def test_bbox_filters_on_centroid(client):
         assert -4 <= event["centroid"]["lat"] <= -3
 
 
+def test_firms_overlay_returns_scoped_observations_without_a_focused_event(client):
+    response = client.get(f"/api/audits/{AUDIT}/overlays/firms?date=2019-09-01")
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["type"] == "FeatureCollection"
+    assert body["features"]
+    assert all(feature["properties"]["acqDate"] == "2019-09-01" for feature in body["features"])
+    assert all(feature["properties"]["eventId"].startswith("FE-") for feature in body["features"])
+    assert all(feature["geometry"]["type"] == "Point" for feature in body["features"])
+
+
+def test_firms_overlay_honours_the_current_review_period_and_bbox(client):
+    created = ready_audit(client, "2019-09-02", "2019-09-03")
+    response = client.get(f"/api/audits/{created}/overlays/firms?bbox=116,-4,117,-3")
+
+    assert response.status_code == 200
+    for feature in response.get_json()["features"]:
+        assert "2019-09-02" <= feature["properties"]["acqDate"] <= "2019-09-03"
+        lon, lat = feature["geometry"]["coordinates"]
+        assert 116 <= lon <= 117
+        assert -4 <= lat <= -3
+
+
+def test_progression_uses_the_current_scoped_register(client):
+    full = client.get(f"{BASE}?limit=2000").get_json()
+    body = client.get(f"{BASE}?bbox=116,-4,117,-3&limit=2000").get_json()
+    events = body["events"]
+    expected_count = sum(event["reviewState"] == "HUMAN_REVIEW" for event in events)
+
+    assert body["total"] == len(events)
+    assert body["progression"]["fireEvents"] < full["progression"]["fireEvents"]
+    assert body["progression"]["requiringHumanReview"] != full["progression"]["requiringHumanReview"]
+    assert body["scope"]["reviewQueueCount"] == expected_count
+    assert body["progression"]["fireEvents"] == len(events)
+    assert body["progression"]["requiringHumanReview"] == expected_count
+    assert body["progression"]["routingDiagnostics"]["humanReviewCount"] == expected_count
+    assert body["progression"]["routingDiagnostics"]["reviewStateDistribution"]["HUMAN_REVIEW"] == {
+        "count": expected_count,
+        "percentage": round(expected_count / len(events), 4),
+    }
+    assert body["progression"]["routingDiagnostics"]["humanReviewPercentage"] == round(
+        expected_count / len(events), 4
+    )
+
+
 def test_bare_date_is_read_as_utc_not_naive(client):
     """A naive `since` compared against tz-aware detections used to raise."""
     body = client.get(f"{BASE}?since=2019-09-03").get_json()
@@ -188,6 +234,14 @@ def test_since_matches_events_overlapping_the_window(client):
     body = client.get(f"{BASE}?since=2019-09-03&limit=2000").get_json()
 
     assert any(e["firstDetection"] < "2019-09-03" for e in body["events"])
+
+
+def test_until_bare_date_includes_late_same_day_fire_event(client):
+    """The scoped map's inclusive review end must retain late-day events."""
+    body = client.get(f"{BASE}?since=2019-09-01&until=2019-09-05&limit=2000&offset=3000").get_json()
+
+    event = next(e for e in body["events"] if e["eventId"] == "FE-20190905-f47a306aba")
+    assert event["firstDetection"] == "2019-09-05T18:03:00+00:00"
 
 
 @pytest.mark.parametrize(
@@ -579,3 +633,34 @@ def test_each_review_queue_figure_names_the_population_it_was_computed_over(clie
     assert scope["eventCount"] == 1463
     assert scope["stage1ReviewQueueCount"] == 1463
     assert scope["reviewQueueCount"] < 396
+
+
+def test_report_store_reads_do_not_scale_with_pack_size(client, monkeypatch):
+    """#270: on Lambda a report with six packed events took 28.7 s and timed
+    out, because every helper re-read the session and re-routed the register.
+    The memo makes the read count a constant, so this counts the underlying
+    store reads during one report and fails if they grow with the pack."""
+    from app import audit_store
+
+    created = client.post("/api/audits", json={"reviewStart": "2019-09-01", "reviewEnd": "2019-09-05"}).get_json()
+    audit_id = created["audit_id"]
+    assert client.post(f"/api/audits/{audit_id}/scope/demo").status_code == 200
+    assert client.post(f"/api/audits/{audit_id}/history/build").status_code == 202
+    event_ids = [event["eventId"] for event in client.get(f"/api/audits/{audit_id}/events?limit=6").get_json()["events"]]
+    assert len(event_ids) == 6
+    for event_id in event_ids:
+        assert client.post(f"/api/audits/{audit_id}/events/{event_id}/add-to-pack", json={}).status_code == 200
+
+    reads = {"count": 0}
+    real_read = audit_store._read_item
+
+    def counted(audit_id: str):
+        reads["count"] += 1
+        return real_read(audit_id)
+
+    monkeypatch.setattr(audit_store, "_read_item", counted)
+    report = client.get(f"/api/audits/{audit_id}/report").get_json()
+    assert len(report["selectedFireEvents"]) == 6
+    # Session, scope geometry, pack and analyses: four reads for the whole
+    # report, whatever the pack size. Without the memo the same report makes 60.
+    assert reads["count"] <= 4

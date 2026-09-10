@@ -13,6 +13,7 @@ nobody has to go digging. Nothing on this page is a credential.
 | API base | `https://g1g4hhe8m7.execute-api.ap-southeast-1.amazonaws.com/` |
 | Health | `https://g1g4hhe8m7.execute-api.ap-southeast-1.amazonaws.com/api/health` |
 | Lambda | `vibe-for-good-2026-dev-api` (python3.13, arm64, 512 MB, 29s) |
+| Lambda concurrency | Account quota `Concurrent executions` (Service Quotas code `L-B99A9384`) is **10** in this region, shared by the API and `vibe-for-good-2026-dev-analysis-worker`. Neither function reserves any, so an analysis in flight plus ten simultaneous map loads throttles the eleventh to a `503`. Adjustable; `aws service-quotas get-service-quota --service-code lambda --quota-code L-B99A9384` shows the current figure. Raising it is an owner action (#260). |
 | Logs | `/aws/lambda/vibe-for-good-2026-dev-api`, `/aws/apigateway/vibe-for-good-2026-dev-api` (14-day retention) |
 | Terraform state | `s3://vibe-for-good-2026-tfstate-apse1/infra/terraform.tfstate`, native `use_lockfile` |
 | CI role | `vibe-for-good-2026-github-actions` (assumed over OIDC) |
@@ -171,5 +172,7 @@ wrong. See the root `.env.example` for the full credential index.
   feasibility spike that writes to no database.
 - **Most API endpoints.** Live: `/api/health`, `/api/hello`, the flat
   `/api/events` pair, and `GET /api/audits/{id}/events`, which serves a
-  committed artifact. The rest of `Environmental_Assurance_Spec.md` §24 (API)
-  — overlays, reports, the agent loop — is still mocked in the frontend.
+  committed artifact. FIRMS and hydrology overlays are now backend routes;
+  reports and the agent loop are still mocked in the frontend. Hydrology
+  remains explicitly unavailable until a materialized #240 cache subset is
+  supplied.

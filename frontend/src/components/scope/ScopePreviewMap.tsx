@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { Map, Source, Layer, type MapRef } from 'react-map-gl/maplibre'
+import { Map, Source, Layer, type MapLayerMouseEvent, type MapRef } from 'react-map-gl/maplibre'
 import type { FeatureCollection, Geometry } from 'geojson'
 import type { ScopePreview } from '../../lib/scope'
 import indonesiaBoundary from '../../assets/indonesia-province-simple.json'
@@ -8,32 +8,47 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 
 const indonesiaBoundaryGeoJson = indonesiaBoundary as unknown as FeatureCollection<Geometry>
 
-export function ScopePreviewMap({ scope }: { scope: ScopePreview }) {
-  const initialViewState = useMemo(() => {
+export function ScopePreviewMap({ scope, onPick }: { scope: ScopePreview; onPick?: (position: [number, number]) => void }) {
+  const view = useMemo(() => {
     const span = Math.max(scope.bufferBbox.maxLon - scope.bufferBbox.minLon, scope.bufferBbox.maxLat - scope.bufferBbox.minLat, 0.01)
     return {
       longitude: scope.centroid[0],
       latitude: scope.centroid[1],
       zoom: Math.max(3, Math.min(12, 8 - Math.log2(span))),
+      span,
     }
   }, [scope])
 
   const mapRef = useRef<MapRef>(null)
+  const framedSpan = useRef<number | null>(null)
   useEffect(() => {
-    mapRef.current?.jumpTo({
-      center: [initialViewState.longitude, initialViewState.latitude],
-      zoom: initialViewState.zoom,
-    })
-  }, [initialViewState])
+    const map = mapRef.current
+    const spanChanged = framedSpan.current !== view.span
+    framedSpan.current = view.span
+    if (!map) return
+    // A click on the map moves the centre to where the user pointed, so
+    // re-framing on every scope change would yank the map away from the spot
+    // they just chose. Re-frame only when the footprint's size changed (a new
+    // radius, buffer or file) or the new centre has left the screen.
+    const centre: [number, number] = [view.longitude, view.latitude]
+    if (!spanChanged && map.getBounds().contains(centre)) return
+    map.jumpTo({ center: centre, zoom: view.zoom })
+  }, [view])
+
+  function handleClick(event: MapLayerMouseEvent) {
+    onPick?.([event.lngLat.lng, event.lngLat.lat])
+  }
 
   return (
     <Map
       ref={mapRef}
       mapStyle="/blank-style.json"
-      initialViewState={initialViewState}
+      initialViewState={{ longitude: view.longitude, latitude: view.latitude, zoom: view.zoom }}
       minZoom={2}
       maxZoom={14}
       attributionControl={false}
+      cursor={onPick ? 'crosshair' : 'grab'}
+      onClick={onPick ? handleClick : undefined}
     >
       <Source id="indonesia-geographic-context" type="geojson" data={indonesiaBoundaryGeoJson}>
         <Layer

@@ -86,9 +86,18 @@ export async function uploadAuditScopeGeometry(auditId: string, geometry: unknow
   return apiPost<AuditScope>(`/audits/${encodeURIComponent(auditId)}/scope/upload`, JSON.stringify(geometry), { 'Content-Type': 'application/json' })
 }
 
-// The server-owned demo study area (#216). The session records it as a demo
-// scope with its own label, so it can never be presented as an upload.
-export async function setAuditDemoScope(auditId: string): Promise<AuditScope> {
+// The two no-file scope paths from #87. Both are server-owned: the API builds
+// the circle and records `scope_source`, so the console never has to post a
+// polygon it made up and call it the auditor's.
+export async function setAuditScopePoint(auditId: string, point: { latitude: number; longitude: number; radiusKm: number }): Promise<AuditScope> {
+  return apiPost<AuditScope>(
+    `/audits/${encodeURIComponent(auditId)}/scope/point`,
+    JSON.stringify({ latitude: point.latitude, longitude: point.longitude, radius_km: point.radiusKm }),
+    { 'Content-Type': 'application/json' },
+  )
+}
+
+export async function setAuditScopeDemo(auditId: string): Promise<AuditScope> {
   return apiPost<AuditScope>(`/audits/${encodeURIComponent(auditId)}/scope/demo`, null)
 }
 
@@ -138,6 +147,18 @@ export async function fetchInvestigationMap(auditId: string, eventIds: string[])
   return apiGet<InvestigationMap>(`/audits/${encodeURIComponent(auditId)}/graph?event_ids=${query}`)
 }
 
+export async function fetchAuditOverlay(
+  auditId: string,
+  layer: OverlayLayerId,
+  filters: { bbox?: BBox; date?: string } = {},
+): Promise<FeatureCollection<unknown, unknown>> {
+  const query = new URLSearchParams()
+  if (filters.bbox) query.set('bbox', `${filters.bbox.minLon},${filters.bbox.minLat},${filters.bbox.maxLon},${filters.bbox.maxLat}`)
+  if (filters.date) query.set('date', filters.date)
+  const suffix = query.toString() ? `?${query}` : ''
+  return apiGet<FeatureCollection<unknown, unknown>>(`/audits/${encodeURIComponent(auditId)}/overlays/${layer}${suffix}`)
+}
+
 export async function fetchAuditEventEvidence(auditId: string, eventId: string): Promise<EventEvidenceResponse> {
   return apiGet<EventEvidenceResponse>(`/audits/${encodeURIComponent(auditId)}/events/${encodeURIComponent(eventId)}/evidence`)
 }
@@ -179,9 +200,10 @@ export async function readInvestigationAnalysis(auditId: string, eventId: string
   return apiGet<AnalysisJob>(`/audits/${encodeURIComponent(auditId)}/events/${encodeURIComponent(eventId)}/analyse`)
 }
 
-export async function generateInvestigationAnalysis(auditId: string, eventId: string): Promise<StructuredAnalysis> {
+export async function generateInvestigationAnalysis(auditId: string, eventId: string, onProgress?: (job: AnalysisJob) => void): Promise<StructuredAnalysis> {
   const path = `/audits/${encodeURIComponent(auditId)}/events/${encodeURIComponent(eventId)}/analyse`
   let job = await apiPost<AnalysisJob>(path, '')
+  onProgress?.(job)
   const deadline = Date.now() + ANALYSIS_POLL_DEADLINE_MS
   while (job.jobStatus === 'RUNNING') {
     if (Date.now() > deadline) {
@@ -191,6 +213,7 @@ export async function generateInvestigationAnalysis(auditId: string, eventId: st
     }
     await delay(null, Math.max(1, job.pollAfterSeconds ?? 5) * 1000)
     job = await apiGet<AnalysisJob>(path)
+    onProgress?.(job)
   }
   if (job.jobStatus !== 'COMPLETE' || !job.analysis) {
     throw new Error(job.error ?? 'Investigation analysis could not be generated.')

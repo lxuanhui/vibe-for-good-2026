@@ -2,14 +2,17 @@ import { useEffect, useMemo, useState } from 'react'
 import { Layer, Map, Source } from 'react-map-gl/maplibre'
 import type { FeatureCollection, Point } from 'geojson'
 import { fetchLiveFirmsDetections } from '../../api/client'
+import { FIRMS_HOTSPOT_COLORS } from '../../lib/layerColors'
 import { Button } from '../ui/Button'
 import { illuminationReference, nightCoverage } from '../../lib/illumination'
 import { SOLAR_NIGHT_COLOR } from '../../lib/layerColors'
+import { REGIONAL_MAP_BOUNDS } from '../../lib/regionalBounds'
+import { APP_DESCRIPTOR } from '../../lib/brand'
+import { Brand } from '../brand/Brand'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
 type FirmsProperties = { confidence: string; frp: number; ageHours: number }
 
-const SEA_BOUNDS: [number, number, number, number] = [90, -12, 145, 25]
 const FIRMS_REFRESH_MS = 15 * 60 * 1000
 const CLOCK_REFRESH_MS = 60 * 1000
 
@@ -123,7 +126,7 @@ export function AuditLanding({ onStartAudit, onOpenContext }: { onStartAudit: ()
           mapStyle="/scoped-map-style.json"
           transformRequest={transformRequest}
           initialViewState={{ longitude: 117.5, latitude: 6.5, zoom: 3 }}
-          maxBounds={SEA_BOUNDS}
+          maxBounds={REGIONAL_MAP_BOUNDS}
           minZoom={3}
           maxZoom={10}
           attributionControl={false}
@@ -141,9 +144,9 @@ export function AuditLanding({ onStartAudit, onOpenContext }: { onStartAudit: ()
         >
           <Source id="solar-night-coverage" type="geojson" data={night}><Layer id="solar-night-coverage-fill" type="fill" paint={{ 'fill-color': SOLAR_NIGHT_COLOR, 'fill-opacity': 0.3 }} /></Source>
           <Source id="firms-live-sea" type="geojson" data={hotspots}>
-            <Layer id="firms-live-glow" type="circle" paint={{ 'circle-color': '#ff351b', 'circle-radius': ['interpolate', ['linear'], ['get', 'frp'], 0, 7, 30, 15, 100, 25], 'circle-blur': 0.8, 'circle-opacity': ['interpolate', ['linear'], ['get', 'ageHours'], 0, 0.85, 6, 0.6, 24, 0.18] }} />
-            <Layer id="firms-live-hotspots" type="circle" paint={{ 'circle-color': '#ff5c2e', 'circle-radius': ['interpolate', ['linear'], ['get', 'frp'], 0, 2.5, 30, 5, 100, 8], 'circle-stroke-color': '#ffe6a3', 'circle-stroke-width': 0.8, 'circle-opacity': ['interpolate', ['linear'], ['get', 'ageHours'], 0, 1, 6, 0.86, 24, 0.42] }} />
-            <Layer id="firms-live-cores" type="circle" paint={{ 'circle-color': '#fff4ce', 'circle-radius': 1.5, 'circle-opacity': ['interpolate', ['linear'], ['get', 'ageHours'], 0, 1, 24, 0.5] }} />
+            <Layer id="firms-live-glow" type="circle" paint={{ 'circle-color': FIRMS_HOTSPOT_COLORS.glow, 'circle-radius': ['interpolate', ['linear'], ['get', 'frp'], 0, 7, 30, 15, 100, 25], 'circle-blur': 0.8, 'circle-opacity': ['interpolate', ['linear'], ['get', 'ageHours'], 0, 0.85, 6, 0.6, 24, 0.18] }} />
+            <Layer id="firms-live-hotspots" type="circle" paint={{ 'circle-color': FIRMS_HOTSPOT_COLORS.point, 'circle-radius': ['interpolate', ['linear'], ['get', 'frp'], 0, 2.5, 30, 5, 100, 8], 'circle-stroke-color': FIRMS_HOTSPOT_COLORS.stroke, 'circle-stroke-width': 0.8, 'circle-opacity': ['interpolate', ['linear'], ['get', 'ageHours'], 0, 1, 6, 0.86, 24, 0.42] }} />
+            <Layer id="firms-live-cores" type="circle" paint={{ 'circle-color': FIRMS_HOTSPOT_COLORS.core, 'circle-radius': 1.5, 'circle-opacity': ['interpolate', ['linear'], ['get', 'ageHours'], 0, 1, 24, 0.5] }} />
           </Source>
         </Map>
         {(firmsStatus !== 'ready' || hotspots.features.length === 0) && <div className={`pointer-events-none absolute inset-0 z-[5] flex items-center justify-center ${firmsStatus === 'loading' ? 'bg-status-info/[0.04]' : ''}`} aria-hidden="true">
@@ -154,6 +157,7 @@ export function AuditLanding({ onStartAudit, onOpenContext }: { onStartAudit: ()
         </div>}
       </div>
       <section className="absolute right-5 top-5 z-10 max-w-md rounded-xl border border-border-strong bg-panel/95 p-5 shadow-2xl backdrop-blur">
+        <Brand subtitle={APP_DESCRIPTOR} className="mb-4" />
         <p className="text-xs uppercase tracking-[0.18em] text-accent">Southeast Asia · live satellite watch</p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">Start with an audit scope.</h1>
         <p className="mt-3 text-sm leading-6 text-text-muted">Live FIRMS thermal detections provide regional context only. FireEvents appear after you define an authorised management-unit boundary and review period.</p>
@@ -166,7 +170,7 @@ export function AuditLanding({ onStartAudit, onOpenContext }: { onStartAudit: ()
         </div>
         <div className="mt-3 text-right text-[10px] uppercase tracking-[0.14em] text-text-faint">NIGHT SHADE: CURRENT SUN</div>
         <Button variant="primary" className="mt-5 w-full py-3 uppercase tracking-[0.14em]" onClick={onStartAudit}>START AUDIT</Button>
-        <p className="mt-3 text-[11px] leading-4 text-text-faint">Upload GeoJSON → validate scope → build the cached historical register → inspect selected FireEvents.</p>
+        <p className="mt-3 text-[11px] leading-4 text-text-faint">Choose a boundary (demo area, point and radius, or GeoJSON) → validate scope → build the cached historical register → inspect selected FireEvents.</p>
         <button
           type="button"
           onClick={onOpenContext}

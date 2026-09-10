@@ -6,7 +6,7 @@ import type { FireEvent } from '../types'
 // here and the backend copy must move with it, or the overlays will sit away
 // from the detection they describe. It is no longer read by client.ts.
 
-// Case A — obvious non-fire: persistent industrial heat source at a
+// Case A: obvious non-fire: persistent industrial heat source at a
 // Pekanbaru facility. Demonstrates cheap Stage-1 triage saving investigation
 // budget.
 export const CASE_A: FireEvent = {
@@ -45,7 +45,7 @@ export const CASE_A: FireEvent = {
   },
 }
 
-// Case B — environmentally plausible fire on a production-zone peat area.
+// Case B: environmentally plausible fire on a production-zone peat area.
 // Demonstrates the system deprioritising rather than accusing: strongest
 // support lands on regional fire-weather conditions, not plantation activity.
 export const CASE_B: FireEvent = {
@@ -56,7 +56,7 @@ export const CASE_B: FireEvent = {
   firstDetected: '2026-09-02T14:18:00Z',
   status: 'CONVERGED',
   qualifiesForInvestigation: true,
-  topHypothesis: 'H1 — Environmental / regional fire-weather conditions',
+  topHypothesis: 'H1: Environmental / regional fire-weather conditions',
   supportScore: 82,
   peatClassification: 'production_zone',
   detections: [
@@ -94,7 +94,7 @@ export const CASE_B: FireEvent = {
   },
 }
 
-// Case C — the flagship fire-complex resurfacing hypothesis. FIRMS has an
+// Case C: the flagship fire-complex resurfacing hypothesis. FIRMS has an
 // observation gap after day 3, Sentinel-1 records a VH change, and a later
 // detection 2km away lies in the same mapped peat unit and inside the
 // first-order surface-fire compatibility envelope. See

@@ -7,7 +7,7 @@ import {
   buildFireHistory,
   createAuditReview,
   readInvestigationAnalysis,
-  setAuditDemoScope,
+  setAuditScopeDemo,
   startInvestigationAnalysis,
 } from '../api/client'
 import { useAppStore } from '../store/useAppStore'
@@ -40,7 +40,7 @@ vi.mock('../api/client', () => ({
   buildFireHistory: vi.fn(),
   createAuditReview: vi.fn(),
   readInvestigationAnalysis: vi.fn(),
-  setAuditDemoScope: vi.fn(),
+  setAuditScopeDemo: vi.fn(),
   startInvestigationAnalysis: vi.fn(),
 }))
 
@@ -93,7 +93,7 @@ describe('DemoFlow', () => {
 
   it('creates one demo audit under StrictMode and primes the analysis once', async () => {
     vi.mocked(createAuditReview).mockResolvedValue({ ...storedScope, audit_id: 'audit-new', status: 'AWAITING_SCOPE' })
-    vi.mocked(setAuditDemoScope).mockResolvedValue({ ...storedScope, audit_id: 'audit-new', status: 'SCOPE_READY' })
+    vi.mocked(setAuditScopeDemo).mockResolvedValue({ ...storedScope, audit_id: 'audit-new', status: 'SCOPE_READY' })
     vi.mocked(buildFireHistory).mockResolvedValue({ audit_id: 'audit-new', scope_id: 'scope-new', status: 'HISTORY_BUILD_READY', duration_ms: 12, dataset_mode: 'cached_real_historical_dataset' })
     vi.mocked(readInvestigationAnalysis).mockResolvedValue({ auditId: 'audit-new', eventId: DEMO_FOCUS_EVENT_ID, jobStatus: 'NOT_RUN' })
     vi.mocked(startInvestigationAnalysis).mockResolvedValue({ auditId: 'audit-new', eventId: DEMO_FOCUS_EVENT_ID, jobStatus: 'RUNNING', pollAfterSeconds: 60 })
@@ -102,7 +102,7 @@ describe('DemoFlow', () => {
 
     await waitFor(() => expect(startInvestigationAnalysis).toHaveBeenCalledTimes(1))
     expect(createAuditReview).toHaveBeenCalledTimes(1)
-    expect(setAuditDemoScope).toHaveBeenCalledWith('audit-new')
+    expect(setAuditScopeDemo).toHaveBeenCalledWith('audit-new')
     expect(buildFireHistory).toHaveBeenCalledWith('audit-new')
     expect(JSON.parse(localStorage.getItem('eac.demo.session') ?? '{}').scope.audit_id).toBe('audit-new')
   })

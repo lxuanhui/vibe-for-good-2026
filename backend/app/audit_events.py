@@ -16,24 +16,35 @@ reconstruction actually runs, and `history_status` says which case a caller is
 in rather than returning a bare 404.
 """
 
+import csv
 import gzip
 import json
+import math
 from datetime import UTC, datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 from data_pipeline.analysis.investigator_skeptic import run_structured_analysis
+from flask import g, has_request_context
 
 from app import audit_store
 from app.analysis_provider import bedrock_runner
-from app.audits import get_audit as get_audit_session
-from app.audits import get_scope_geometry
+from app.audits import get_audit as _load_audit_session
+from app.audits import get_scope_geometry as _load_scope_geometry
 from app.review_routing import attach_routing, routing_diagnostics
 
 DATA_DIR = Path(__file__).parent / "data"
 EVENTS_PATH = DATA_DIR / "audit_events.json.gz"
 TRIAGE_PATH = DATA_DIR / "audit_triage_detail.json.gz"
+HYDROLOGY_CSV_PATH = DATA_DIR / "peat_cache" / "smap_peatclsm_2019_demo.csv"
+HYDROLOGY_METADATA_PATH = DATA_DIR / "peat_cache" / "smap_peatclsm_2019_demo.metadata.json"
+HYDROLOGY_WINDOW = ("2019-09-01", "2019-09-10")
+HYDROLOGY_LIMITATIONS = [
+    "SMAP L4 is a model analysis informed by radiometer observations, not a well measurement.",
+    "The 9 km grid is coarser than a management unit and is not a local groundwater observation.",
+    "Hydrology context does not establish fire cause, persistence, or responsibility.",
+]
 
 # Stage-1 outcomes, canonical spec §10.
 VALID_STATES = frozenset({"LIKELY_FIRE", "LIKELY_NON_FIRE", "AMBIGUOUS"})
@@ -43,6 +54,7 @@ VALID_STATES = frozenset({"LIKELY_FIRE", "LIKELY_NON_FIRE", "AMBIGUOUS"})
 # caller pages or filters; `total` always reports the unpaged count so the UI
 # can say how many matched.
 DEFAULT_LIMIT = 500
+MAX_DISPLAY_ENVELOPE_REACH_KM = 5.0
 MAX_LIMIT = 2000
 
 # The pack is engagement-scoped and contains only event IDs plus human review
@@ -152,7 +164,41 @@ def _real_edges_by_pair(triage: dict[str, Any], visible: list[dict[str, Any]]) -
     return by_pair
 
 
-def _edge_from_real(real: dict[str, Any], subject_id: str, candidate_id: str) -> dict[str, Any]:
+def _cap_display_envelope(envelope: dict[str, Any], origin: dict[str, float]) -> dict[str, Any]:
+    """Keep committed and newly generated envelopes within the map's near-field limit.
+
+    The polygon and orientation come from the deterministic pipeline. This is
+    only a display bound for older cached artifacts whose envelope was capped
+    under the previous product limit; it does not change graph eligibility.
+    """
+
+    polygon = envelope.get("polygon")
+    if not isinstance(polygon, list) or not polygon:
+        return envelope
+    origin_lon, origin_lat = origin["lon"], origin["lat"]
+    max_reach = 0.0
+    for point in polygon:
+        if not isinstance(point, list) or len(point) != 2:
+            return envelope
+        east = (float(point[0]) - origin_lon) * 111.32 * math.cos(math.radians(origin_lat))
+        north = (float(point[1]) - origin_lat) * 111.32
+        max_reach = max(max_reach, math.hypot(east, north))
+    if max_reach <= MAX_DISPLAY_ENVELOPE_REACH_KM:
+        return envelope
+    scale = MAX_DISPLAY_ENVELOPE_REACH_KM / max_reach
+    return {
+        **envelope,
+        "polygon": [
+            [origin_lon + (float(point[0]) - origin_lon) * scale,
+             origin_lat + (float(point[1]) - origin_lat) * scale]
+            for point in polygon
+        ],
+        "semiMajorKm": envelope.get("semiMajorKm", 0.0) * scale,
+        "semiMinorKm": envelope.get("semiMinorKm", 0.0) * scale,
+    }
+
+
+def _edge_from_real(real: dict[str, Any], subject_id: str, candidate_id: str, source_centroid: dict[str, float]) -> dict[str, Any]:
     """Translate a precomputed `FireEventEdge.to_dict()` (snake_case,
     Python-side field names) into this API's existing edge shape, replacing
     the crude distance-only synthesized edge below with the real
@@ -165,7 +211,9 @@ def _edge_from_real(real: dict[str, Any], subject_id: str, candidate_id: str) ->
         # The envelope is projected from the directed source event. Keep that
         # ownership explicit at the API boundary so clients cannot mistake
         # every candidate edge for an ellipse belonging to the open event.
-        envelope = {**envelope, "ownerEventId": real["source_event_id"]}
+        envelope = _cap_display_envelope(
+            {**envelope, "ownerEventId": real["source_event_id"]}, source_centroid
+        )
     evidence_id = f"GRAPH_{real['source_event_id']}_{real['target_event_id']}_fire_event_graph"
     limitations = [
         "A candidate edge is a relationship for review, not evidence of a shared cause or responsibility.",
@@ -243,14 +291,14 @@ def investigation_map(audit_id: str, event_ids: list[str]) -> dict[str, Any] | N
             real = real_edges.get(frozenset((source["eventId"], target["eventId"])))
             if real is not None:
                 has_real_edge = True
-                edges.append(_edge_from_real(real, source["eventId"], target["eventId"]))
+                edges.append(_edge_from_real(real, source["eventId"], target["eventId"], source["centroid"]))
 
     for candidate in neighbours:
         subject = min(selected, key=lambda event: _distance_km(candidate, event))
         real = real_edges.get(frozenset((subject["eventId"], candidate["eventId"])))
         if real is not None:
             has_real_edge = True
-            edges.append(_edge_from_real(real, subject["eventId"], candidate["eventId"]))
+            edges.append(_edge_from_real(real, subject["eventId"], candidate["eventId"], subject["centroid"]))
             continue
         distance = round(_distance_km(subject, candidate), 3)
         edge_evidence_id = f"GRAPH_{subject['eventId']}_{candidate['eventId']}_distance"
@@ -317,6 +365,59 @@ def _triage_for_audit(audit_id: str) -> dict[str, Any]:
     """Resolve the cached demo detail through an anonymised audit session."""
     details = _load_triage_detail()
     return details.get(audit_id) or details.get("demo-2019-haze", {})
+
+
+def _request_memo(key: tuple[Any, ...], compute: Any) -> Any:
+    """Memoise a read for the rest of the current Flask request.
+
+    A report with six packed events made 36 `get_audit` calls and 56 session
+    reads (#270): `find_event`, `evidence_for_event`, `analysis_for_event`,
+    `_pack`, `investigation_map` and `progression` each re-read DynamoDB and
+    re-routed all 3,610 events. On Lambda that crossed the 29 s timeout, which
+    API Gateway reports as a bodyless 500. Within one request the session
+    cannot change underneath these readers -- every write goes through
+    `audit_store`'s compare-and-set, which does its own read -- so the first
+    answer stands for the request. Outside a request (the analysis worker,
+    unit code) there is no memo and nothing is cached.
+    """
+    if not has_request_context():
+        return compute()
+    memo = getattr(g, "_audit_memo", None)
+    if memo is None:
+        memo = g._audit_memo = {}
+    if key not in memo:
+        memo[key] = compute()
+    return memo[key]
+
+
+def get_audit_session(audit_id: str) -> dict[str, Any] | None:
+    return _request_memo(("session", audit_id), lambda: _load_audit_session(audit_id))
+
+
+def get_scope_geometry(audit_id: str) -> Any:
+    return _request_memo(("geometry", audit_id), lambda: _load_scope_geometry(audit_id))
+
+
+def _session_pack(audit_id: str) -> dict[str, dict[str, Any]]:
+    # Read once per request. `add_to_pack` and `remove_from_pack` write through
+    # `audit_store`'s compare-and-set, which re-reads for itself, and nothing
+    # reads the pack again in the same request after writing it.
+    return _request_memo(("pack", audit_id), lambda: audit_store.pack(audit_id))
+
+
+@lru_cache(maxsize=32)
+def _routed_window(since: datetime | None, until: datetime | None) -> list[dict[str, Any]]:
+    # The artifact is immutable and routing is a pure function of the event,
+    # so the routed register for a review window is the same for every audit
+    # that names it. Cached per container, keyed by the window alone; a
+    # cache miss costs one pass over the demo register.
+    demo = _load_events()["audits"]["demo-2019-haze"]
+    return attach_routing(scoped_register_events(demo["events"], since=since, until=until))
+
+
+@lru_cache(maxsize=4)
+def _routed_artifact(audit_id: str) -> list[dict[str, Any]]:
+    return attach_routing(_load_events()["audits"][audit_id]["events"])
 
 
 def _review_window(session: dict[str, Any]) -> tuple[datetime | None, datetime | None]:
@@ -399,10 +500,18 @@ def review_queue_fields(events: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def get_audit(audit_id: str) -> dict[str, Any] | None:
-    """The reconstructed history for an audit id, if one has been built."""
+    """The reconstructed history for an audit id, if one has been built.
+
+    Memoised for the request; see `_request_memo`. Callers read the result
+    and never mutate it, which is what makes sharing one copy safe.
+    """
+    return _request_memo(("audit", audit_id), lambda: _build_audit(audit_id))
+
+
+def _build_audit(audit_id: str) -> dict[str, Any] | None:
     artifact = _load_events()["audits"].get(audit_id)
     if artifact is not None:
-        events = attach_routing(artifact["events"])
+        events = _routed_artifact(audit_id)
         # The artifact's own `reviewQueueCount` is Stage-1's queue (3,610 on
         # the demo scope) and its `compression` is Stage-1's ratio. Both are
         # replaced here by the same-named served fields -- so the artifact's
@@ -433,7 +542,7 @@ def get_audit(audit_id: str) -> dict[str, Any] | None:
     # The base register population is every clustered event in the audit's
     # review window. Stage-1 state, sufficiency, priority, and workflow are
     # annotations or explicit user filters, never membership gates.
-    events = attach_routing(scoped_register_events(demo["events"], since=since, until=until))
+    events = _routed_window(since, until)
     narrowed = len(events) != len(demo["events"])
     return {
         "scope": {
@@ -489,8 +598,11 @@ def source_provenance() -> dict[str, Any]:
     return _load_events()["source"]
 
 
-def progression(audit_id: str) -> dict[str, Any] | None:
-    """Return artifact-derived clustering and boundary-aware review counts."""
+def progression(
+    audit_id: str,
+    register_events: list[dict[str, Any]] | None = None,
+) -> dict[str, Any] | None:
+    """Return clustering and routing counts for the represented register."""
     audit = get_audit(audit_id)
     if audit is None:
         return None
@@ -502,28 +614,41 @@ def progression(audit_id: str) -> dict[str, Any] | None:
     if private_geometry is not None:
         scope_context["geometry"] = private_geometry
     boundary_available = private_geometry is not None
-    in_scope = sum(_in_scope_or_buffer(event, scope_context) for event in audit["events"]) if boundary_available else None
+    events = audit["events"] if register_events is None else register_events
+    in_scope = sum(_in_scope_or_buffer(event, scope_context) for event in events) if boundary_available else None
     # Prefer the scope's own counts. They are recomputed from the review
     # window in get_audit, and the artifact's dataset-wide totals divided by a
     # filtered event count would report an observations-to-events compression
     # nothing measured -- an efficiency figure manufactured by narrowing the
     # period. The artifact path leaves both keys at the dataset totals, so the
     # unfiltered demo scope is unchanged.
-    qualified = scope.get("qualifiedObservations")
+    qualified = (
+        scope.get("qualifiedObservations")
+        if register_events is None
+        else sum(event["observationCount"] for event in events)
+    )
     if qualified is None:
         qualified = source.get("qualifiedObservations", source.get("observationsUsed"))
-    fire_events = len(audit["events"])
+    fire_events = len(events)
     observations_to_events = round(qualified / fire_events, 2) if fire_events else None
     scope_compression = round(fire_events / in_scope, 2) if in_scope else None
-    pack = audit_store.pack(audit_id) if get_audit_session(audit_id) else AUDIT_PACKS.get(audit_id, {})
-    route_summary = routing_diagnostics(audit["events"])
+    pack = _session_pack(audit_id) if get_audit_session(audit_id) else AUDIT_PACKS.get(audit_id, {})
+    route_summary = routing_diagnostics(events)
     return {
         # None when a narrowed window makes the pre-clustering raw count
         # unknowable; see get_audit. Only the artifact's own coverage can
         # answer it, so do not fall back to the dataset total here.
-        "rawObservations": scope["rawObservations"]
-        if "rawObservations" in scope
-        else source.get("rawObservations", source.get("observationsUsed")),
+        # A bbox/state query is a further register scope. The artifact's raw
+        # detection total cannot be apportioned to that subset honestly.
+        "rawObservations": (
+            (
+                scope["rawObservations"]
+                if "rawObservations" in scope
+                else source.get("rawObservations", source.get("observationsUsed"))
+            )
+            if register_events is None
+            else None
+        ),
         "qualifiedObservations": qualified,
         "fireEvents": fire_events,
         "requiringHumanReview": route_summary["humanReviewCount"],
@@ -584,8 +709,14 @@ def parse_timestamp(raw: str | None, field: str) -> datetime | None:
         raise FilterError(f"{field} must be an ISO 8601 date or timestamp") from None
     # FIRMS acquisition times are UTC and the stored events are tz-aware, so a
     # bare `?since=2019-09-02` has to be read as UTC rather than compared naive
-    # -- an unattached tzinfo raises TypeError deep inside the filter.
-    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+    # -- an unattached tzinfo raises TypeError deep inside the filter. A bare
+    # end date is an auditor-facing inclusive date, so extend `until` through
+    # the end of that UTC day rather than excluding its later observations.
+    if not parsed.tzinfo:
+        parsed = parsed.replace(tzinfo=UTC)
+    if field == "until" and "T" not in raw and "t" not in raw:
+        parsed = parsed.replace(hour=23, minute=59, second=59, microsecond=999999)
+    return parsed
 
 
 def parse_state(raw: str | None) -> str | None:
@@ -668,6 +799,107 @@ def find_event(audit_id: str, event_id: str) -> dict[str, Any] | None:
     # The rule-by-rule breakdown and its evidence objects: what makes the
     # Stage-1 outcome inspectable rather than asserted (§17).
     return {**summary, "triageDetail": detail}
+
+
+def firms_overlay(
+    audit_id: str,
+    bbox: tuple[float, float, float, float] | None = None,
+    date: str | None = None,
+) -> dict[str, Any] | None:
+    """Return raw FIRMS observations for the audit's current register population."""
+    audit = get_audit(audit_id)
+    if audit is None:
+        return None
+    review_start = str(audit["scope"].get("reviewStart", ""))[:10]
+    review_end = str(audit["scope"].get("reviewEnd", ""))[:10]
+    events = filter_events(audit["events"], bbox=bbox)
+    details = _triage_for_audit(audit_id)
+    features: list[dict[str, Any]] = []
+    for event in events:
+        for observation in details.get(event["eventId"], {}).get("observations", []):
+            acquired_date = observation.get("acqDate")
+            if not isinstance(acquired_date, str):
+                continue
+            if review_start and acquired_date < review_start:
+                continue
+            if review_end and acquired_date > review_end:
+                continue
+            if date is not None and acquired_date != date:
+                continue
+            features.append({
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [observation["lon"], observation["lat"]]},
+                "properties": {
+                    "eventId": event["eventId"],
+                    "frp": observation.get("frp"),
+                    "confidence": observation.get("confidence"),
+                    "acqDate": acquired_date,
+                    "acqTime": observation.get("acqTime"),
+                },
+            })
+    return {"type": "FeatureCollection", "features": features}
+
+
+def hydrology_overlay(
+    audit_id: str, layer: str, bbox: tuple[float, float, float, float] | None = None,
+    date: str | None = None,
+) -> dict[str, Any] | None:
+    """Read the #240 cached subset as sparse points for MapLibre heatmaps.
+
+    The cache CSV is intentionally a deployable backend artifact rather than a
+    frontend fixture. If #240 only catalogued the source, the response stays a
+    valid empty collection and explains that absence in metadata.
+    """
+    if get_audit(audit_id) is None:
+        return None
+    metadata: dict[str, Any] = {}
+    if HYDROLOGY_METADATA_PATH.exists():
+        try:
+            metadata = json.loads(HYDROLOGY_METADATA_PATH.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            metadata = {}
+    coverage = metadata.get("temporal_coverage") or {"start": HYDROLOGY_WINDOW[0], "end": HYDROLOGY_WINDOW[1]}
+    spatial = metadata.get("spatial_coverage") or {"bbox": [116.0, -4.05, 116.5, -3.55]}
+    variables = metadata.get("variables", {})
+    config = {
+        "groundwater": ("groundwater_water_table_depth", "m", "PEATCLSM water-table depth relative to mean peat surface"),
+        "peatclsm": ("free_surface_water_on_peat_flux", "kg m-2 s-1", "PEATCLSM free-surface water flux"),
+        "soil-moisture": ("surface_soil_moisture", "m3/m3", "SMAP L4 surface soil moisture, 0-5 cm vertical average"),
+    }
+    variable, unit, label = config[layer]
+    variable_info = variables.get(variable, {})
+    field = {
+        "groundwater": "depth_to_water_table_from_surface_in_peat_m",
+        "peatclsm": "free_surface_water_on_peat_flux_kg_m2_s",
+        "soil-moisture": "surface_soil_moisture_m3_m3",
+    }[layer]
+    rows = []
+    if HYDROLOGY_CSV_PATH.exists():
+        with HYDROLOGY_CSV_PATH.open(newline="", encoding="utf-8") as stream:
+            rows = list(csv.DictReader(stream))
+    available = bool(rows) and any(row.get(field) for row in rows) and (
+        layer != "groundwater" or variable_info.get("status") == "available"
+    )
+    reason = "Cached rows are available." if available else (
+        variable_info.get("reason") or "No materialized cached subset is available for this layer."
+    )
+    features: list[dict[str, Any]] = []
+    if available and (date is None or coverage["start"] <= date <= coverage["end"]):
+        for row in rows:
+            if not row.get(field):
+                continue
+            lon, lat = float(row["longitude"]), float(row["latitude"])
+            if bbox and not (bbox[0] <= lon <= bbox[2] and bbox[1] <= lat <= bbox[3]):
+                continue
+            features.append({
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [lon, lat]},
+                "properties": {
+                    "value": float(row[field]), "unit": unit,
+                    "source": "NASA NSIDC DAAC SPL4SMGP v7", "label": label,
+                },
+            })
+    return {"type": "FeatureCollection", "features": features, "metadata": {"layer": layer, "status": "available" if available else "unavailable", "unit": unit if available else None, "source": "NASA NSIDC DAAC SPL4SMGP v7", "coverage": {"start": coverage["start"], "end": coverage["end"], "bbox": spatial.get("bbox")}, "reason": reason, "limitations": HYDROLOGY_LIMITATIONS}}
 
 
 def _evidence_object(
@@ -862,7 +1094,10 @@ def _analysis_store(audit_id: str) -> dict[str, dict[str, Any]] | None:
     if get_audit(audit_id) is None:
         return None
     if get_audit_session(audit_id):
-        return audit_store.analyses(audit_id)
+        # One read per request, not one per packed event: `_save_analysis`
+        # mutates this same dict before writing it back, so the memo and the
+        # store stay in step within the request.
+        return _request_memo(("analyses", audit_id), lambda: audit_store.analyses(audit_id))
     return AUDIT_ANALYSES.setdefault(audit_id, {})
 
 
@@ -933,7 +1168,7 @@ def _pack(audit_id: str) -> dict[str, dict[str, Any]] | None:
     if get_audit(audit_id) is None:
         return None
     if get_audit_session(audit_id):
-        return audit_store.pack(audit_id)
+        return _session_pack(audit_id)
     return AUDIT_PACKS.setdefault(audit_id, {})
 
 

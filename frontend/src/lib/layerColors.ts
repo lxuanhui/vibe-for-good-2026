@@ -1,17 +1,45 @@
 import type { OverlayLayerId } from '../api/types'
 
-// Single source of truth for overlay layer colors — used both for MapLibre
+// Fire-related map layers share one palette across the landing and scoped
+// investigation maps. FIRMS observations remain the brighter coral signal;
+// clustered FireEvents use orange so the derived investigative unit stays
+// distinct without borrowing any status colour.
+export const FIRMS_HOTSPOT_COLORS = {
+  glow: '#ff351b',
+  point: '#ff5a4a',
+  core: '#fff4ce',
+  stroke: '#ffe6a3',
+} as const
+
+export const FIRE_EVENT_COLORS = {
+  point: '#f97316',
+  focused: '#ffb347',
+} as const
+
+// Single source of truth for overlay layer colors: used both for MapLibre
 // paint expressions (ScopedMapLanding) and the layer legend
 // (LayerControlPanel), so the two can never drift apart. One color scheme,
 // reused everywhere -- this repo's own convention; `Environmental_Assurance_Spec.md`
 // doesn't specify exact colors.
 export const LAYER_COLORS: Record<OverlayLayerId, string> = {
-  firms: '#ff5a4a',
+  firms: FIRMS_HOTSPOT_COLORS.point,
+  groundwater: '#38bdf8',
+  peatclsm: '#a78bfa',
+  'soil-moisture': '#2dd4bf',
   'sar-backscatter': '#6fb3a6',
   khg: '#f97316',
   concessions: '#8b96a8',
   'fire-complex-links': '#ef4444',
 }
+
+export const HYDROLOGY_RAMP_COLORS = {
+  groundwaterLow: '#2563eb',
+  groundwaterMid: '#38bdf8',
+  groundwaterHigh: '#fbbf24',
+  soilMoistureLow: '#f97316',
+  soilMoistureMid: '#facc15',
+  soilMoistureHigh: '#2dd4bf',
+} as const
 
 export const KHG_CLASSIFICATION_COLORS = {
   protected_dome: '#f97316',

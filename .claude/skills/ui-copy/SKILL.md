@@ -69,11 +69,11 @@ Five places. Check the one you are editing and the ones downstream of it.
 
 ## Check before finishing
 
-Until #194 lands a lint rule, the check is a grep. Run it over what you
-touched, and over the artifact if you regenerated one:
+Run `npm run lint:copy` from `frontend` to fail on U+2014 in frontend source.
+Run it over what you touched, and over the artifact if you regenerated one:
 
 ```bash
-grep -rn $'—' frontend/src backend/app data_pipeline --include='*.ts' --include='*.tsx' --include='*.py' --include='*.json' | grep -v '/tests/'
+grep -rn $'—' backend/app data_pipeline --include='*.py' --include='*.json' | grep -v '/tests/'
 for f in backend/app/data/*.json.gz; do printf '%s: ' "$f"; gzip -dc "$f" | grep -o $'—' | wc -l; done
 ```
 

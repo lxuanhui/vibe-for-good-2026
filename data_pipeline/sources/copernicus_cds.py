@@ -53,6 +53,7 @@ def select_scenes(
     *,
     max_cloud_cover_pct: float = 50.0,
     cloud_cover_threshold_pct: float | None = None,
+    location: tuple[float, float] | Mapping[str, Any] | None = None,
 ) -> CopernicusSceneSelection:
     """Select closest usable pre/post scenes from already-fetched STAC items.
 
@@ -67,6 +68,7 @@ def select_scenes(
         event_end,
         max_cloud_cover_pct=max_cloud_cover_pct,
         cloud_cover_threshold_pct=cloud_cover_threshold_pct,
+        location=location,
     )
 
 

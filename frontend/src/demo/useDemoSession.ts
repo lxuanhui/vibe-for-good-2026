@@ -3,7 +3,7 @@ import {
   buildFireHistory,
   createAuditReview,
   readInvestigationAnalysis,
-  setAuditDemoScope,
+  setAuditScopeDemo,
   startInvestigationAnalysis,
 } from '../api/client'
 import type { AnalysisJob, AuditScope } from '../api/types'
@@ -55,7 +55,7 @@ async function createDemoAudit(): Promise<AuditScope> {
     reviewEnd: DEMO_REVIEW_END,
     contextBufferKm: DEMO_CONTEXT_BUFFER_KM,
   })
-  const scoped = await setAuditDemoScope(created.audit_id)
+  const scoped = await setAuditScopeDemo(created.audit_id)
   const handoff = await buildFireHistory(scoped.audit_id)
   return { ...scoped, status: handoff.status, historyBuild: handoff }
 }
