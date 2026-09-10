@@ -14,6 +14,14 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 const GRAPH_LINE_COLOR = '#f97316'
 const OBSERVATION_COLOR = '#fbbf24'
 const SCOPED_MAP_RELATIONSHIP_DISTANCE_KM = 10
+const CLOCK_REFRESH_MS = 60 * 1000
+
+function southeastAsiaLight(date: Date) {
+  // UTC+8 is a useful regional midpoint. This is visual orientation only.
+  const localHour = (date.getUTCHours() + date.getUTCMinutes() / 60 + 8) % 24
+  const daylight = Math.max(0, Math.sin(((localHour - 6) / 12) * Math.PI))
+  return { daylight, label: daylight > 0.15 ? 'DAYLIGHT' : 'NIGHT' }
+}
 
 // The correlation graph is one rolled-together view now, not two flows that
 // silently replace each other: `origin` distinguishes an edge that touches
@@ -142,6 +150,7 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
   const activeDay = selectedDay && days.includes(selectedDay) ? selectedDay : null
   const [showPeatland, setShowPeatland] = useState(false)
   const [evidenceReloadToken, setEvidenceReloadToken] = useState(0)
+  const [clock, setClock] = useState(() => new Date())
   useEffect(() => {
     if (!drawerEventId) { setEvidence(undefined); setEvidenceError(''); setFocusGraph(undefined); setFocusGraphError(''); setAnalysis(undefined); setAnalysisError(''); return }
     setShowObservations(true)
@@ -250,6 +259,12 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
   const envelopes = useMemo(() => envelopePolygons(taggedEdges, focusedEventId), [taggedEdges, focusedEventId])
   const [showSpreadEnvelopes, setShowSpreadEnvelopes] = useState(true)
   const center = useMemo<[number, number]>(() => scope.centroid ?? [116.25, -3.8], [scope.centroid])
+  const light = southeastAsiaLight(clock)
+
+  useEffect(() => {
+    const refresh = window.setInterval(() => setClock(new Date()), CLOCK_REFRESH_MS)
+    return () => window.clearInterval(refresh)
+  }, [])
 
   // Carto's basemap tiles now require a key on every request. The style JSON
   // stays key-free and committed; the key is appended here so it never lands
@@ -310,6 +325,16 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
           onClick={handleMapClick}
           cursor="default"
           onLoad={(event) => {
+            // Keep scoped investigation maps in the same visual language as
+            // Audit Landing: readable green land and clearly blue water.
+            const map = event.target
+            if (map.getLayer('background')) map.setPaintProperty('background', 'background-color', '#183f37')
+            if (map.getLayer('landcover')) map.setPaintProperty('landcover', 'fill-color', '#347657')
+            if (map.getLayer('landuse')) map.setPaintProperty('landuse', 'fill-color', '#285f49')
+            if (map.getLayer('park_national_park')) map.setPaintProperty('park_national_park', 'fill-color', '#54a34f')
+            if (map.getLayer('park_nature_reserve')) map.setPaintProperty('park_nature_reserve', 'fill-color', '#438a4d')
+            if (map.getLayer('water')) map.setPaintProperty('water', 'fill-color', '#010f2b')
+            if (map.getLayer('waterway')) map.setPaintProperty('waterway', 'line-color', '#20b7d7')
             event.target.jumpTo({ center, zoom: initialViewState.zoom })
           }}
           onIdle={(event) => {
@@ -355,6 +380,11 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
             />
           </Source>
         </Map>
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-[1] mix-blend-screen transition-opacity duration-[60000ms]"
+          style={{ background: 'radial-gradient(ellipse at 14% 6%, rgba(42, 200, 255, 0.33), transparent 43%), radial-gradient(ellipse at 86% 84%, rgba(255, 166, 52, 0.18), transparent 45%), radial-gradient(ellipse at 45% 20%, transparent 18%, rgba(1, 13, 30, 0.72) 100%)', opacity: 0.82 - light.daylight * 0.6 }}
+        />
       </div>
       <aside className="scoped-map-print-hide flex w-80 shrink-0 flex-col overflow-y-auto border-l border-border-strong bg-panel">
         <div className="border-b border-border-strong p-4">
