@@ -33,7 +33,7 @@ apply an older decision without checking the entries above it.
 
 ## 2026-09-10 - The console is named atmosclear.ai, and its mark is a graticule earth held in one component
 
-**Status:** done · PR #268 · Closes #257
+**Status:** done · PR #269 · Closes #257
 
 **Decision.** The product name is `atmosclear.ai`, chosen by the team on
 2026-09-10. It replaces the provisional "Environmental Assurance Console",
