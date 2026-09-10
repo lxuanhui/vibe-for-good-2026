@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+import logging
 import time
 from datetime import UTC, datetime, timedelta
 
@@ -62,6 +63,12 @@ class FakeSharedCache:
         self.broken = broken
         self.reads = 0
         self.writes = 0
+        self.warms = 0
+
+    def warm(self):
+        self.warms += 1
+        if self.broken:
+            raise RuntimeError("shared store unreachable")
 
     def read(self):
         self.reads += 1
@@ -355,10 +362,79 @@ def test_the_s3_store_round_trips_gzipped_json_and_treats_no_object_as_empty():
     store = firms_live._S3SharedCache.__new__(firms_live._S3SharedCache)
     store.bucket = "cache-bucket"
     store._client = StubClient()
+    store.stages = {}
 
     assert store.read() is None
     entry = {"storedAt": 1757468000.5, "payload": {"detections": {"features": [{"a": 1}]}}}
     store.write(entry)
     assert store.read() == entry
+    # The stage split #251 asked for: a GET and a decode, both timed, and
+    # the wire size, so a CloudWatch line says where a cold read went.
+    assert {"get_ms", "get_bytes", "decode_ms"} <= set(store.stages)
+    assert store.stages["get_bytes"] == len(store._client.objects[("cache-bucket", firms_live.SHARED_CACHE_KEY)])
     stored = store._client.objects[("cache-bucket", firms_live.SHARED_CACHE_KEY)]
     assert stored[:2] == b"\x1f\x8b"  # gzip magic: what is on the wire is compressed
+
+
+def test_the_store_is_warmed_when_the_app_is_built_and_only_when_configured(monkeypatch):
+    # The client and its connection are what a cold request used to build
+    # inside the handler (#251). `create_app()` warms them, so on Lambda the
+    # cost lands in the init phase; unconfigured, nothing is built at all.
+    fake = FakeSharedCache()
+    monkeypatch.setattr(firms_live, "_shared_cache", lambda: fake)
+    create_app({"TESTING": True})
+    assert fake.warms == 1
+
+    monkeypatch.setattr(firms_live, "_shared_cache", lambda: None)
+    create_app({"TESTING": True})  # no store, no error
+
+    # A store that cannot be warmed is the store `_read_shared` falls through
+    # on: start-up must not fail because a cache is unreachable.
+    monkeypatch.setattr(firms_live, "_shared_cache", lambda: FakeSharedCache(broken=True))
+    create_app({"TESTING": True})
+
+
+def test_the_s3_store_warm_up_opens_the_connection_and_tolerates_a_missing_object():
+    from botocore.exceptions import ClientError
+
+    class StubClient:
+        def __init__(self, code):
+            self.code = code
+            self.heads = 0
+
+        def head_object(self, *, Bucket, Key):
+            self.heads += 1
+            if self.code:
+                raise ClientError({"Error": {"Code": self.code}}, "HeadObject")
+            return {}
+
+    store = firms_live._S3SharedCache.__new__(firms_live._S3SharedCache)
+    store.bucket = "cache-bucket"
+    store.stages = {}
+
+    store._client = StubClient(None)
+    store.warm()
+    assert store._client.heads == 1 and "warm_ms" in store.stages
+
+    # HEAD reports a missing key as a bare 404; that is an empty bucket, not a
+    # failure, and the connection it opened is still the point.
+    store._client = StubClient("404")
+    store.warm()
+
+    store._client = StubClient("AccessDenied")
+    with pytest.raises(ClientError):
+        store.warm()
+
+
+def test_a_shared_read_logs_one_stage_line(client, monkeypatch, caplog):
+    payload = {"status": "ready", "sensor": "x", "windowHours": 24, "fetchedAt": "now",
+               "detections": {"type": "FeatureCollection", "features": []}}
+    _shared(monkeypatch, FakeSharedCache({"storedAt": time.time() - 60, "payload": payload}))
+    monkeypatch.setattr(firms_live, "_fetch_csv", _upstream_must_not_be_called)
+
+    with caplog.at_level(logging.INFO, logger="app"):
+        assert client.get("/api/firms/live").status_code == 200
+
+    read_lines = [r.message for r in caplog.records if r.message.startswith("Shared live FIRMS cache read:")]
+    assert len(read_lines) == 1 and "read_ms=" in read_lines[0]
+    assert any(r.message.startswith("Live FIRMS layer encoded: encode_ms=") for r in caplog.records)

@@ -94,9 +94,63 @@ of that and is already in the manifest.
 
 ---
 
+## 2026-09-10 - The thermal-lobe radius is the clustering module's 1 km and is refused at or above the clustering radius; no served artifact carried the metric
+
+**Status:** done · PR #254 · Closes #213 · Refs #86, #214
+
+**Decision.** `complexity/fire_complexity.py` no longer has a lobe radius of
+its own. It imports `DEFAULT_LOBE_DISTANCE_KM` (1 km) from
+`clustering/firms_clustering.py`, the same value `event_lobes` and the
+diagnostics CLI use, and `compute_fire_complexity()` raises if the lobe
+radius it is given is not strictly below the spatial threshold of the
+`ClusteringParameters` it is given (the defaults when none are). The field's
+`details` record both radii, so a value is self-describing.
+
+**Why.** Every pair the clustering linked is within the clustering radius,
+so a spatial-only connectivity pass at that same radius returns one
+component for every event, whatever the event looks like. With the module's
+old 2 km default `distinct_thermal_lobes` was 1 for all 1,842
+multi-observation events in the 2019 window, and the priority normaliser
+(`min(max(value - 1, 0) / 4, 1)`) turned that into a feature that
+contributed exactly 0 to every score. At 1 km the five largest events
+resolve into 6, 2, 10, 2 and 3 lobes (`python -m
+data_pipeline.clustering.diagnostics --start 2019-09-01 --end 2019-09-05`,
+before and after: the diagnostics already used 1 km, so its output is the
+same; the complexity module now agrees with it). Run through
+`compute_fire_complexity()` itself over the same window, 562 of the 1,842
+multi-observation events now have more than one lobe, against 0 before.
+
+**Finding: nothing needed regenerating.** #213 asked for the detail
+artifact to be regenerated because the served field changes. It does not
+exist to change: neither `audit_events.json.gz` nor
+`audit_triage_detail.json.gz` carries any complexity field, and
+`backend/app/audit_events.py` emits every one of the thirteen as a
+"not evaluated" placeholder with `value: null`. Running the complexity
+module over the artifact and serving its output is #214's work, and this
+fix is what makes that output worth serving.
+
+**Rejected: bumping the algorithm version to v2.** The version string is
+also the one the API's placeholders cite, no artifact holds a v1 value that
+a v2 could be confused with, and the field records its own radius. Bump it
+when #214 first writes real values.
+
+**Rejected: replacing `_spatial_components` with `event_lobes`.** Same
+computation, but `event_lobes` returns lobes as `FireEvent`s with derived
+ids, which the complexity module has no use for and which would invite
+treating a lobe as an event. The count is all it needs.
+
+---
+
 ## 2026-09-10 - The live FIRMS cache is shared across Lambda containers as one S3 object, filling the disposable-cache role
 
 **Status:** done · PR #246 · Refs #186
+
+> **Corrected 2026-09-10 by PR #261 (#251).** The 2.5 s handler floor
+> below was almost certainly the upstream FIRMS fetch on a shared entry
+> that had aged past 15 minutes, which runs with no warning by design, not
+> anything inside the Lambda; the paragraph after this one has the
+> measurement that shows it. Read the figures below as the stale-entry
+> case.
 
 > **Measured 2026-09-10 by PR #250: the cache works, the cold start did
 > not move.** After the apply, a cold container serves the route from the
@@ -109,6 +163,57 @@ of that and is already in the manifest.
 > open; the saving is FIRMS transactions and duplicate fetches, not the
 > cold wait, and the remaining cost sits inside the Lambda, not the
 > network. Attribution and candidate fixes are in #251.
+
+> **Measured on the deployed function 2026-09-10 after PR #256, and the
+> attribution below is corrected (#251, #186).** Three bursts against the
+> API with the new stage lines in CloudWatch:
+>
+> | Burst | Shared entry | Cold handler | Init | Cold TTFB |
+> |---|---|---|---|---|
+> | 12 wide, entry 15 min old | stale | 3,082 to 3,184 ms, 10 of 10 | 1,188 to 1,550 ms | 3.7 to 5.8 s |
+> | 12 wide, entry 2 s old | fresh | 237 to 340 ms, 7 cold | 1,164 to 1,592 ms | 2.9 to 4.0 s, client contended |
+> | 4 wide, entry 10 s old | fresh | 261 to 298 ms, 2 cold | 1,254 to 1,596 ms | 2.08 and 2.50 s |
+>
+> Warm requests answered in 0.47 to 0.69 s throughout. In the stale burst
+> every stage line shows the S3 read at 107 to 218 ms and then a 2.9 s gap
+> before the encode line: that gap is the FIRMS fetch, and all ten
+> containers made it and rewrote the object. So the ~2.5 s floor #250
+> measured, and the local first-connection figures quoted below, were
+> the wrong cause: on Lambda the client builds in 127 to 162 ms, the
+> warm-up HEAD takes 50 to 58 ms, the GET 36 to 156 ms, the decode 31 to
+> 79 ms and the encode 62 to 101 ms, together 0.3 to 0.5 s. With a fresh
+> entry a cold request is 2.1 to 2.5 s to first byte, against 3.2 to 3.9 s
+> in #250, so #186's criterion is met for the case it describes and both
+> issues close. What #256 itself bought is small: about 0.2 s of handler
+> moved into init, and init grew from 0.56 to 0.74 s to 1.16 to 1.6 s
+> because `boto3` is now imported and the connection opened there; the
+> stage lines are the durable part of that PR. The remaining cold cost is
+> init, and the remaining slow path is whoever arrives first after the
+> entry expires, which #259 carries (refresh ahead of expiry). Two of
+> twelve burst requests were throttled to 503 by the account's Lambda
+> concurrency limit of 10; #260.
+
+> **Attributed 2026-09-10 by PR #256 (#251): the cost is the first S3
+> connection, not the decode or the encode.** *(Superseded by the
+> paragraph above: the laptop figures here are real, but the first
+> connection is not what the deployed handler was spending its time on.)* Staged on a laptop through
+> the same code against the real bucket, profile `kino`: `import boto3`
+> 129 ms, client construction 84 to 86 ms, the first `get_object` of the
+> 75 KB object 5,308 ms against 996 ms for the second, gunzip 1 ms,
+> `json.loads` of the 1.1 MB payload 24 ms, `jsonify` 12 to 17 ms. Every
+> CPU stage together is under 150 ms; the first request carries the
+> credential resolution and TLS handshake, and on a 512 MB handler that
+> work runs on a fraction of a vCPU. The fix is the issue's first
+> candidate, taken alone: `create_app()` now builds the S3 client and
+> opens its connection with a HEAD of the cache key, which on Lambda is
+> the init phase. Measured locally, the warm-up absorbs 3,530 ms and the
+> first request then takes 325 ms end to end (GET 292 ms, decode 14 ms,
+> encode 17 ms). The read logs one INFO line with those stages, so the
+> deployed split is read from CloudWatch rather than inferred. The cold
+> TTFB after the deploy is not quoted here yet: this PR is the deploy, so
+> the figure is taken after the merge, on #251, with the burst in that
+> issue. `lambda_memory_mb` stays at 512 until that figure says the
+> handler is still CPU-bound.
 
 **Decision.** `GET /api/firms/live` keeps its process-local 15-minute cache as
 a first level and adds a second: one gzipped JSON object,
@@ -164,10 +269,12 @@ bucket, which keeps its object-only grant. The trade is stated in that
 file: a PR merged to `main` can widen CI's own permissions, in the open,
 with a plan comment. Bootstrap now holds only what CI cannot give itself.
 
-**Open.** The cold-start time-to-first-byte is quoted above and is not
+**Open.** ~~The cold-start time-to-first-byte is quoted above and is not
 materially below the pre-change figure. #186 stays open, and #251
 carries the next step: where the ~2.5 s goes inside a cold handler that no
-longer waits on FIRMS.
+longer waits on FIRMS.~~ Resolved 2026-09-10, see the measured paragraph
+above: 2.1 to 2.5 s cold with a fresh entry. Still open: the first request
+after the entry expires pays the FIRMS fetch, #259.
 ---
 
 ## 2026-09-10 - The shared evidence prefix is sent behind a Bedrock cache point; round 1 stays parallel, so the saving is two reads, not three
@@ -508,6 +615,12 @@ same radius the events were clustered at, so `distinct_thermal_lobes` is
 always 1 for every event in the artifact (0 of 1,842 multi-observation
 events have more). That is #213, not fixed here because it
 changes a served metric and so needs regeneration.
+
+> **Fixed 2026-09-10 by PR #254 (#213).** The complexity module now uses
+> the clustering module's 1 km lobe radius and refuses one at or above the
+> clustering radius. No regeneration was due: no committed artifact carries
+> the metric, and the API serves every complexity field as "not evaluated"
+> until #214. See the entry of that date.
 
 ---
 
