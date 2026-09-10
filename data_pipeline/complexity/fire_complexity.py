@@ -28,7 +28,12 @@ import numpy as np
 import pandas as pd
 from scipy.spatial import cKDTree
 
-from data_pipeline.clustering.firms_clustering import FireEvent
+from data_pipeline.clustering.firms_clustering import (
+    DEFAULT_LOBE_DISTANCE_KM,
+    DEFAULT_SPATIAL_THRESHOLD_KM,
+    ClusteringParameters,
+    FireEvent,
+)
 from data_pipeline.propagation.surface_fire import (
     DEFAULT_SPREAD_PARAMETERS,
     SurfaceFireCompatibilityResult,
@@ -55,7 +60,19 @@ FIELD_NAMES = (
     "surface_propagation_mismatch",
 )
 
-DEFAULT_LOBE_DISTANCE_KM = 2.0
+# The lobe radius is the clustering module's, not a constant of this module's
+# own, and it has to stay strictly below the clustering radius. Every pair the
+# clustering linked was already within ``spatial_threshold_km``, so a
+# spatial-only connectivity pass at that same radius (or wider) can never
+# find more than one component: the metric was a constant 1 for all 1,842
+# multi-observation events in the 2019 artifact while this module carried
+# its own 2 km default (#213). At 1 km the five largest events resolve into
+# 6, 2, 10, 2 and 3 lobes. ``compute_fire_complexity`` re-checks the pair it
+# is actually given, so a caller cannot drift the two back together either.
+if not DEFAULT_LOBE_DISTANCE_KM < DEFAULT_SPATIAL_THRESHOLD_KM:
+    raise ValueError(
+        "DEFAULT_LOBE_DISTANCE_KM must be below DEFAULT_SPATIAL_THRESHOLD_KM, or every event has one lobe"
+    )
 DEFAULT_NEARBY_EVENT_DISTANCE_KM = 10.0
 DEFAULT_NEARBY_EVENT_WINDOW_HOURS = 72.0
 DEFAULT_RECURRENCE_DISTANCE_KM = 2.0
@@ -494,6 +511,7 @@ def compute_fire_complexity(
     unexplained_observation_indices: Sequence[int] | None = None,
     surface_parameters: SurfaceFireSpreadParameters = DEFAULT_SPREAD_PARAMETERS,
     lobe_distance_km: float = DEFAULT_LOBE_DISTANCE_KM,
+    clustering_parameters: ClusteringParameters | None = None,
     nearby_event_distance_km: float = DEFAULT_NEARBY_EVENT_DISTANCE_KM,
     nearby_event_window_hours: float = DEFAULT_NEARBY_EVENT_WINDOW_HOURS,
     recurrence_distance_km: float = DEFAULT_RECURRENCE_DISTANCE_KM,
@@ -506,6 +524,16 @@ def compute_fire_complexity(
     is intentionally outside this pure function.  If no context is supplied,
     that field remains explicitly ``NOT_EVALUATED``.
     """
+    # See the note beside the default: a lobe radius at or above the radius
+    # the event was clustered at cannot split anything, so it is a mistake,
+    # not a setting. The caller passes the parameters it clustered with;
+    # without them the defaults are assumed, which is what the artifact uses.
+    clustering_spatial_km = (clustering_parameters or ClusteringParameters()).spatial_threshold_km
+    if not lobe_distance_km < clustering_spatial_km:
+        raise ValueError(
+            f"lobe_distance_km ({lobe_distance_km:g}) must be below the clustering radius "
+            f"({clustering_spatial_km:g} km): every linked pair is already within that distance"
+        )
 
     evaluated_at = datetime.now(timezone.utc).isoformat()
     event_observations = _event_observations(event, observations)
@@ -692,7 +720,10 @@ def compute_fire_complexity(
         limitations=(
             "Lobes are spatially connected observation components, not independently confirmed fires.",
         ),
-        details={"connectivity_distance_km": lobe_distance_km},
+        details={
+            "connectivity_distance_km": lobe_distance_km,
+            "clustering_spatial_threshold_km": clustering_spatial_km,
+        },
     )
 
     if peat_context is None:
