@@ -79,12 +79,23 @@ Only three things, in order of likelihood:
    So ~$15 per 100 assessments. Cheaper models are not a saving here: the
    one tried below Haiku 4.5 (Gemma 3 27B) was slower and failed schema
    validation, and cost per *successful* assessment is the only figure that
-   matters. The
-   real lever is Bedrock prompt caching on the ~19k-token evidence prefix
-   every one of the four calls repeats — cache reads are $0.10/1M against
-   $1.00/1M, taking an assessment to roughly $0.09 with no quality tradeoff.
-   Not built yet (#147); the Lambda share of the same request is a rounding
-   error beside it.
+   matters. The Lambda share of the same request is a rounding error beside
+   it.
+
+   The ~19k-token prefix every one of the four calls repeats (system
+   framing, evidence pack, hypotheses) is now sent behind a Bedrock cache
+   point (#147). Cache reads bill at $0.10/1M against $1.00/1M fresh, cache
+   writes at $1.25/1M. The two roles of a round run in parallel and a cache
+   entry is readable only once the response that wrote it has begun, so per
+   assessment that is **two writes and two reads, not one write and three
+   reads**: about **$0.13** rather than $0.15, with the ~3.5k output tokens
+   per call now the larger share of the bill. The issue's ~$0.09 assumed
+   the one-write case; reaching ~$0.10 means running round 1 sequentially,
+   ~9s more on a ~51s job, which was not taken (decision log, 2026-09-10,
+   prompt caching). These are estimates from the token counts above: each
+   call logs its `usage` including `cacheReadInputTokens` and
+   `cacheWriteInputTokens` at INFO, and this paragraph should be replaced
+   with the observed figures after the first deployed assessments.
 
    The structural risk is not the model, it is a retry loop: an unbounded
    poll or auto-retry re-triggering analysis would multiply this line
