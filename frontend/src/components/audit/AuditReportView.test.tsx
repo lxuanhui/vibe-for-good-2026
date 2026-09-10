@@ -170,11 +170,26 @@ test('analysis runs only when the explicit control is pressed, and the report is
   fetchAuditReportMock.mockResolvedValue(report({ analysed: true }))
   await userEvent.click(first)
 
-  await waitFor(() => expect(generateInvestigationAnalysisMock).toHaveBeenCalledWith(AUDIT_ID, ANALYSED))
+  await waitFor(() => expect(generateInvestigationAnalysisMock).toHaveBeenCalledWith(AUDIT_ID, ANALYSED, expect.any(Function)))
   expect(generateInvestigationAnalysisMock).toHaveBeenCalledTimes(1)
   // Re-read rather than patched in place: the analysis reaches the pack
   // through the report the API assembles, so the two cannot disagree.
   await waitFor(() => expect(fetchAuditReportMock).toHaveBeenCalledTimes(2))
+})
+
+test('shows visible analysis progress while the report generation is pending', async () => {
+  fetchAuditReportMock.mockResolvedValue(report({ analysed: false }))
+  generateInvestigationAnalysisMock.mockImplementation(() => new Promise(() => undefined))
+
+  render(<AuditReportView auditId={AUDIT_ID} onBack={() => {}} />)
+  const [first] = await screen.findAllByRole('button', { name: 'GENERATE INVESTIGATION ANALYSIS' })
+  await userEvent.click(first)
+
+  const status = await screen.findByRole('status')
+  expect(status.textContent).toContain('Usually takes about a minute.')
+  expect(status.textContent).toContain('The job keeps running if you leave this report.')
+  expect(status.textContent).toContain('Starting')
+  expect(status.querySelector('.animate-spin')).toBeTruthy()
 })
 
 test('a completed analysis renders its findings with evidence IDs, and keeps the rounds off the page', async () => {

@@ -160,9 +160,10 @@ export function fetchProcessedImageryManifest(): Promise<ProcessedImageryManifes
 // analysis or one error -- rather than pushing job state into every caller.
 const ANALYSIS_POLL_DEADLINE_MS = 5 * 60 * 1000
 
-export async function generateInvestigationAnalysis(auditId: string, eventId: string): Promise<StructuredAnalysis> {
+export async function generateInvestigationAnalysis(auditId: string, eventId: string, onProgress?: (job: AnalysisJob) => void): Promise<StructuredAnalysis> {
   const path = `/audits/${encodeURIComponent(auditId)}/events/${encodeURIComponent(eventId)}/analyse`
   let job = await apiPost<AnalysisJob>(path, '')
+  onProgress?.(job)
   const deadline = Date.now() + ANALYSIS_POLL_DEADLINE_MS
   while (job.jobStatus === 'RUNNING') {
     if (Date.now() > deadline) {
@@ -172,6 +173,7 @@ export async function generateInvestigationAnalysis(auditId: string, eventId: st
     }
     await delay(null, Math.max(1, job.pollAfterSeconds ?? 5) * 1000)
     job = await apiGet<AnalysisJob>(path)
+    onProgress?.(job)
   }
   if (job.jobStatus !== 'COMPLETE' || !job.analysis) {
     throw new Error(job.error ?? 'Investigation analysis could not be generated.')

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Layer, Map, Source, type MapLayerMouseEvent } from 'react-map-gl/maplibre'
 import type { Feature, FeatureCollection, Geometry, LineString, Point } from 'geojson'
-import type { AuditEventSummary, AuditScope, EventEvidenceResponse, InvestigationMap, InvestigationMapNode, StructuredAnalysis } from '../../api/types'
+import type { AnalysisJob, AuditEventSummary, AuditScope, EventEvidenceResponse, InvestigationMap, InvestigationMapNode, StructuredAnalysis } from '../../api/types'
 import { addToAuditPack, fetchAuditRegister, fetchInvestigationBundle, fetchInvestigationMap, generateInvestigationAnalysis } from '../../api/client'
 import { AUDIT_EVENT_COLORS, AUDIT_SCOPE_BOUNDARY_COLOR, AUDIT_SCOPE_BUFFER_COLOR, SURFACE_FIRE_ENVELOPE_COLOR } from '../../lib/layerColors'
 import { useAppStore } from '../../store/useAppStore'
@@ -142,6 +142,8 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
   const [evidenceError, setEvidenceError] = useState('')
   const [analysis, setAnalysis] = useState<StructuredAnalysis>()
   const [analysisLoading, setAnalysisLoading] = useState(false)
+  const [analysisStartedAt, setAnalysisStartedAt] = useState<string>()
+  const [analysisStage, setAnalysisStage] = useState<string | null>(null)
   const [analysisError, setAnalysisError] = useState('')
   const [focusGraph, setFocusGraph] = useState<InvestigationMap>()
   const [focusGraphError, setFocusGraphError] = useState('')
@@ -207,7 +209,9 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
     if (!drawerEventId) return
     setAnalysisLoading(true)
     setAnalysisError('')
-    try { setAnalysis(await generateInvestigationAnalysis(scope.audit_id, drawerEventId)) }
+    setAnalysisStartedAt(new Date().toISOString())
+    setAnalysisStage('Starting')
+    try { setAnalysis(await generateInvestigationAnalysis(scope.audit_id, drawerEventId, (job: AnalysisJob) => { setAnalysisStage(job.stage ?? 'Starting'); if (job.startedAt) setAnalysisStartedAt(job.startedAt) })) }
     catch (reason) { setAnalysisError(reason instanceof Error ? reason.message : 'Investigation analysis could not be generated.') }
     finally { setAnalysisLoading(false) }
   }
@@ -486,6 +490,8 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
           onRetry={() => setEvidenceReloadToken((value) => value + 1)}
           analysis={analysis}
           analysisLoading={analysisLoading}
+          analysisStartedAt={analysisStartedAt}
+          analysisStage={analysisStage}
           analysisError={analysisError || undefined}
           onGenerateAnalysis={() => void generateAnalysis()}
         />

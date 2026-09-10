@@ -358,6 +358,7 @@ export interface AnalysisJob {
   startedAt?: string | null
   completedAt?: string | null
   pollAfterSeconds?: number
+  stage?: string | null
 }
 
 export interface InvestigationBundle {

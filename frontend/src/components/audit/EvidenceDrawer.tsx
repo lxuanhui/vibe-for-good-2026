@@ -4,6 +4,7 @@ import { fetchProcessedImageryManifest } from '../../api/client'
 import type { EventEvidenceResponse, EvidenceObject, InvestigationMap, ProcessedImageryAsset, StructuredAnalysis, StructuredAnalysisAssessment } from '../../api/types'
 import { Button } from '../ui/Button'
 import { Toggle } from '../ui/Toggle'
+import { AnalysisProgress } from './AnalysisProgress'
 
 function valueText(value: unknown): string {
   if (value == null) return 'not evaluated'
@@ -286,8 +287,9 @@ function AnalysisAssessmentSummary({ assessment }: { assessment: StructuredAnaly
   </div>
 }
 
-function StructuredAnalysisSection({ analysis, loading, error, onGenerate }: { analysis?: StructuredAnalysis; loading: boolean; error?: string; onGenerate: () => void }) {
+function StructuredAnalysisSection({ analysis, loading, error, startedAt, stage, onGenerate }: { analysis?: StructuredAnalysis; loading: boolean; error?: string; startedAt?: string; stage?: string | null; onGenerate: () => void }) {
   return <Section title="AI interpretation: Investigator / Skeptic">
+    {!analysis && loading && startedAt && <AnalysisProgress startedAt={startedAt} stage={stage} returnMessage="The job keeps running if you close this drawer. Reopen it to see the result." />}
     {!analysis && <><p className="text-[11px] leading-4 text-text-muted">No structured analysis has been run for this FireEvent. Generation uses only the EvidenceObjects and relationship summaries shown in this audit.</p><Button variant="primary" className="mt-3 w-full text-[10px]" disabled={loading} onClick={onGenerate}>{loading ? 'GENERATING INVESTIGATION ANALYSIS…' : 'GENERATE INVESTIGATION ANALYSIS'}</Button></>}
     {error && <div role="alert" className="mt-3 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-[11px] text-red-200">{error}</div>}
     {analysis && <><p className="mb-2 text-[11px] leading-4 text-text-muted">Final structured assessments are evidence-linked interpretations, separate from deterministic evidence and human review. They do not establish cause or responsibility.</p><div className="grid gap-2 lg:grid-cols-2"><AnalysisAssessmentSummary assessment={analysis.final_assessment.investigator} /><AnalysisAssessmentSummary assessment={analysis.final_assessment.skeptic} /></div><div className="mt-3 rounded border border-border bg-bg/60 p-2 text-[11px]"><div className="font-semibold">Unresolved disagreement / verification</div>{analysis.unresolved_questions.length ? <ul className="mt-1 space-y-1 text-text-muted">{analysis.unresolved_questions.map((question, index) => <li key={`${question.question}-${index}`}>• {question.question} <span className="font-mono text-text-faint">({question.evidence_ids.join(', ')})</span></li>)}</ul> : <p className="mt-1 text-text-faint">No final disagreement was retained.</p>}</div><p className="mt-2 text-[10px] text-text-faint">Model/pipeline: {analysis.algorithm_version}. Evidence IDs are shown above; no private reasoning transcript is stored or displayed.</p></>}
@@ -310,6 +312,8 @@ export function EvidenceDrawer({
   onRetry,
   analysis,
   analysisLoading,
+  analysisStartedAt,
+  analysisStage,
   analysisError,
   onGenerateAnalysis,
 }: {
@@ -328,6 +332,8 @@ export function EvidenceDrawer({
   onRetry: () => void
   analysis?: StructuredAnalysis
   analysisLoading: boolean
+  analysisStartedAt?: string
+  analysisStage?: string | null
   analysisError?: string
   onGenerateAnalysis: () => void
 }) {
@@ -384,7 +390,7 @@ export function EvidenceDrawer({
       <Section title="Availability / limitations"><div className="space-y-2">{data.availability.map((item) => <div key={item.kind} className="rounded border border-border bg-bg/60 p-2 text-[11px] print:border-black/20 print:bg-transparent"><div className="flex justify-between"><span className="capitalize">{item.kind}</span><span className="text-status-moderate">{item.status}</span></div><p className="mt-1 text-text-muted">{item.reason}</p></div>)}</div></Section>
       <RelatedFireEvents graph={graph} error={graphError} eventId={eventId} />
       <DerivedSummary complexity={grouped.complexity} priority={grouped.priority} />
-      <StructuredAnalysisSection analysis={analysis} loading={analysisLoading} error={analysisError} onGenerate={onGenerateAnalysis} />
+      <StructuredAnalysisSection analysis={analysis} loading={analysisLoading} error={analysisError} startedAt={analysisStartedAt} stage={analysisStage} onGenerate={onGenerateAnalysis} />
       <MetricSection title="Peat / event-buffer intersection" note="The drawer shows the event footprint or buffer intersection only when a peat EvidenceObject is available. Peat overlap is environmental context and does not establish an underground path, cause, or responsibility." items={grouped.peat} />
       <Section title="Weather time window"><p className="mb-2 text-[11px] leading-4 text-text-muted">Every Open-Meteo/ERA5 hourly variable, during the event and the 7 days before it. Historical values, not a forecast; missing weather is not negative evidence.</p><WeatherSummary items={grouped.weather} /></Section>
       <Section title="Imagery acquisition metadata"><p className="mb-2 text-[11px] leading-4 text-text-muted">Closest usable Sentinel-1 (SAR) and Sentinel-2 (optical) scenes before and after the event. Processed display assets are loaded from the committed imagery manifest; catalogue quicklooks are metadata only.</p><ImagerySummary eventId={eventId} items={grouped.imagery} /></Section>

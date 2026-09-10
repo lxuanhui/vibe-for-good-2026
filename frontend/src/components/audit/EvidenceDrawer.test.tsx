@@ -40,6 +40,16 @@ afterEach(() => {
 })
 
 describe('EvidenceDrawer sidebar hierarchy', () => {
+  it('shows an animated, time-aware analysis status while generation is running', () => {
+    render(<EvidenceDrawer {...{ eventId: 'FE-1', loading: false, data: evidence, showObservations: false, onToggleObservations: () => undefined, onClose: () => undefined, onRetry: () => undefined, analysisLoading: true, analysisStartedAt: new Date().toISOString(), analysisStage: 'Round 1 of 2: independent assessment', onGenerateAnalysis: () => undefined }} />)
+
+    const status = screen.getByRole('status')
+    expect(status.textContent).toContain('Usually takes about a minute.')
+    expect(status.textContent).toContain('The job keeps running if you close this drawer.')
+    expect(status.textContent).toContain('Round 1 of 2: independent assessment')
+    expect(status.querySelector('.animate-spin')).toBeTruthy()
+  })
+
   it('puts availability near the summary and omits sidebar provenance and surface sections', () => {
     render(
       <EvidenceDrawer
