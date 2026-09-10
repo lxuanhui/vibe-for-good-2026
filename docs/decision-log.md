@@ -13,7 +13,7 @@ when changing that subsystem.
 | API state | Audit IDs and scope state persist in DynamoDB in deployed environments; in-memory state is local development only. Every write is revision-checked — there is no unconditional write path — and both backends implement the same compare-and-set. | 2026-09-09, audit session / landing; 2026-09-10, conditional writes |
 | Derived data | Clustered events, weather, imagery selection, peat context, and prepared graph data are offline artifacts, not request-time Lambda work. | 2026-09-09, graph; weather and imagery; 2026-09-08, clustering |
 | Investigation | Scores, review routing, graph edges, and propagation are separate deterministic evidence outputs; none establishes causation. | 2026-09-09, graph; review routing; 2026-09-08, triage / graph / surface growth |
-| AI interpretation | Claude runs only after an explicit auditor request, receives bounded EvidenceObjects plus graph summaries, and returns schema-validated Investigator/Skeptic findings retained with the audit session. | 2026-09-09, structured analysis |
+| AI interpretation | Claude runs only after an explicit auditor request, receives bounded EvidenceObjects plus graph summaries, and returns schema-validated Investigator/Skeptic findings retained with the audit session. Haiku 4.5 is deployed for speed and cost; Sonnet 4.5 also validates now that the prompt states the evidence-ID rule. | 2026-09-10, Sonnet 4.5 validates; 2026-09-09, structured analysis |
 | Analysis delivery | Analysis is an async job on a second Lambda: POST starts one, GET polls it and never spends tokens. It does not fit API Gateway's 30s response cap. | 2026-09-10, async job |
 | Live regional context | The landing map's live NASA FIRMS layer is proxied by the API. A FIRMS MAP_KEY cannot be domain-restricted, so it can never ship in the bundle. Two days are fetched and filtered to a rolling 24 h here; a non-CSV body is an error, not an absence of fires. | 2026-09-10, FIRMS proxy; rolling window |
 | Map and imagery | Camera fitting is bounds-driven; map context is not an unscoped fire browser. Satellite display processing is deterministic and provenance-preserving. Investigation-sized Sentinel-1/2 context images are rendered once by the CDSE Process API, pinned to the scenes the evidence already names, and committed as static files under `frontend/public/imagery/`. | 2026-09-10, processed imagery; 2026-09-09, audit session / landing; 2026-09-08, Copernicus scenes |
@@ -64,6 +64,55 @@ silent-default problem the issue names.
 **Open.** The console still posts its own copy of the rectangle. Until it
 calls `/scope/demo` the two constants must match, and the button copy and
 lat/lon form are #87's frontend half.
+---
+
+## 2026-09-10 - Sonnet 4.5 passes the evidence-ID guard once the prompt states it; Haiku 4.5 stays deployed on speed and cost, not validity
+
+**Status:** done · PR #219 · Closes #182 · Refs #61
+
+**Decision.** The deployed model remains
+`global.anthropic.claude-haiku-4-5-20251001-v1:0`. The reason is now only
+that it is roughly 40% faster and cheaper per assessment. It is no longer
+"the only model that produces schema-valid output", and the log's Bedrock
+entry of the same date is annotated to say so.
+
+**Why.** The Bedrock entry recorded Sonnet 4.5 as "rejected by the evidence-ID
+guard", and that was being read as a verdict on the model. It was a verdict
+on the prompt: it gave `verification_questions` an explicit field list and
+gave `unresolved_questions` only a count, while the validator
+(`data_pipeline/analysis/investigator_skeptic.py`) rejects any unresolved
+question without an evidence ID. Haiku inferred the field; Sonnet took the
+prompt literally. PR #200 stated the shape. Re-measured through the
+production path (`bedrock_runner` + `run_structured_analysis`,
+`max_rounds=2`, the real 128-object pack for `FE-20190901-c52c42e7aa` in
+`demo-2019-haze`, four provider calls per assessment, ~152k input tokens):
+
+| Model | Before #200 | After #200 | Wall time after |
+|---|---|---|---|
+| Haiku 4.5 | 2/2 pass | 2/2 pass | 33.8s, 34.0s |
+| Sonnet 4.5 | 0/3 pass, all "unresolved questions require at least one evidence ID" | 3/3 pass | 52.5s, 56.4s, 58.8s |
+
+Both models return six findings and three unresolved questions on every
+passing run. Comparisons between models on this pipeline only mean something
+when the prompt states every rule the validator enforces; a future model
+comparison should start by checking that again.
+
+**Rejected: relaxing the guard.** Making `evidence_ids` optional on an
+unresolved question would have made both models pass in the first
+measurement and deleted the traceability rule the product rests on. A test
+now pins the guard so that stating the contract in the prompt cannot become
+the reason to drop it.
+
+**Rejected: switching to Sonnet 4.5.** It is entitled and it validates, but
+an assessment takes ~56s against ~34s, and its published `ap-southeast-1`
+rate has still not been verified alongside the rest of the cost table in
+`docs/infra.md`. Nothing measured here shows its findings are better; only
+that they are valid. Quality is untested either way and is a separate
+question (#61).
+
+**Open.** Whether Sonnet's findings are better rather than merely valid, and
+what it costs per assessment, are unmeasured. The choice is genuinely open on
+validation grounds and closed for the demo on speed.
 ---
 
 ## 2026-09-10 - If the pipeline ever runs in-request it runs as a Lambda container image, not a bigger zip and not EC2
@@ -876,6 +925,16 @@ the existing `analyse` URL already had a natural GET.
 **Status:** done · PR #142 · Refs #61 — the open part below (synchronous
 delivery is impossible) is answered by the entry above it: analysis is now an
 async job. Everything else here still holds.
+
+> **Qualified 2026-09-10 by PR #219 (#182).** The Sonnet 4.5 failure in the
+> table below was the prompt, not the model. The prompt spelled out the
+> `verification_questions` shape but never said that an `unresolved_question`
+> must carry an evidence ID, so a model taking it literally failed the guard
+> on every run (0/3 through the production path). PR #200 stated the shape;
+> re-measured afterwards on the real 128-object pack, two rounds, Sonnet 4.5
+> passes 3/3 (52.5–58.8s) and Haiku 4.5 still passes 2/2 (33.8–34.0s). "The
+> only candidate that produced schema-valid output" no longer holds; the
+> speed and cost grounds do. See the entry of that date.
 
 **The 503 was a model entitlement, not a bug.** The deployed
 `POST /api/audits/{id}/events/{id}/analyse` returned 503 for every request. The

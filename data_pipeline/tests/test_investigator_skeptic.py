@@ -128,6 +128,22 @@ def test_factual_finding_without_evidence_reference_is_rejected():
         run_structured_analysis("FIRE_001", EVIDENCE, HYPOTHESES, agent, agent, max_rounds=1)
 
 
+def test_unresolved_question_without_evidence_id_fails_the_assessment():
+    """The prompt now states this contract (#182); stating it must not relax it.
+
+    A question with no evidence ID is untraceable, and every AI claim traces
+    to an evidence ID. The guard fails the whole assessment, not the question.
+    """
+
+    def agent(agent_input):
+        value = _assessment(agent_input.role, agent_input.round_number, unresolved=True)
+        value["unresolved_questions"][0]["evidence_ids"] = []
+        return value
+
+    with pytest.raises(ValueError, match="unresolved questions require at least one evidence ID"):
+        run_structured_analysis("FIRE_001", EVIDENCE, HYPOTHESES, agent, agent, max_rounds=1)
+
+
 def test_prebuilt_assessment_cannot_skip_hypotheses():
     def agent(agent_input):
         return AgentAssessment(
