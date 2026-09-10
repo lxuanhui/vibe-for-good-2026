@@ -68,6 +68,24 @@ export interface EvidenceObject {
   raw_reference?: string | null
 }
 
+export interface ProcessedImageryAsset {
+  asset_id: string
+  event_id: string
+  source_evidence_id: string
+  sensor: 'Sentinel-1' | 'Sentinel-2'
+  position: 'pre_event' | 'post_event'
+  label: string
+  path: string
+  format: string
+  width: number
+  height: number
+  processing?: { recipe_id?: string; description?: string }
+}
+
+export interface ProcessedImageryManifest {
+  events: Record<string, { assets: ProcessedImageryAsset[] }>
+}
+
 export interface TopTheory {
   rank: number
   hypothesis: string

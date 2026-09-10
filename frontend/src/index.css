@@ -13,8 +13,10 @@
   --color-text-muted: #8b96a8;
   --color-text-faint: #566072;
 
-  --color-accent: #22d3ee;
-  --color-accent-muted: #0e7490;
+  /* Muted teal keeps investigation affordances distinct without the
+     electric-cyan emphasis that made the workspace feel generic. */
+  --color-accent: #6fb3a6;
+  --color-accent-muted: #2f756d;
 
   --color-status-quiet: #3f4a5c;
   --color-status-info: #3b82f6;
@@ -84,8 +86,8 @@ body {
     --color-text-muted: #464f5e;
     --color-text-faint: #6b7382;
 
-    /* Same hue, taken to 6.2:1 on white. Keeping the accent rather than
-       flattening it to black is what stops the figures reading as body copy. */
+    /* Keep a dark teal on paper at 6.2:1. Retaining an accent rather than
+       flattening it to black stops the figures reading as body copy. */
     --color-accent: #0b6b7d;
     --color-accent-muted: #0a5768;
   }
