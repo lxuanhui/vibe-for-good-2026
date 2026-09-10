@@ -55,28 +55,28 @@ function SummaryHelp({ label, children }: { label: string; children: ReactNode }
 
 export function RegisterSummary({ progression }: { progression: AuditProgression }) {
   const eventDenominator = progression.fireEvents.toLocaleString()
-  return <>
-    <section aria-label="Historical register population summary" className="shrink-0 border-b border-border bg-border">
-    <div className="grid gap-px bg-border md:grid-cols-3">
-      <section aria-labelledby="clustering-summary" className="bg-panel px-4 py-3">
+  return <section aria-label="Historical register population summary" className="shrink-0 border-b border-border bg-panel">
+    <div aria-label="Register processing flow" className="flex flex-col gap-3 px-4 py-3 md:grid md:grid-cols-[minmax(0,1.5fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] md:items-center md:gap-0">
+      <section aria-labelledby="clustering-summary" data-flow-stage="observation-derivation" className="min-w-0">
         <div className="mb-2 flex items-center gap-2"><h2 id="clustering-summary" className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-faint">Observation derivation</h2><SummaryHelp label="observation derivation">Spatially and temporally related FIRMS observations are deterministically clustered into FireEvents. An observation is a satellite detection, not an individual fire.</SummaryHelp></div>
         <div className="flex items-end gap-3"><div><div className="font-semibold text-accent">{progression.qualifiedObservations.toLocaleString()}</div><div className="text-[10px] text-text-faint">QUALIFIED FIRMS OBSERVATIONS</div></div><div className="pb-3 text-text-faint">→</div><div><div className="font-semibold text-accent">{eventDenominator}</div><div className="text-[10px] text-text-faint">CLUSTERED FIREEVENTS</div></div></div>
       </section>
-      <section aria-labelledby="scope-summary" className="bg-panel px-4 py-3">
+      <div aria-hidden="true" data-flow-arrow className="block rotate-90 px-4 text-center text-text-faint md:block md:rotate-0">→</div>
+      <section aria-labelledby="scope-summary" data-flow-stage="current-audit-scope" className="min-w-0 md:px-4">
         <div className="mb-2 flex items-center gap-2"><h2 id="scope-summary" className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-faint">Current audit scope</h2></div>
         <div className="font-semibold text-accent">{progression.inScopeAndBuffer?.toLocaleString() ?? 'n/a'}</div>
         <div className="text-[10px] text-text-faint">IN SCOPE</div>
         <p className="mt-2 text-[10px] text-text-muted">{progression.scopeBoundaryAvailable ? `Count includes the configured context buffer: ${progression.inScopeAndBuffer?.toLocaleString() ?? 'n/a'} of ${eventDenominator} FireEvents.` : 'No private audit boundary supplied; scope count is unavailable.'}</p>
       </section>
-      <section aria-labelledby="routing-summary" className="bg-panel px-4 py-3">
+      <div aria-hidden="true" data-flow-arrow className="block rotate-90 px-4 text-center text-text-faint md:block md:rotate-0">→</div>
+      <section aria-labelledby="routing-summary" data-flow-stage="scoped-routing" className="min-w-0 md:px-4">
         <div className="mb-2 flex items-center gap-2"><h2 id="routing-summary" className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-faint">Scoped routing diagnostic</h2><SummaryHelp label="routing dimensions"><p>FIRMS observations are clustered into FireEvents. Stage 1 classification indicates fire support and is separate from evidence sufficiency.</p><p className="mt-2">Priority is a review-routing aid, separate from workflow status. Routing is not proof of causality or responsibility.</p><p className="mt-2">Because you control filtering, the register can include low-confidence or likely-non-fire events for inspection.</p></SummaryHelp></div>
         <div className="font-semibold text-accent">{progression.requiringHumanReview.toLocaleString()}</div>
         <div className="text-[10px] text-text-faint">ROUTED TO HUMAN REVIEW IN CURRENT REGISTER</div>
         <p className="mt-2 text-[10px] text-text-muted">{(progression.routingDiagnostics.humanReviewPercentage * 100).toFixed(1)}% of {eventDenominator} FireEvents in this register.</p>
       </section>
     </div>
-    </section>
-  </>
+  </section>
 }
 
 // The selected-events + graph investigation used to render on its own page

@@ -192,6 +192,18 @@ test('reports human-review routing for the current register population', () => {
   expect(screen.queryByText('observations → FireEvents → in scope + buffer → human review')).toBeNull()
 })
 
+test('presents derivation, scope, and routing as one connected flow', () => {
+  render(<RegisterSummary progression={summaryProgression} />)
+
+  const summary = screen.getByRole('region', { name: 'Historical register population summary' })
+  expect(summary.querySelector('[aria-label="Register processing flow"]')).toBeTruthy()
+  expect(summary.querySelectorAll('[data-flow-stage]')).toHaveLength(3)
+  expect(summary.querySelectorAll('[data-flow-arrow]')).toHaveLength(2)
+  expect(summary.className).not.toContain('bg-border')
+  expect(summary.querySelector('[data-flow-stage="current-audit-scope"]')?.textContent).toContain('16')
+  expect(summary.querySelector('[data-flow-stage="scoped-routing"]')?.textContent).toContain('396')
+})
+
 test('shows zero scoped routing without falling back to global numbers', () => {
   render(<RegisterSummary progression={{ ...summaryProgression, fireEvents: 0, requiringHumanReview: 0, routingDiagnostics: { ...summaryProgression.routingDiagnostics, humanReviewCount: 0, humanReviewPercentage: 0 } }} />)
 
