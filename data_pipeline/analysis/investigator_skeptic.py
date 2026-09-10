@@ -78,6 +78,7 @@ class Finding:
     supporting_evidence_ids: tuple[str, ...]
     contradicting_evidence_ids: tuple[str, ...]
     summary: str
+    mixed_evidence_ids: tuple[str, ...] = ()
     verification_questions: tuple[UnresolvedQuestion, ...] = ()
 
     def __post_init__(self) -> None:
@@ -89,14 +90,14 @@ class Finding:
             raise ValueError("support_score must be between 0 and 100")
         if not self.summary.strip():
             raise ValueError("findings require a concise summary")
-        if not self.supporting_evidence_ids and not self.contradicting_evidence_ids:
+        if not self.supporting_evidence_ids and not self.contradicting_evidence_ids and not self.mixed_evidence_ids:
             raise ValueError("factual findings require at least one evidence ID")
 
     @property
     def evidence_ids(self) -> tuple[str, ...]:
         """All references in stable, de-duplicated order."""
 
-        return tuple(dict.fromkeys(self.supporting_evidence_ids + self.contradicting_evidence_ids))
+        return tuple(dict.fromkeys(self.supporting_evidence_ids + self.contradicting_evidence_ids + self.mixed_evidence_ids))
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -105,6 +106,7 @@ class Finding:
             "evidence_sufficiency": self.evidence_sufficiency.value,
             "supporting_evidence_ids": list(self.supporting_evidence_ids),
             "contradicting_evidence_ids": list(self.contradicting_evidence_ids),
+            "mixed_evidence_ids": list(self.mixed_evidence_ids),
             "summary": self.summary,
             "verification_questions": [item.to_dict() for item in self.verification_questions],
         }
@@ -221,6 +223,8 @@ class StructuredAnalysisResult:
     rounds: tuple[StructuredAnalysisRound, ...]
     unresolved_questions: tuple[UnresolvedQuestion, ...]
     algorithm_version: str = ALGORITHM_VERSION
+    validation_status: str = "VALID"
+    repaired: bool = False
 
     @property
     def final_round(self) -> StructuredAnalysisRound:
@@ -231,6 +235,8 @@ class StructuredAnalysisResult:
         return {
             "event_id": self.event_id,
             "status": self.status,
+            "validation_status": self.validation_status,
+            "repaired": self.repaired,
             "algorithm_version": self.algorithm_version,
             "evidence_ids": list(self.evidence_ids),
             "rounds": [item.to_dict() for item in self.rounds],
@@ -243,6 +249,8 @@ class StructuredAnalysisResult:
 
 
 AgentRunner = Callable[[AgentInput], Mapping[str, Any] | AgentAssessment]
+
+MAX_OUTPUT_REPAIR_RETRIES = 1
 
 
 def _normalise_evidence(
@@ -437,9 +445,19 @@ def _assessment(
             raw_finding.get("contradicting_evidence_ids", raw_finding.get("contradicting_evidence", ())),
             field_name="contradicting_evidence_ids",
         )
-        _validate_ids(supporting + contradicting, valid_evidence_ids, f"finding {hypothesis_id}")
-        if set(supporting) & set(contradicting):
-            raise ValueError(f"finding {hypothesis_id!r} cites evidence as both supporting and contradicting")
+        mixed = _ids(
+            raw_finding.get("mixed_evidence_ids", raw_finding.get("mixed_evidence", ())),
+            field_name="mixed_evidence_ids",
+        )
+        _validate_ids(supporting + contradicting + mixed, valid_evidence_ids, f"finding {hypothesis_id}")
+        # Overlap is a recoverable model-output problem. Keeping the ID in a
+        # first-class mixed bucket preserves the fact that the model saw
+        # implications in both directions without arbitrarily choosing one.
+        overlap = set(supporting) & set(contradicting)
+        if overlap:
+            mixed = tuple(dict.fromkeys(mixed + tuple(item for item in supporting if item in overlap) + tuple(item for item in contradicting if item in overlap)))
+            supporting = tuple(item for item in supporting if item not in overlap)
+            contradicting = tuple(item for item in contradicting if item not in overlap)
         raw_questions = raw_finding.get("verification_questions", ())
         questions = tuple(_question(item, valid_evidence_ids) for item in raw_questions)
         summary = plain_text(
@@ -462,6 +480,7 @@ def _assessment(
                 evidence_sufficiency=parsed_sufficiency,
                 supporting_evidence_ids=supporting,
                 contradicting_evidence_ids=contradicting,
+                mixed_evidence_ids=mixed,
                 summary=summary,
                 verification_questions=questions,
             )
@@ -496,6 +515,7 @@ def _validate_finding(
     _validate_ids(finding.evidence_ids, valid_evidence_ids, f"finding {finding.hypothesis_id}")
     if set(finding.supporting_evidence_ids) & set(finding.contradicting_evidence_ids):
         raise ValueError(f"finding {finding.hypothesis_id!r} cites evidence in both directions")
+    _validate_ids(finding.mixed_evidence_ids, valid_evidence_ids, f"finding {finding.hypothesis_id} mixed evidence")
     for question in finding.verification_questions:
         _validate_ids(question.evidence_ids, valid_evidence_ids, "question")
 
@@ -562,6 +582,7 @@ def run_structured_analysis(
     valid_evidence_ids = {item["evidence_id"] for item in evidence_objects}
     hypothesis_objects = _normalise_hypotheses(hypotheses)
     rounds: list[StructuredAnalysisRound] = []
+    repaired_output = False
 
     for round_number in range(1, max_rounds + 1):
         phase = (
@@ -594,6 +615,42 @@ def run_structured_analysis(
             prior_assessment=previous.skeptic if previous else None,
             opponent_assessment=previous.investigator if previous else None,
         )
+        def validated_call(
+            agent: AgentRunner,
+            agent_input: AgentInput,
+            current_round: int = round_number,
+            current_phase: AnalysisPhase = phase,
+        ) -> tuple[AgentAssessment, bool]:
+            """Allow one bounded provider retry for recoverable output failures.
+
+            The second call is still schema-constrained and goes through the
+            same semantic validator. Unknown evidence, invalid hypotheses and
+            missing usable findings therefore remain hard failures.
+            """
+            last_error: Exception | None = None
+            for attempt in range(MAX_OUTPUT_REPAIR_RETRIES + 1):
+                try:
+                    output = agent(agent_input)
+                    return _assessment(
+                        output,
+                        role=agent_input.role,
+                        round_number=current_round,
+                        phase=current_phase,
+                        hypotheses=hypothesis_objects,
+                        valid_evidence_ids=valid_evidence_ids,
+                    ), attempt > 0
+                except Exception as exc:  # noqa: BLE001 - provider SDKs expose unrelated failure types
+                    last_error = exc
+                    if attempt < MAX_OUTPUT_REPAIR_RETRIES:
+                        logger.warning(
+                            "Retrying %s round %d after structured-output failure: %s",
+                            agent_input.role.value,
+                            current_round,
+                            exc,
+                        )
+            assert last_error is not None
+            raise last_error
+
         # Both roles in a round read only the *previous* round, never each
         # other, so running them concurrently changes wall time and nothing
         # else -- same inputs, same outputs, same validation. It is what keeps
@@ -601,26 +658,13 @@ def run_structured_analysis(
         # sequentially, four provider calls overshoot it. Resolving the
         # investigator first preserves the sequential exception precedence.
         with ThreadPoolExecutor(max_workers=2) as pool:
-            investigator_future = pool.submit(investigator, investigator_input)
-            skeptic_future = pool.submit(skeptic, skeptic_input)
+            investigator_future = pool.submit(validated_call, investigator, investigator_input)
+            skeptic_future = pool.submit(validated_call, skeptic, skeptic_input)
             investigator_output = investigator_future.result()
             skeptic_output = skeptic_future.result()
-        investigator_assessment = _assessment(
-            investigator_output,
-            role=AgentRole.INVESTIGATOR,
-            round_number=round_number,
-            phase=phase,
-            hypotheses=hypothesis_objects,
-            valid_evidence_ids=valid_evidence_ids,
-        )
-        skeptic_assessment = _assessment(
-            skeptic_output,
-            role=AgentRole.SKEPTIC,
-            round_number=round_number,
-            phase=phase,
-            hypotheses=hypothesis_objects,
-            valid_evidence_ids=valid_evidence_ids,
-        )
+        investigator_assessment, investigator_repaired = investigator_output
+        skeptic_assessment, skeptic_repaired = skeptic_output
+        repaired_output = repaired_output or investigator_repaired or skeptic_repaired
         questions = list(investigator_assessment.unresolved_questions)
         questions.extend(skeptic_assessment.unresolved_questions)
         if round_number == max_rounds:
@@ -644,12 +688,26 @@ def run_structured_analysis(
 
     final_questions = rounds[-1].unresolved_questions
     status = "UNRESOLVED" if final_questions else "CONVERGED"
+    has_mixed_evidence = any(
+        finding.mixed_evidence_ids
+        for analysis_round in rounds
+        for assessment in (analysis_round.investigator, analysis_round.skeptic)
+        for finding in assessment.findings
+    )
     return StructuredAnalysisResult(
         event_id=str(event_id),
         status=status,
         evidence_ids=tuple(item["evidence_id"] for item in evidence_objects),
         rounds=tuple(rounds),
         unresolved_questions=final_questions,
+        validation_status=(
+            "VALID_WITH_AMBIGUITY"
+            if has_mixed_evidence
+            else "REPAIRED"
+            if repaired_output
+            else "VALID"
+        ),
+        repaired=has_mixed_evidence or repaired_output,
     )
 
 

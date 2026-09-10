@@ -242,7 +242,7 @@ test('a failed run is reported without inventing an assessment', async () => {
   await userEvent.click(first)
 
   const alert = await screen.findByRole('alert')
-  expect(alert.textContent).toContain('Bedrock could not generate investigation analysis.')
+  expect(alert.textContent).toContain('Analysis could not be completed. Your evidence and previous analysis have been preserved. Retry analysis.')
   expect(screen.getByText(/does not fabricate an AI assessment/)).toBeTruthy()
   expect(screen.getAllByRole('button', { name: 'GENERATE INVESTIGATION ANALYSIS' })).toHaveLength(2)
 })

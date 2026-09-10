@@ -322,6 +322,7 @@ export interface StructuredAnalysisFinding {
   evidence_sufficiency: 'SUFFICIENT' | 'PARTIAL' | 'INSUFFICIENT'
   supporting_evidence_ids: string[]
   contradicting_evidence_ids: string[]
+  mixed_evidence_ids?: string[]
   summary: string
   verification_questions: StructuredAnalysisQuestion[]
 }
@@ -337,6 +338,8 @@ export interface StructuredAnalysisAssessment {
 export interface StructuredAnalysis {
   event_id: string
   status: string
+  validation_status?: 'VALID' | 'VALID_WITH_AMBIGUITY' | 'REPAIRED' | 'FAILED'
+  repaired?: boolean
   algorithm_version: string
   evidence_ids: string[]
   rounds: { round: number; phase: string; investigator: StructuredAnalysisAssessment; skeptic: StructuredAnalysisAssessment; unresolved_questions: StructuredAnalysisQuestion[] }[]
