@@ -28,7 +28,7 @@ apply an older decision without checking the entries above it.
 
 ## 2026-09-10 - The live FIRMS window is fetched wide and narrowed here, and a non-CSV answer is an error
 
-**Status:** done · PR #<pr> · Closes #154
+**Status:** done · PR #155 · Closes #154
 
 The proxy in the entry below shipped, deployed, answered `200`, reported
 `status: ready`, `sensor: VIIRS_SNPP_NRT`, `windowHours: 24` — and carried
