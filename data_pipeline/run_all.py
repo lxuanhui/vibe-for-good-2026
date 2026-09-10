@@ -25,6 +25,7 @@ from data_pipeline.sources import (
     global_peatland_database,
     nasa_firms,
     nasa_power,
+    nasa_smap_peatclsm,
     open_meteo,
     overpass_api,
 )
@@ -38,6 +39,7 @@ LIVE_SOURCES = [
     ("ESA WorldCover", esa_worldcover.fetch_historical_sample),
     ("Global Peatland Database", global_peatland_database.fetch_historical_sample),
     ("Overpass API (OSM)", overpass_api.fetch_historical_sample),
+    ("NASA SMAP L4 PEATCLSM", nasa_smap_peatclsm.fetch_historical_sample),
 ]
 
 PENDING_ACCOUNT_SOURCES = [

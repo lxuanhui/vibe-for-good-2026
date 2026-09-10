@@ -34,6 +34,36 @@ python -m data_pipeline.sources.open_meteo
 
 Sample pulls land in `data_pipeline/output/` (gitignored).
 
+## SMAP L4 PEATCLSM hydrology cache
+
+`sources/nasa_smap_peatclsm.py` queries NASA CMR for the bounded demo window
+(`2019-09-01..2019-09-10`) and Kalimantan demo bbox, then writes a compact
+metadata manifest and an explicit `groundwater_context_2019_demo.json`.
+SPL4SMGP Version 7 is the compatible historical product: it is 3-hourly,
+9 km, and its Catchment model includes PEATCLSM. The cached variables are
+surface soil moisture (0-5 cm) and root-zone soil moisture (0-100 cm), both in
+m3/m3, plus PEATCLSM's `depth_to_water_table_from_surface_in_peat` in metres
+when that variable is present in the clipped input. That is water level
+relative to the mean peat surface, not a well measurement.
+The associated `free_surface_water_on_peat_flux` is retained when present in
+its product units (`kg m-2 s-1`).
+
+The script never downloads a global HDF5 granule. To materialize rows, provide
+a pre-clipped HDF5 containing explicit latitude/longitude plus
+`sm_surface`/`sm_rootzone` datasets:
+
+```
+python -m data_pipeline.sources.nasa_smap_peatclsm --source-file subset.h5
+```
+
+Without `--source-file`, the catalog step records the exact CMR query and
+limitations, while leaving the soil-moisture data artifact explicitly marked
+`not_downloaded`; an authenticated/server-side subset must be supplied before
+caching data. When the subset lacks the PEATCLSM water-level variable, the
+groundwater artifact says `unavailable`; the pipeline never derives it from
+soil moisture. This prevents a demo job from pulling an enormous global
+archive or silently substituting another source.
+
 ## FIRMS historical backfill
 
 `sources/nasa_firms_backfill.py` sits on top of `nasa_firms.fetch_area()`

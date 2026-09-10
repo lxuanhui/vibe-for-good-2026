@@ -30,6 +30,34 @@ apply an older decision without checking the entries above it.
 
 ---
 
+## 2026-09-10 - SMAP L4 PEATCLSM cache records peat water level explicitly
+
+**Status:** done · #240
+
+**Decision.** Cache the bounded Kalimantan demo query against NASA SMAP L4
+SPL4SMGP Version 7 for 2019-09-01..2019-09-10. The adapter records surface
+and root-zone soil moisture and, when present in a pre-clipped HDF5 subset,
+PEATCLSM's `depth_to_water_table_from_surface_in_peat` variable. It always
+writes a provenance record for groundwater/water-table depth; that record is
+explicitly unavailable when the source variable is absent or invalid.
+
+**Why.** NSIDC documents Version 7 as 3-hourly, 9 km EASE-Grid data whose
+Catchment model includes PEATCLSM. The user guide identifies the peat-specific
+water-level variable, measured relative to the mean peat-surface elevation.
+That model output is useful hydrology context but is not a well observation;
+the pipeline does not derive or fabricate a value when it is not supplied.
+
+**Rejected: downloading global HDF5 granules.** The demo only needs a small
+geography and window. The cache job catalogs the exact CMR records and accepts
+only a pre-clipped subset for materialization, avoiding an enormous global
+download and making the processing boundary explicit.
+
+**Open.** A future authenticated server-side subset can populate the compact
+CSV without a local HDF5 staging file. A separate in-situ groundwater product
+would need its own source and validation.
+
+---
+
 ## 2026-09-10 - The Amplify SPA rewrite is the documented regex 200 rule, because 404-200 on `/<*>` never rewrote the status
 
 **Status:** done · PR #218 · Closes #115
