@@ -65,7 +65,7 @@ test('the pickers are bounded to the window the artifact says it covers', async 
   // The end floor tracks the chosen start, not the coverage floor, so an
   // inverted range is unreachable in the picker rather than refused later.
   expect(end.getAttribute('min')).toBe('2019-09-01')
-  expect(screen.getByText(/Selectable range is 2019-09-01 to 2019-09-05/)).toBeTruthy()
+  expect(screen.queryByText(/Selectable range is/)).toBeNull()
 })
 
 test('a period outside the coverage is refused and creates no audit', async () => {

@@ -119,7 +119,7 @@ export function DataVisualizations({ fwiKbdi, sarTrend, fireGrowth }: DataVisual
               <YAxis yAxisId="idx" orientation="right" tick={AXIS_TICK} width={28} />
               <Tooltip labelFormatter={(d) => formatDate(String(d))} contentStyle={TOOLTIP_STYLE} />
               <Legend wrapperStyle={{ fontSize: 10 }} />
-              <Line yAxisId="kbdi" type="monotone" dataKey="kbdi" stroke="#22d3ee" dot={false} strokeWidth={2} name="KBDI" />
+              <Line yAxisId="kbdi" type="monotone" dataKey="kbdi" stroke="var(--color-accent)" dot={false} strokeWidth={2} name="KBDI" />
               <Line yAxisId="idx" type="monotone" dataKey="fwi" stroke="#f97316" dot={false} strokeWidth={2} name="FWI" />
               <Line yAxisId="idx" type="monotone" dataKey="vpd" stroke="#eab308" dot={false} strokeWidth={2} name="VPD" />
             </LineChart>
@@ -134,7 +134,7 @@ export function DataVisualizations({ fwiKbdi, sarTrend, fireGrowth }: DataVisual
               <XAxis dataKey="date" tickFormatter={(d) => formatDate(d).slice(0, 6)} tick={AXIS_TICK} />
               <YAxis tick={AXIS_TICK} width={32} />
               <Tooltip labelFormatter={(d) => formatDate(String(d))} contentStyle={TOOLTIP_STYLE} />
-              <Line type="monotone" dataKey="vhDb" stroke="#22d3ee" dot strokeWidth={2} name="VH (dB)" />
+              <Line type="monotone" dataKey="vhDb" stroke="var(--color-accent)" dot strokeWidth={2} name="VH (dB)" />
             </LineChart>
           </ResponsiveContainer>
           {sarTrend.length <= 2 && (
