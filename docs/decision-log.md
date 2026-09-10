@@ -93,7 +93,7 @@ treating a lobe as an event. The count is all it needs.
 > cold wait, and the remaining cost sits inside the Lambda, not the
 > network. Attribution and candidate fixes are in #251.
 
-> **Attributed 2026-09-10 by PR #255 (#251): the cost is the first S3
+> **Attributed 2026-09-10 by PR #256 (#251): the cost is the first S3
 > connection, not the decode or the encode.** Staged on a laptop through
 > the same code against the real bucket, profile `kino`: `import boto3`
 > 129 ms, client construction 84 to 86 ms, the first `get_object` of the
