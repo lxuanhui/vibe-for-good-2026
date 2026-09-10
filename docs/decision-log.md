@@ -31,7 +31,7 @@ apply an older decision without checking the entries above it.
 
 ## 2026-09-10 - Sonnet 4.5 passes the evidence-ID guard once the prompt states it; Haiku 4.5 stays deployed on speed and cost, not validity
 
-**Status:** done · PR #PRNUM · Closes #182 · Refs #61
+**Status:** done · PR #219 · Closes #182 · Refs #61
 
 **Decision.** The deployed model remains
 `global.anthropic.claude-haiku-4-5-20251001-v1:0`. The reason is now only
@@ -820,7 +820,7 @@ the existing `analyse` URL already had a natural GET.
 delivery is impossible) is answered by the entry above it: analysis is now an
 async job. Everything else here still holds.
 
-> **Qualified 2026-09-10 by PR #PRNUM (#182).** The Sonnet 4.5 failure in the
+> **Qualified 2026-09-10 by PR #219 (#182).** The Sonnet 4.5 failure in the
 > table below was the prompt, not the model. The prompt spelled out the
 > `verification_questions` shape but never said that an `unresolved_question`
 > must carry an evidence ID, so a model taking it literally failed the guard
