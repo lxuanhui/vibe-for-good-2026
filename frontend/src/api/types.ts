@@ -242,6 +242,7 @@ export interface InvestigationMap {
       orientationDeg: number
       semiMajorKm: number
       semiMinorKm: number
+      ownerEventId: string
     } | null
   }[]
   layers: Record<string, boolean>

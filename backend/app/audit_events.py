@@ -161,6 +161,11 @@ def _edge_from_real(real: dict[str, Any], subject_id: str, candidate_id: str) ->
     features = real["features"]
     distance = round(features["geographic_distance_km"], 3)
     envelope = real.get("envelope")
+    if envelope is not None:
+        # The envelope is projected from the directed source event. Keep that
+        # ownership explicit at the API boundary so clients cannot mistake
+        # every candidate edge for an ellipse belonging to the open event.
+        envelope = {**envelope, "ownerEventId": real["source_event_id"]}
     evidence_id = f"GRAPH_{real['source_event_id']}_{real['target_event_id']}_fire_event_graph"
     limitations = [
         "A candidate edge is a relationship for review, not evidence of a shared cause or responsibility.",

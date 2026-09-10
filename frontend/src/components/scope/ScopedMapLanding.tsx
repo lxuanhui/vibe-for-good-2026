@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Layer, Map, Source, type MapLayerMouseEvent } from 'react-map-gl/maplibre'
-import type { Feature, FeatureCollection, Geometry, LineString, Point, Polygon } from 'geojson'
+import type { Feature, FeatureCollection, Geometry, LineString, Point } from 'geojson'
 import type { AuditEventSummary, AuditScope, EventEvidenceResponse, InvestigationMap, InvestigationMapNode, StructuredAnalysis } from '../../api/types'
 import { addToAuditPack, fetchAuditRegister, fetchInvestigationBundle, fetchInvestigationMap, generateInvestigationAnalysis } from '../../api/client'
 import { AUDIT_EVENT_COLORS, AUDIT_SCOPE_BOUNDARY_COLOR, AUDIT_SCOPE_BUFFER_COLOR, SURFACE_FIRE_ENVELOPE_COLOR } from '../../lib/layerColors'
 import { useAppStore } from '../../store/useAppStore'
 import { Button } from '../ui/Button'
 import { EvidenceDrawer } from '../audit/EvidenceDrawer'
+import { envelopePolygons } from './propagationEnvelopes'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
 const GRAPH_LINE_COLOR = '#f97316'
@@ -67,27 +68,6 @@ function graphEdges(graphNodes: InvestigationMapNode[], edges: TaggedGraphEdge[]
       return from && to
         ? [{ type: 'Feature' as const, geometry: { type: 'LineString' as const, coordinates: [[from.centroid.lon, from.centroid.lat], [to.centroid.lon, to.centroid.lat]] }, properties: { origin: edge.origin, state: edge.state } }]
         : []
-    }),
-  }
-}
-
-// One polygon per candidate edge that has a precomputed wind-oriented
-// surface-spread envelope (`data_pipeline/enrich_fire_spread_audit_events.py`
-// -- real historical wind, only available for this demo's in-scope+buffer
-// FireEvents). A first-order geometric compatibility estimate, not a
-// fire-behaviour forecast or a claim about what happened (evidence-framing).
-// Built from the same already-merged `taggedEdges` the correlation lines use,
-// so an envelope never appears for an edge the graph itself isn't showing.
-function envelopePolygons(edges: TaggedGraphEdge[]): FeatureCollection<Polygon> {
-  return {
-    type: 'FeatureCollection',
-    features: edges.flatMap((edge) => {
-      if (!edge.envelope) return []
-      return [{
-        type: 'Feature' as const,
-        geometry: { type: 'Polygon' as const, coordinates: [edge.envelope.polygon] },
-        properties: { state: edge.state, sourceEventId: edge.sourceEventId, targetEventId: edge.targetEventId },
-      }]
     }),
   }
 }
@@ -262,7 +242,7 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
   }
   const points = useMemo(() => mapPoints(events, graphNodes), [events, graphNodes])
   const edges = useMemo(() => graphEdges(graphNodes, taggedEdges), [graphNodes, taggedEdges])
-  const envelopes = useMemo(() => envelopePolygons(taggedEdges), [taggedEdges])
+  const envelopes = useMemo(() => envelopePolygons(taggedEdges, focusedEventId), [taggedEdges, focusedEventId])
   const [showSpreadEnvelopes, setShowSpreadEnvelopes] = useState(true)
   const center = useMemo<[number, number]>(() => scope.centroid ?? [116.25, -3.8], [scope.centroid])
 

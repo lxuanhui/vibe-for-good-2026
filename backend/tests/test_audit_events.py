@@ -266,6 +266,7 @@ def test_graph_prefers_the_precomputed_real_fire_event_graph_edge(client):
     )
     assert edge["state"] == "PROPAGATION_COMPATIBLE"
     assert edge["envelope"] is not None
+    assert edge["envelope"]["ownerEventId"] == edge["sourceEventId"]
     assert len(edge["envelope"]["polygon"]) > 3
     assert edge["envelope"]["polygon"][0] == edge["envelope"]["polygon"][-1]
 
