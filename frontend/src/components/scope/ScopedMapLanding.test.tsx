@@ -1,7 +1,119 @@
-import { describe, expect, it } from 'vitest'
+import { forwardRef, type PropsWithChildren, type ReactNode } from 'react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { afterEach, describe, expect, it } from 'vitest'
+import { vi } from 'vitest'
 import type { EventEvidenceResponse } from '../../api/types'
+import type { AuditEventSummary, AuditProgression, AuditScope } from '../../api/types'
+import { fetchAuditRegister } from '../../api/client'
 import { envelopePolygons } from './propagationEnvelopes'
-import { eventOverlapsDay, investigationDays, observationsForDay } from './temporalScrubber'
+import { ScopedMapLanding } from './ScopedMapLanding'
+import { eventOverlapsDay, investigationDays, observationDays, observationsForDay } from './temporalScrubber'
+
+vi.mock('react-map-gl/maplibre', () => ({
+  Map: forwardRef<HTMLDivElement, PropsWithChildren<{ children?: ReactNode }>>(({ children }, _ref) => <div data-testid="map">{children}</div>),
+  Source: ({ children }: PropsWithChildren<{ id: string }>) => <div>{children}</div>,
+  Layer: () => <div />,
+}))
+
+vi.mock('../../api/client', () => ({
+  addToAuditPack: vi.fn(),
+  fetchAuditRegister: vi.fn(),
+  fetchInvestigationBundle: vi.fn(),
+  fetchInvestigationMap: vi.fn(),
+  generateInvestigationAnalysis: vi.fn(),
+}))
+
+const fetchAuditRegisterMock = vi.mocked(fetchAuditRegister)
+
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+})
+
+const scope: AuditScope = {
+  audit_id: 'audit-1',
+  scope_id: 'scope-1',
+  review_start: '2019-09-01',
+  review_end: '2019-09-01',
+  context_buffer_km: 25,
+  status: 'HISTORY_BUILD_READY',
+  bbox: null,
+  centroid: [116, -3],
+  buffer_bbox: { minLon: 115, minLat: -4, maxLon: 117, maxLat: -2 },
+  buffer_geometry: null,
+}
+
+const event: AuditEventSummary = {
+  eventId: 'FE-1',
+  auditId: 'audit-1',
+  firstDetection: '2019-09-01T03:00:00Z',
+  lastDetection: '2019-09-01T04:00:00Z',
+  durationHours: 1,
+  observationCount: 1,
+  centroid: { lat: -3, lon: 116 },
+  bbox: [116, -3, 116, -3],
+  spatialExtentKm: 1,
+  maxFrp: 1,
+  meanFrp: 1,
+  triage: { state: 'LIKELY_FIRE', deeperInvestigationEligible: true },
+  evidenceSufficiency: 'PARTIAL',
+  investigationPriority: 'MEDIUM',
+  reviewState: 'REVIEW_RECOMMENDED',
+  reviewRouting: { priorityScore: 1, escalationReasonCodes: [], components: [] },
+}
+
+it('selects candidates from the full keyboard-accessible row surface', async () => {
+  const progression: AuditProgression = {
+    rawObservations: 1,
+    qualifiedObservations: 1,
+    fireEvents: 1,
+    requiringHumanReview: 1,
+    selected: 0,
+    selectedEventIds: [],
+    compression: null,
+    observationsToEventsCompression: null,
+    inScopeAndBuffer: 1,
+    scopeBoundaryAvailable: false,
+    scopeCompression: null,
+    routingDiagnostics: {
+      humanReviewCount: 1,
+      humanReviewPercentage: 100,
+      priorityDistribution: {},
+      reviewStateDistribution: {},
+      evidenceSufficiencyDistribution: {},
+      escalationReasonCodes: {},
+      componentContributionDistribution: {},
+    },
+  }
+  fetchAuditRegisterMock.mockResolvedValue({ events: [event], progression })
+
+  render(<ScopedMapLanding scope={scope} onOpenScope={() => undefined} onOpenRegister={() => undefined} onViewReport={() => undefined} />)
+
+  await screen.findByRole('list', { name: 'Available observation dates' })
+  const candidate = screen.getByRole('button', { name: 'Select FE-1 for audit report' })
+  const list = candidate.closest('ul') as HTMLElement
+  const user = userEvent.setup()
+  const eventCount = screen.getByText((_, element) => element?.tagName === 'P' && element.textContent?.replace(/\s+/g, ' ').trim() === 'Events shown 1')
+  expect(screen.queryByRole('checkbox')).toBeNull()
+  expect(eventCount.tagName).toBe('P')
+  expect(eventCount.className).not.toContain('rounded')
+  expect(eventCount.className).not.toContain('border')
+  expect(eventCount.className).not.toContain('bg-bg')
+  expect(candidate.getAttribute('aria-pressed')).toBe('false')
+  await user.click(candidate)
+  expect(candidate.getAttribute('aria-pressed')).toBe('true')
+  expect(candidate.className).toContain('border-accent')
+  await user.keyboard('{Enter}')
+  expect(candidate.getAttribute('aria-pressed')).toBe('false')
+  expect(screen.queryByText('FireEvents in scope + context')).toBeNull()
+  expect(screen.queryByText('Review scoped FireEvents and optional peat context.')).toBeNull()
+  expect(screen.queryByText('OPEN A FIRE EVENT TO ADD IT')).toBeNull()
+  expect(screen.queryByText(/separate from Fire Register map comparison/i)).toBeNull()
+  expect(list.className).not.toContain('overflow-y-auto')
+  expect(list.className).not.toContain('max-h-64')
+  expect(list.closest('aside')?.className).toContain('overflow-y-auto')
+})
 
 const edge = (sourceEventId: string, ownerEventId: string) => ({
   sourceEventId,
@@ -19,6 +131,8 @@ const edge = (sourceEventId: string, ownerEventId: string) => ({
   },
 })
 
+const edgeWithState = (state: string) => ({ ...edge('FE-ONE', 'FE-ONE'), state })
+
 describe('ScopedMapLanding propagation envelopes', () => {
   it('renders only envelopes owned by explicitly selected FireEvents', () => {
     const result = envelopePolygons([edge('FE-ONE', 'FE-ONE'), edge('FE-TWO', 'FE-TWO')], ['FE-ONE'])
@@ -35,6 +149,12 @@ describe('ScopedMapLanding propagation envelopes', () => {
     expect(envelopePolygons([withoutOwner], ['FE-ONE'])).toEqual({ type: 'FeatureCollection', features: [] })
     expect(envelopePolygons([owned], ['FE-OTHER'])).toEqual({ type: 'FeatureCollection', features: [] })
   })
+
+  it('renders no envelope when the graph relationship is not spatially and temporally compatible', () => {
+    expect(envelopePolygons([edgeWithState('PROPAGATION_WEAK')], ['FE-ONE']).features).toHaveLength(0)
+    expect(envelopePolygons([edgeWithState('INDEPENDENT_PLAUSIBLE')], ['FE-ONE']).features).toHaveLength(0)
+    expect(envelopePolygons([edgeWithState('UNRESOLVED')], ['FE-ONE']).features).toHaveLength(0)
+  })
 })
 
 describe('ScopedMapLanding temporal scrubber', () => {
@@ -42,6 +162,13 @@ describe('ScopedMapLanding temporal scrubber', () => {
     expect(investigationDays('2019-09-01', '2019-09-05')).toEqual([
       '2019-09-01', '2019-09-02', '2019-09-03', '2019-09-04', '2019-09-05',
     ])
+  })
+
+  it('derives timeline dates from scoped event detection windows', () => {
+    expect(observationDays([
+      { firstDetection: '2019-09-02T03:00:00Z', lastDetection: '2019-09-03T04:00:00Z' },
+      { firstDetection: '2019-09-05T03:00:00Z', lastDetection: '2019-09-05T04:00:00Z' },
+    ], '2019-09-01', '2019-09-06')).toEqual(['2019-09-02', '2019-09-03', '2019-09-05'])
   })
 
   it('filters constituent observations by their recorded acquisition date', () => {
@@ -60,5 +187,40 @@ describe('ScopedMapLanding temporal scrubber', () => {
     expect(eventOverlapsDay(event, '2019-09-03')).toBe(true)
     expect(eventOverlapsDay(event, '2019-09-05')).toBe(false)
     expect(eventOverlapsDay(event, null)).toBe(true)
+  })
+})
+
+describe('ScopedMapLanding timeline controls', () => {
+  it('jumps to a date, pauses playback, and restores all days', async () => {
+    fetchAuditRegisterMock.mockResolvedValue({
+      events: [
+        { ...event, firstDetection: '2019-09-01T03:00:00Z', lastDetection: '2019-09-01T04:00:00Z' },
+        { ...event, eventId: 'FE-2', firstDetection: '2019-09-02T03:00:00Z', lastDetection: '2019-09-02T04:00:00Z' },
+      ],
+      progression: { selectedEventIds: [] } as unknown as AuditProgression,
+    })
+
+    render(<ScopedMapLanding scope={{ ...scope, review_end: '2019-09-02' }} onOpenScope={() => undefined} onOpenRegister={() => undefined} onViewReport={() => undefined} />)
+
+    await screen.findByRole('list', { name: 'Available observation dates' })
+    const day = screen.getByRole('button', { name: 'Show observations for 2019-09-02' })
+    fireEvent.click(day)
+    expect(day.getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByText('2019-09-02')).toBeTruthy()
+
+    vi.useFakeTimers()
+    fireEvent.click(screen.getByRole('button', { name: 'Play timeline' }))
+    expect(screen.getByRole('button', { name: 'Pause timeline' })).toBeTruthy()
+    await vi.advanceTimersByTimeAsync(1500)
+    expect(screen.getByRole('button', { name: 'Show observations for 2019-09-02' }).getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: 'Pause timeline' }))
+    expect(screen.getByRole('button', { name: 'Play timeline' })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play timeline' }))
+    expect(screen.getByRole('button', { name: 'Pause timeline' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'ALL DAYS' }))
+    expect(screen.getByRole('button', { name: 'ALL DAYS' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'ALL DAYS' }).getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByRole('button', { name: 'Play timeline' })).toBeTruthy()
   })
 })

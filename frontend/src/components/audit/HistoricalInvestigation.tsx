@@ -53,32 +53,6 @@ function SummaryHelp({ label, children }: { label: string; children: ReactNode }
   return <details className="relative inline-block align-middle"><summary aria-label={`About ${label}`} className="flex h-4 w-4 cursor-pointer list-none items-center justify-center rounded-full border border-border-strong text-[10px] text-text-muted hover:text-text"><span aria-hidden="true">?</span></summary><div role="note" className="absolute right-0 z-10 mt-2 w-64 rounded border border-border-strong bg-panel-raised p-3 text-left text-[11px] leading-4 text-text shadow-lg">{children}</div></details>
 }
 
-type RoutingDistribution = { count: number; percentage: number }
-
-function distributionCount(distribution: Record<string, RoutingDistribution>, key: string) {
-  return distribution[key]?.count ?? 0
-}
-
-function routingLabel(value: string) {
-  return value.replaceAll('_', ' ')
-}
-
-function RoutingSummary({ progression }: { progression: AuditProgression }) {
-  const { routingDiagnostics: diagnostics } = progression
-  const higherPriorityCount = distributionCount(diagnostics.priorityDistribution, 'HIGH') + distributionCount(diagnostics.priorityDistribution, 'URGENT')
-  const workflowItems = Object.entries(diagnostics.reviewStateDistribution)
-  const sufficiencyItems = Object.entries(diagnostics.evidenceSufficiencyDistribution)
-
-  return <section aria-label="Decision-oriented routing summary" className="border-b border-border bg-panel px-5 py-3">
-    <div className="mb-2 flex items-center gap-2"><h2 className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-faint">How to read routing</h2><SummaryHelp label="routing summary">Priority, workflow, and evidence sufficiency answer different questions. They are separate diagnostics over the same FireEvent population.</SummaryHelp></div>
-    <div className="grid gap-3 md:grid-cols-3">
-      <div className="rounded border border-border bg-bg px-3 py-2"><div className="text-[10px] uppercase tracking-[0.1em] text-text-faint">Higher priority</div><div className="mt-1 text-sm font-semibold text-accent">{higherPriorityCount.toLocaleString()} of {progression.fireEvents.toLocaleString()} FireEvents</div><p className="mt-1 text-[11px] leading-4 text-text-muted">HIGH or URGENT routing bands for review attention; this is not a finding about cause or responsibility.</p></div>
-      <div className="rounded border border-border bg-bg px-3 py-2"><div className="text-[10px] uppercase tracking-[0.1em] text-text-faint">Workflow status</div><div className="mt-1 space-y-0.5 text-[11px] text-text-muted">{workflowItems.map(([state, distribution]) => <div key={state}><span className="font-semibold text-text">{distribution.count.toLocaleString()}</span> {routingLabel(state).toLowerCase()}{state === 'HUMAN_REVIEW' ? ' = enter the human-review queue' : state === 'REVIEW_RECOMMENDED' ? ' = remain available for inspection' : ' = screened without queue escalation'}</div>)}</div><p className="mt-1 text-[11px] leading-4 text-text-muted">Ambiguous events can be review-recommended without automatic human escalation.</p></div>
-      <div className="rounded border border-border bg-bg px-3 py-2"><div className="text-[10px] uppercase tracking-[0.1em] text-text-faint">Evidence sufficiency</div><div className="mt-1 space-y-0.5 text-[11px] text-text-muted">{sufficiencyItems.map(([status, distribution]) => <div key={status}><span className="font-semibold text-text">{distribution.count.toLocaleString()}</span> {routingLabel(status).toLowerCase()}</div>)}</div><p className="mt-1 text-[11px] leading-4 text-text-muted">This describes evidence coverage, independently of priority and workflow.</p></div>
-    </div>
-  </section>
-}
-
 export function RegisterSummary({ progression }: { progression: AuditProgression }) {
   const eventDenominator = progression.fireEvents.toLocaleString()
   return <>
@@ -96,14 +70,13 @@ export function RegisterSummary({ progression }: { progression: AuditProgression
         <p className="mt-2 text-[10px] text-text-muted">{progression.scopeBoundaryAvailable ? `Count includes the configured context buffer: ${progression.inScopeAndBuffer?.toLocaleString() ?? '—'} of ${eventDenominator} FireEvents.` : 'No private audit boundary supplied; scope count is unavailable.'}</p>
       </section>
       <section aria-labelledby="routing-summary" className="bg-panel px-4 py-3">
-        <div className="mb-2 flex items-center gap-2"><h2 id="routing-summary" className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-faint">Global routing diagnostics</h2><SummaryHelp label="routing dimensions">Priority, evidence sufficiency, and workflow are separate dimensions. They are diagnostics over the event population, not sequential funnel stages.</SummaryHelp></div>
+        <div className="mb-2 flex items-center gap-2"><h2 id="routing-summary" className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-faint">Scoped routing diagnostic</h2><SummaryHelp label="routing dimensions"><p>FIRMS observations are clustered into FireEvents. Stage 1 classification indicates fire support and is separate from evidence sufficiency.</p><p className="mt-2">Priority is a review-routing aid, separate from workflow status. Routing is not proof of causality or responsibility.</p><p className="mt-2">Because you control filtering, the register can include low-confidence or likely-non-fire events for inspection.</p></SummaryHelp></div>
         <div className="font-semibold text-accent">{progression.requiringHumanReview.toLocaleString()}</div>
-        <div className="text-[10px] text-text-faint">ROUTED TO HUMAN REVIEW</div>
-        <p className="mt-2 text-[10px] text-text-muted">{(progression.routingDiagnostics.humanReviewPercentage * 100).toFixed(1)}% of {eventDenominator} FireEvents; this is not a subset count of the In Scope figure.</p>
+        <div className="text-[10px] text-text-faint">ROUTED TO HUMAN REVIEW IN CURRENT REGISTER</div>
+        <p className="mt-2 text-[10px] text-text-muted">{(progression.routingDiagnostics.humanReviewPercentage * 100).toFixed(1)}% of {eventDenominator} FireEvents in this register.</p>
       </section>
     </div>
     </section>
-    <RoutingSummary progression={progression} />
   </>
 }
 

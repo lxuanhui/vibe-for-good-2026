@@ -381,7 +381,10 @@ def get_audit(audit_id: str) -> dict[str, Any] | None:
     # filter_events: a fire burning across the window's edge is exactly what
     # the auditor needs to see, so it counts as inside.
     since, until = _review_window(session)
-    events = attach_routing(filter_events(demo["events"], since=since, until=until))
+    # The base register population is every clustered event in the audit's
+    # review window. Stage-1 state, sufficiency, priority, and workflow are
+    # annotations or explicit user filters, never membership gates.
+    events = attach_routing(scoped_register_events(demo["events"], since=since, until=until))
     review_queue = routing_diagnostics(events)["humanReviewCount"]
     # Stage-1 routes everything that is not LIKELY_NON_FIRE, a state FIRMS-only
     # input cannot reach (CLAUDE.md, "State of things"), so this equals the
@@ -602,6 +605,21 @@ def filter_events(
             continue
         selected.append(event)
     return selected
+
+
+def scoped_register_events(
+    events: list[dict[str, Any]],
+    since: datetime | None = None,
+    until: datetime | None = None,
+) -> list[dict[str, Any]]:
+    """Return the full clustered register population for an audit window.
+
+    Stage-1 state remains available to the API's explicit ``state`` query
+    filter, but it must not silently decide which clustered events exist in
+    the register by default.
+    """
+
+    return filter_events(events, since=since, until=until)
 
 
 def find_event(audit_id: str, event_id: str) -> dict[str, Any] | None:
