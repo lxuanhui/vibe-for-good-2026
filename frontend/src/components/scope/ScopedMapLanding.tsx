@@ -355,7 +355,9 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
     <div className="scoped-map-print-hide border-b border-border-strong bg-panel px-5 py-2.5" aria-label="Observation timeline">
       <div className="flex items-center gap-3">
         <div className="min-w-28 text-[10px] uppercase tracking-[0.16em] text-text-faint">Observation date <span className="ml-1 text-accent">{activeDay ?? 'ALL DAYS'}</span></div>
-        <button type="button" aria-label={isPlaying ? 'Pause timeline' : 'Play timeline'} onClick={toggleTimelinePlayback} disabled={!days.length} className="rounded border border-accent px-2 py-1 text-xs font-semibold text-accent hover:bg-accent/15 disabled:cursor-not-allowed disabled:opacity-40">{isPlaying ? 'PAUSE' : 'PLAY'}</button>
+        <button type="button" aria-label={isPlaying ? 'Pause timeline' : 'Play timeline'} title={isPlaying ? 'Pause timeline' : 'Play timeline'} onClick={toggleTimelinePlayback} disabled={!days.length} className="rounded border border-accent p-1.5 text-accent hover:bg-accent/15 disabled:cursor-not-allowed disabled:opacity-40">
+          {isPlaying ? <svg data-icon="pause" aria-hidden="true" viewBox="0 0 16 16" className="h-4 w-4 fill-current"><rect x="3" y="2" width="3" height="12" rx="0.5" /><rect x="10" y="2" width="3" height="12" rx="0.5" /></svg> : <svg data-icon="play" aria-hidden="true" viewBox="0 0 16 16" className="h-4 w-4 fill-current"><path d="M4 2.5v11l9-5.5-9-5.5Z" /></svg>}
+        </button>
         <div className="flex min-w-0 flex-1 items-end gap-1" role="list" aria-label="Available observation dates">
           {days.map((day) => <button key={day} type="button" aria-label={`Show observations for ${day}`} aria-pressed={activeDay === day} onClick={() => selectTimelineDay(day)} className={`group flex min-w-8 flex-1 flex-col items-center gap-1 text-[10px] text-text-faint ${activeDay === day ? 'text-accent' : 'hover:text-text-muted'}`}><span className={`h-2.5 w-px ${activeDay === day ? 'bg-accent' : 'bg-border-strong group-hover:bg-text-muted'}`} /><span>{day.slice(5)}</span></button>)}
         </div>
