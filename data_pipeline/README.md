@@ -78,6 +78,55 @@ extent), last verified run. See the module docstring for the documented
 single-linkage chaining limitation and how FireEvent fields here relate to
 the canonical `FireEvent` type (`Environmental_Assurance_Spec.md` S9).
 
+### Parameters, diagnostics and lobes (#86)
+
+The thresholds are an explicit, validated `ClusteringParameters` value
+rather than two loose keyword defaults. Construction rejects anything
+pathological (zero, negative, NaN, infinite, or above the 50 km / 720 h
+guardrails), so a bad value fails at the call site instead of silently
+producing one event or ten thousand. `ClusteringParameters.from_env()` reads
+`FIRMS_CLUSTER_SPATIAL_KM` / `FIRMS_CLUSTER_TEMPORAL_HOURS` for a developer
+regenerating under a different radius; a blank variable is the default, a
+malformed one is an error, never a fallback. `export_audit_events.py` records
+the parameters it ran with in the artifact's `source.clustering` block, and
+the committed artifact is always the defaults.
+
+`cluster_run(observations, parameters)` is the same algorithm returning a
+`ClusteringRun`, which also carries what the run *did*: how many pairs were
+within the radius, how many of those the temporal rule accepted, and the
+widest accepted gap and distance. Each `FireEvent` gains `link_count`,
+`max_link_gap_hours` and `max_link_distance_km`, so a large event's widest
+link can be read against the thresholds to see whether it is one fire or
+two bridged by a single detection. `cluster_events` still returns
+`(events, annotated)` and still accepts the old keyword thresholds.
+
+`clustering/diagnostics.py` turns a run into numbers a reader can check
+against expectations and prints them during export:
+
+```bash
+PYTHONPATH=. .venv/bin/python -m data_pipeline.clustering.diagnostics \
+    --start 2019-09-01 --end 2019-09-05 --sweep
+```
+
+Reports the compression ratio, the size distribution, the singleton and
+large-event (100+ observations) counts with their share of observations,
+the link statistics, and the five largest events with their sub-clusters at
+1 km. `--sweep` re-clusters the same window across a small threshold grid
+(1/2/3/5 km by 24/48/72/120 h) so the effect of each threshold is measured
+rather than guessed. Last verified run on the 2019 window, defaults:
+20,471 observations, 3,610 events, 419,239 pairs within 2 km of which
+378,619 were accepted (widest link 2.0 km / 71.1 h). The largest event stays
+at roughly 1,100 observations across the whole sweep grid, so that structure
+is in the data, not the radius. Output goes to
+`data_pipeline/output/clustering_diagnostics.json`, which is not committed.
+
+`event_lobes(event, observations, lobe_distance_km)` splits one event into
+spatial-only components at a tighter radius (default 1 km). It never changes
+membership; it is a description of an event that was already formed, for a
+reader deciding whether a large event should be described as one fire
+complex with several lobes. At or above the clustering radius it always
+finds one lobe, since every clustered pair was already within it.
+
 ## Historical weather-window enrichment
 
 `enrichment/weather_enrichment.py` reconstructs the weather context around a
