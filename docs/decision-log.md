@@ -30,6 +30,61 @@ apply an older decision without checking the entries above it.
 
 ---
 
+## 2026-09-10 - The live FIRMS cache is shared across Lambda containers as one S3 object, filling the disposable-cache role
+
+**Status:** done · PR #246 · Refs #186
+
+**Decision.** `GET /api/firms/live` keeps its process-local 15-minute cache as
+a first level and adds a second: one gzipped JSON object,
+`firms-live/current.json.gz`, in a new bucket `aws_s3_bucket.cache`. A cold
+container reads the object before it fetches; a successful fetch publishes
+it. Freshness is judged by the wall-clock stamp written inside the object,
+and a container that reads an aged entry expires its local copy at the same
+moment the shared one would. The shared level is best-effort in both
+directions: any failure to read or write falls through to the upstream
+fetch, and an upstream failure publishes nothing. This is the third of spec
+§8's persistence roles, the disposable cache; the bulky-immutable-evidence
+role is still unfilled.
+
+**Why.** The same failure the audit-state entry (2026-09-09) worked through,
+one route over: Lambda serves consecutive requests from different
+containers, and a cold container's dict is empty. Measured on the deployed
+API on 2026-09-10, a cold start cost ~2.4s of extra time-to-first-byte on the
+landing map, which is the first screen every visitor sees, and two warm
+containers each spent a FIRMS transaction for the same window.
+
+**Rejected: a row in the audit-state table.** The payload does not reliably
+fit DynamoDB's 400 KB item. Measured on synthetic payloads in the served
+shape: 97 KB gzipped at the 5,389 detections seen live on 2026-09-10, 268 KB
+at 15,000, 714 KB at 40,000. The cap is passed near 20,000 detections in 24
+hours across the Southeast Asia bounding box, which is a haze-season day, so
+the table would fail exactly when the layer matters. Chunking across items
+would work and was rejected as more code for what S3 gives for free.
+
+**Rejected: a lease against the simultaneous double miss.** Two containers
+that miss at the same instant both fetch. A lease in the shared store would
+stop that at the price of a second round trip on every miss and a stale-lease
+path to get right, to save one FIRMS transaction per coincidence against a
+quota in the thousands per ten minutes. Not worth it at this traffic; revisit
+only if FIRMS transaction errors appear in the logs.
+
+**Rejected: CloudFront; provisioned concurrency.** Both from the issue's own
+list. The first is a new distribution for a cache the app can hold itself.
+The second is always-on, so it needs the standing justification, and it does
+not stop two warm containers duplicating the fetch anyway.
+
+**Consequence for CI.** The CI role had no S3 grant beyond the state bucket.
+`bootstrap/oidc.tf` now grants `s3:*` on buckets named
+`<project>-*-cache-*`, and that stack is applied by hand, so a main-stack PR
+that adds such a bucket cannot merge until bootstrap has been applied. The
+pattern deliberately excludes the state bucket, which keeps its object-only
+grant.
+
+**Open.** The post-deploy cold-start time-to-first-byte has not been measured
+yet; #186 stays open until it is quoted.
+
+---
+
 ## 2026-09-10 - The served scope names the population behind each review-queue figure, and the two are never divided into each other
 
 **Status:** done · PR #244 · Closes #187
