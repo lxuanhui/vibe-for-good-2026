@@ -1,0 +1,66 @@
+{
+  "asset_id": "IMG_FE-20190901-f0d0bb0675_s2-swir-false-colour-v1_pre_event",
+  "event_id": "FE-20190901-f0d0bb0675",
+  "source_evidence_id": "ENV_IMAGERY_FE-20190901-f0d0bb0675_Sentinel-2_pre_event",
+  "sensor": "Sentinel-2",
+  "position": "pre_event",
+  "label": "Optical context",
+  "path": "/imagery/FE-20190901-f0d0bb0675/s2-pre.jpg",
+  "format": "image/jpeg",
+  "width": 1024,
+  "height": 1024,
+  "bytes": 232889,
+  "coverage_fraction": 1.0,
+  "aoi": {
+    "bbox": [
+      116.192212,
+      -3.910276,
+      116.282248,
+      -3.820444
+    ],
+    "crs": "EPSG:4326",
+    "half_size_km": 5.0
+  },
+  "acquisition": {
+    "collection": "sentinel-2-l2a",
+    "product_id": "S2A_MSIL2A_20190831T021601_N0500_R003_T50MMA_20230524T231442",
+    "acquisition_time": "2019-08-31T02:16:01.024000Z",
+    "time_range": {
+      "from": "2019-08-31T00:00:00Z",
+      "to": "2019-08-31T23:59:59Z"
+    },
+    "orbit": {
+      "absolute": 21879,
+      "relative": 3,
+      "state": "descending"
+    },
+    "cloud_cover_pct": 15.31,
+    "temporal_distance_hours": 39.366382,
+    "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2A_MSIL2A_20190831T021601_N0500_R003_T50MMA_20230524T231442"
+  },
+  "processing": {
+    "recipe_id": "s2-swir-false-colour-v1",
+    "description": "Sentinel-2 L2A surface reflectance rendered as SWIR2 (B12) / NIR (B08) / Red (B04) false colour with a fixed 2.5x gain; bilinear resampling to 1024 px over a 10 km square; no-data black. No per-scene stretch, so the pre- and post-event images share one scale.",
+    "evalscript_sha256": "8e21166251255a78f28e081e40a5bf5ba40a0f42445ac5a77f67fa6b1b13ed71",
+    "data_filter": {
+      "timeRange": {
+        "from": "2019-08-31T00:00:00Z",
+        "to": "2019-08-31T23:59:59Z"
+      },
+      "mosaickingOrder": "leastCC"
+    },
+    "options": {
+      "upsampling": "BILINEAR",
+      "downsampling": "BILINEAR"
+    },
+    "request_sha256": "aed73d62a736ef047c559f9dfb869e02825ee7edf4cb4421a29110886c11981f"
+  },
+  "limitations": [
+    "A display product for human orientation; it is not analytical imagery and no burned area, cause, or responsibility is derived from it.",
+    "Cloud and smoke in the image are what the sensor saw on that date; the catalogue cloud percentage is for the whole tile, not this 10 km square.",
+    "Colour differences between the pre- and post-event images may reflect atmospheric conditions, sun angle, or different tiles as well as surface change."
+  ],
+  "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
+  "generator_version": "cdse-process-imagery-v1",
+  "generated_at": "2026-09-10T05:56:08+00:00"
+}

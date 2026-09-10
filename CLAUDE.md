@@ -147,6 +147,13 @@ fire, nothing else, so it is only honest at a short range; anything a
 candidate needs to explain beyond that is AI interpretation's job. See
 decision log, 2026-09-09.
 
+Satellite context images for those same 16 events are static files under
+`frontend/public/imagery/` (JPEG per scene plus `manifest.json`), rendered
+once by `data_pipeline/generate_processed_imagery.py` through the CDSE
+Process API and pinned to the scenes the evidence already names. They are
+served by Amplify from the console's origin, not by the API, and never enter
+the Lambda bundle. The evidence-drawer surface that displays them is #171.
+
 The console consumes them. `components/scope/ScopedMapLanding.tsx` is the
 map-first landing surface for the bounded demo scope, and
 `components/audit/HistoricalInvestigation.tsx` is the register, investigation
