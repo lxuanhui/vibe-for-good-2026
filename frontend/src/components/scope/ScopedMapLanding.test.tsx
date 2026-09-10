@@ -1,5 +1,6 @@
 import { forwardRef, type PropsWithChildren, type ReactNode } from 'react'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { vi } from 'vitest'
 import type { EventEvidenceResponse } from '../../api/types'
@@ -57,7 +58,7 @@ const event: AuditEventSummary = {
   reviewRouting: { priorityScore: 1, escalationReasonCodes: [], components: [] },
 }
 
-it('keeps candidate list content in the sidebar scroll flow', async () => {
+it('selects candidates from the full keyboard-accessible row surface', async () => {
   const progression: AuditProgression = {
     rawObservations: 1,
     qualifiedObservations: 1,
@@ -85,6 +86,17 @@ it('keeps candidate list content in the sidebar scroll flow', async () => {
   render(<ScopedMapLanding scope={scope} onOpenScope={() => undefined} onOpenRegister={() => undefined} onViewReport={() => undefined} />)
 
   const list = await screen.findByRole('list')
+  const candidate = screen.getByRole('button', { name: 'Select FE-1 for audit report' })
+  const user = userEvent.setup()
+  expect(screen.queryByRole('checkbox')).toBeNull()
+  expect(candidate.getAttribute('aria-pressed')).toBe('false')
+  await user.click(candidate)
+  expect(candidate.getAttribute('aria-pressed')).toBe('true')
+  expect(candidate.className).toContain('border-accent')
+  await user.keyboard('{Enter}')
+  expect(candidate.getAttribute('aria-pressed')).toBe('false')
+  expect(screen.queryByText('OPEN A FIRE EVENT TO ADD IT')).toBeNull()
+  expect(screen.queryByText(/separate from Fire Register map comparison/i)).toBeNull()
   expect(list.className).not.toContain('overflow-y-auto')
   expect(list.className).not.toContain('max-h-64')
   expect(list.closest('aside')?.className).toContain('overflow-y-auto')

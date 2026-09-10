@@ -231,15 +231,6 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
     setCandidateIds((ids) => ids.includes(eventId) ? ids.filter((id) => id !== eventId) : [...ids, eventId])
   }
 
-  async function addFocusedEventToPack() {
-    if (!drawerEventId || packed.includes(drawerEventId)) return
-    setPackError('')
-    try {
-      await addToAuditPack(scope.audit_id, drawerEventId)
-      setPacked((ids) => ids.includes(drawerEventId) ? ids : [...ids, drawerEventId])
-    } catch (reason) { setPackError(reason instanceof Error ? reason.message : 'Could not add the open FireEvent to the audit report.') }
-  }
-
   async function addCandidatesToPack() {
     const additions = candidateIds.filter((id) => !packed.includes(id))
     if (!additions.length) return
@@ -425,12 +416,12 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
             <div className="text-sm uppercase tracking-[0.16em] text-accent">Investigation candidates</div>
             <span className="rounded border border-border px-1.5 py-0.5 text-xs text-text-muted">{packed.length} IN REPORT</span>
           </div>
-          <p className="mt-2 text-sm leading-5 text-text-muted">Select scoped FireEvents for the audit report; this is separate from Fire Register map comparison.</p>
+          <p className="mt-2 text-sm leading-5 text-text-muted">Select scoped FireEvents for the audit report.</p>
           {packError && <div role="alert" className="mt-2 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-sm text-red-200">{packError}</div>}
-          <Button className="mt-3 w-full" disabled={!drawerEventId || packed.includes(drawerEventId)} onClick={() => void addFocusedEventToPack()}>{drawerEventId ? packed.includes(drawerEventId) ? 'OPEN FIRE EVENT IS IN REPORT' : `ADD OPEN FIRE EVENT (${drawerEventId})` : 'OPEN A FIRE EVENT TO ADD IT'}</Button>
           {!loading && events.length === 0 ? <p className="mt-3 text-sm text-text-faint">No scoped FireEvents are available to add.</p> : <ul className="mt-3 space-y-1.5">{events.map((event) => {
             const inReport = packed.includes(event.eventId)
-            return <li key={event.eventId} className="rounded border border-border bg-bg px-2 py-1.5 text-sm"><label className="flex cursor-pointer items-center gap-2"><input aria-label={`Add ${event.eventId} to audit report`} type="checkbox" checked={candidateIds.includes(event.eventId)} disabled={inReport} onChange={() => toggleCandidate(event.eventId)} /><span className="min-w-0 flex-1 truncate font-mono text-text-muted">{event.eventId}</span><span className="shrink-0 text-xs text-text-faint">{inReport ? 'IN REPORT' : event.investigationPriority}</span></label></li>
+            const selected = candidateIds.includes(event.eventId)
+            return <li key={event.eventId}><button type="button" aria-label={`Select ${event.eventId} for audit report`} aria-pressed={selected} disabled={inReport} onClick={() => toggleCandidate(event.eventId)} className={`flex w-full items-center gap-2 rounded border px-2 py-2 text-left text-sm transition-colors ${selected ? 'border-accent bg-accent/15 text-text' : 'border-border bg-bg text-text-muted hover:border-border-strong hover:bg-panel-raised'} ${inReport ? 'cursor-default opacity-70' : 'cursor-pointer'}`}><span className="min-w-0 flex-1 truncate font-mono">{event.eventId}</span><span className="shrink-0 text-xs text-text-faint">{inReport ? 'IN REPORT' : event.investigationPriority}</span></button></li>
           })}</ul>}
           <Button className="mt-3 w-full" disabled={!candidateIds.length} onClick={() => void addCandidatesToPack()}>{`ADD SELECTED TO REPORT (${candidateIds.length})`}</Button>
           <Button variant="primary" className="mt-3 w-full" onClick={onViewReport}>{`VIEW AUDIT REPORT (${packed.length})`}</Button>
