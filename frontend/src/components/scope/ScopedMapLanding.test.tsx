@@ -131,6 +131,8 @@ const edge = (sourceEventId: string, ownerEventId: string) => ({
   },
 })
 
+const edgeWithState = (state: string) => ({ ...edge('FE-ONE', 'FE-ONE'), state })
+
 describe('ScopedMapLanding propagation envelopes', () => {
   it('renders only envelopes owned by explicitly selected FireEvents', () => {
     const result = envelopePolygons([edge('FE-ONE', 'FE-ONE'), edge('FE-TWO', 'FE-TWO')], ['FE-ONE'])
@@ -146,6 +148,12 @@ describe('ScopedMapLanding propagation envelopes', () => {
     expect(envelopePolygons([owned])).toEqual({ type: 'FeatureCollection', features: [] })
     expect(envelopePolygons([withoutOwner], ['FE-ONE'])).toEqual({ type: 'FeatureCollection', features: [] })
     expect(envelopePolygons([owned], ['FE-OTHER'])).toEqual({ type: 'FeatureCollection', features: [] })
+  })
+
+  it('renders no envelope when the graph relationship is not spatially and temporally compatible', () => {
+    expect(envelopePolygons([edgeWithState('PROPAGATION_WEAK')], ['FE-ONE']).features).toHaveLength(0)
+    expect(envelopePolygons([edgeWithState('INDEPENDENT_PLAUSIBLE')], ['FE-ONE']).features).toHaveLength(0)
+    expect(envelopePolygons([edgeWithState('UNRESOLVED')], ['FE-ONE']).features).toHaveLength(0)
   })
 })
 
