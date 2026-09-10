@@ -66,8 +66,10 @@ Only three things, in order of likelihood:
    account 424609180893 in `ap-southeast-1` on 2026-09-10: the Claude 5 family
    returns `AccessDeniedException: "... is not available for this account"`, so
    the two cheapest-looking upgrades in this table cannot be switched to by
-   changing `var.bedrock_model_id`. **Claude Sonnet 4.5 is entitled** and is
-   the only alternative that can actually be selected today; its rate is not
+   changing `var.bedrock_model_id`. **Claude Sonnet 4.5 is entitled**, is
+   the only alternative that can actually be selected today, and passes
+   schema validation since the prompt states the unresolved-question rule
+   (decision log, 2026-09-10, Sonnet 4.5 validates); its rate is not
    listed here because it was not verified against published pricing at the
    same time as the rest of the table, and an unverified number in a cost
    document is worse than an absent one. Background, and how to tell a wrong
@@ -75,8 +77,9 @@ Only three things, in order of likelihood:
    Bedrock).
 
    So ~$15 per 100 assessments. Cheaper models are not a saving here: the
-   ones tried below Haiku 4.5 were both slower and failed schema validation,
-   and cost per *successful* assessment is the only figure that matters. The
+   one tried below Haiku 4.5 (Gemma 3 27B) was slower and failed schema
+   validation, and cost per *successful* assessment is the only figure that
+   matters. The
    real lever is Bedrock prompt caching on the ~19k-token evidence prefix
    every one of the four calls repeats — cache reads are $0.10/1M against
    $1.00/1M, taking an assessment to roughly $0.09 with no quality tradeoff.
