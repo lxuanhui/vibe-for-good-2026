@@ -142,6 +142,22 @@ Settings → Secrets and variables → Actions:
 | Variable | `AWS_ROLE_ARN` | yes | Role assumed over OIDC. Set. |
 | Variable | `CORS_ORIGINS` | no | Origin the console is served from; defaults to `*` |
 | Secret | `FLASK_SECRET_KEY` | no | Lambda's `SECRET_KEY`; defaults to `dev` |
+| Secret | `NASA_FIRMS_MAP_KEY` | no | Server-side key for `GET /api/firms/live`. Unset leaves the landing map's live regional layer reporting itself unavailable |
+| Variable | `CARTO_API_KEY` | no | Carto basemap key, baked into the bundle by Vite. Unset drops the map to unauthenticated, rate-limited tiles |
+
+**`NASA_FIRMS_MAP_KEY` is a GitHub *secret*, never an Amplify variable.** A
+FIRMS MAP_KEY cannot be restricted to a domain, and Amplify variables named
+`VITE_*` are inlined into the public bundle by Vite — so setting it there
+publishes it. It reaches the Lambda through `TF_VAR_nasa_firms_map_key` in the
+Infra workflow, the same route `FLASK_SECRET_KEY` takes.
+
+**`CARTO_API_KEY` is the mirror image, and it is a GitHub *variable* for the
+same reason.** It is a client-side key by design, restricted by origin in the
+Carto dashboard, and it does ship in the bundle. It has to be set here rather
+than typed into the Amplify console because `environment_variables` in
+`infra/console.tf` is replaced wholesale on every apply — a hand-typed value
+is deleted by the next infra merge, and the map quietly falls back to
+unauthenticated tiles with nothing in the repository to explain it.
 
 **No AWS access keys, by design** — the whole point of the OIDC role. If
 `AWS_ACCESS_KEY_ID` ever appears in this repo's settings, something has gone

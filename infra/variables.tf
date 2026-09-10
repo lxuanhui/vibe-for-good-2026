@@ -58,3 +58,16 @@ variable "bedrock_model_id" {
   type        = string
   default     = "global.anthropic.claude-haiku-4-5-20251001-v1:0"
 }
+
+variable "nasa_firms_map_key" {
+  description = "NASA FIRMS MAP_KEY. Used server-side by GET /api/firms/live so the landing map's live regional layer never ships the key to the browser -- a FIRMS key cannot be restricted to a domain, unlike the Carto key the console does publish. Empty leaves that route reporting the layer unavailable, which is the honest render rather than an empty region. NOTE: like flask_secret_key, whatever is passed here is stored in plain text in Terraform state -- acceptable for a free, re-issuable key on a dev stack, not for a credential with a real blast radius."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "carto_api_key" {
+  description = "Carto API key for the basemap raster tiles. This one IS meant to reach the browser -- Vite bakes it into the bundle and Carto restricts it by origin -- so it is deliberately not marked sensitive: masking it in the plan would imply a secrecy it does not have, and it is readable in the published JS either way. It has to be declared here because environment_variables in console.tf is replaced wholesale on every apply, so a key typed into the Amplify console is deleted by the next infra merge. Empty falls back to unauthenticated tiles, which Carto rate-limits."
+  type        = string
+  default     = ""
+}

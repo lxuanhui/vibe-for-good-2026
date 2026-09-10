@@ -15,6 +15,7 @@ when changing that subsystem.
 | Investigation | Scores, review routing, graph edges, and propagation are separate deterministic evidence outputs; none establishes causation. | 2026-09-09, graph; review routing; 2026-09-08, triage / graph / surface growth |
 | AI interpretation | Claude runs only after an explicit auditor request, receives bounded EvidenceObjects plus graph summaries, and returns schema-validated Investigator/Skeptic findings retained with the audit session. | 2026-09-09, structured analysis |
 | Analysis delivery | Analysis is an async job on a second Lambda: POST starts one, GET polls it and never spends tokens. It does not fit API Gateway's 30s response cap. | 2026-09-10, async job |
+| Live regional context | The landing map's live NASA FIRMS layer is proxied by the API. A FIRMS MAP_KEY cannot be domain-restricted, so it can never ship in the bundle. | 2026-09-10, FIRMS proxy |
 | Map and imagery | Camera fitting is bounds-driven; map context is not an unscoped fire browser. Satellite display processing is deterministic and provenance-preserving. | 2026-09-09, audit session / landing; 2026-09-08, Copernicus scenes |
 | Infrastructure | Flask runs on Lambda behind API Gateway; Terraform owns the deployed configuration; CORS is Flask-owned. | 2026-09-09, Amplify; 2026-09-07, Lambda / CORS |
 | Service selection | DynamoDB and S3 are authorised without a fresh argument each time; every service switched on gets a cost row in `docs/infra.md` in the same PR. | 2026-09-09, DynamoDB and S3 are authorised |
@@ -22,6 +23,98 @@ when changing that subsystem.
 **Use this log:** entries retain the original diagnosis, rejected alternatives,
 and historical context. A later entry can supersede an earlier one; do not
 apply an older decision without checking the entries above it.
+
+---
+
+## 2026-09-10 - The live FIRMS layer is proxied by the API, not fetched by the browser
+
+**Status:** done · PR #150 · Closes #149
+
+The console's landing screen draws current regional thermal detections as
+orientation context. It fetched them from the browser:
+
+```ts
+await fetch(`https://firms.modaps.eosdis.nasa.gov/api/area/csv/${firmsMapKey}/VIIRS_SNPP_NRT/world/1`)
+```
+
+with `firmsMapKey` read from `import.meta.env.VITE_FIRMS_MAP_KEY`. That shape
+has no correct configuration, which is why it had to move rather than be
+fixed in place:
+
+- **Unset** — which is how the Amplify app was actually configured — Vite
+  folds the key to `undefined`, the minifier proves the guard always returns,
+  and the whole fetch is eliminated as dead code. The deployed landing page
+  had reported "Live FIRMS context unavailable" since it shipped. (That
+  elimination is also why grepping an older bundle for `modaps` finds
+  nothing: absence of the host there is not evidence the key was safe.)
+- **Set** — the key is inlined into the public bundle. Unlike
+  `VITE_CARTO_API_KEY` beside it, which is designed to be published and
+  restricted to an origin, **a NASA FIRMS MAP_KEY cannot be restricted to a
+  domain at all.** Publishing it hands the account's transaction quota to
+  anyone who opens the JS.
+
+**So the key stays on the server.** `GET /api/firms/live`
+(`backend/app/firms_live.py`) holds `NASA_FIRMS_MAP_KEY`, fetches, parses the
+CSV and returns GeoJSON; `client.ts` gains `fetchLiveFirmsDetections` and
+`AuditLanding` loses its CSV parser and its `import.meta.env` read. The built
+bundle now contains `/api/firms/live` and no FIRMS host — checked in the
+`dist/` output, not assumed.
+
+**The route is deliberately flat, not audit-scoped.** `CLAUDE.md` says to
+build new endpoints audit-scoped; this is the exception that proves it. The
+layer is what the console shows *before* a scope exists, so there is no audit
+to scope it to. It is regional context, never evidence — nothing it returns is
+persisted, and the audit path still reads the committed, immutable 2019
+artifact so a review reproduces.
+
+**Rejected: setting `VITE_FIRMS_MAP_KEY` in Amplify.** It is one click and it
+makes the layer work. It also publishes a credential that cannot be
+restricted, which is a worse state than the dead layer it fixes.
+
+**Rejected: returning an empty FeatureCollection when the key is missing or
+FIRMS is down.** The route answers 503 and the console renders an explicit
+unavailable state. An empty regional layer is indistinguishable from "no
+fires are burning" — an observation nothing measured, which is exactly the
+class of claim the product boundary exists to prevent.
+
+Two things came free from moving server-side. The browser was requesting
+`world/1` — every VIIRS detection on Earth for 24 hours, several MB of CSV —
+and discarding everything outside Southeast Asia after downloading it; the
+area API takes a bounding box, so the fetch is now regional. And a 15-minute
+server-side cache means N visitors are one FIRMS transaction rather than N,
+against a per-key cap the landing page is the most exposed screen to.
+
+The response carries raw UTC `acquiredAt` rather than a precomputed age,
+because a response cached for 15 minutes would otherwise hand every later
+visitor a stale "now"; the client derives `ageHours` at render time, which is
+what the circle-fade paint expressions read.
+
+The key reaches the Lambda as `TF_VAR_nasa_firms_map_key` from a
+`NASA_FIRMS_MAP_KEY` GitHub secret, the same route `FLASK_SECRET_KEY` takes,
+and lands in Terraform state in plain text like that one — acceptable for a
+free, re-issuable key on a dev stack, and recorded in `infra/variables.tf`
+rather than left to be discovered.
+
+**The plan for this PR turned up a second, unrelated finding worth keeping.**
+`environment_variables` on `aws_amplify_app.console` is a Terraform-owned map
+and is replaced wholesale on every apply, so both variables that had been
+typed into the Amplify console by hand — `VITE_FIRMS_MAP_KEY` and
+`VITE_CARTO_API_KEY` — showed as deletions. For the FIRMS key that is the
+correct outcome and does the cleanup for us. For the Carto key it is a silent
+regression: the basemap would drop to unauthenticated, rate-limited tiles with
+nothing in the repository explaining why. `VITE_CARTO_API_KEY` is therefore
+declared in `console.tf` and fed by a `CARTO_API_KEY` GitHub *variable* — a
+variable, not a secret, because it is public by design and masking it would
+only hide it from us. The general rule: an Amplify environment variable that
+is not in `console.tf` does not exist past the next infra merge.
+
+**The published key is reused through the 2026-09-11 demo and rotated after
+it** (owner's call, 2026-09-10; tracked in #152). Recorded because a leaked
+credential left in place looks like an oversight six commits later. The
+reasoning: a FIRMS MAP_KEY carries a transaction quota and nothing else, so
+the whole downside is the landing layer answering 503 if someone else spends
+it, and this change is what stops the key being re-published on every
+subsequent build. Rotation is a secret swap with no code change.
 
 ---
 

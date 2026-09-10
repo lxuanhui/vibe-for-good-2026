@@ -149,6 +149,11 @@ resource "aws_lambda_function" "api" {
       AUDIT_STATE_TABLE = aws_dynamodb_table.audit_state.name
       BEDROCK_MODEL_ID  = var.bedrock_model_id
 
+      # Only the API function serves the landing map's live regional layer.
+      # The worker runs analysis over the committed 2019 artifact and never
+      # touches FIRMS, so it is not given the key.
+      NASA_FIRMS_MAP_KEY = var.nasa_firms_map_key
+
       # Unset locally, which is what makes `analysis_jobs.dispatch` run the
       # work inline for the dev server instead of reporting a job nothing
       # will ever pick up.

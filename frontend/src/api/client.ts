@@ -1,5 +1,5 @@
 import type { FeatureCollection } from './geojson'
-import type { AnalysisJob, AuditEventSummary, AuditPackReview, AuditProgression, AuditReport, AuditScope, BBox, DemoDatasetSummary, EventEvidenceResponse, EventStatus, FireEvent, InvestigationBundle, InvestigationMap, InvestigationReport, OverlayLayerId, StructuredAnalysis } from './types'
+import type { AnalysisJob, AuditEventSummary, AuditPackReview, AuditProgression, AuditReport, AuditScope, BBox, DemoDatasetSummary, EventEvidenceResponse, EventStatus, FireEvent, InvestigationBundle, InvestigationMap, InvestigationReport, LiveFirmsDetections, OverlayLayerId, StructuredAnalysis } from './types'
 import { getOverlay, isLayerAvailable } from './fixtures/overlays'
 import { REPORTS } from './fixtures/reports'
 
@@ -180,6 +180,20 @@ export async function removeFromAuditPack(auditId: string, eventId: string): Pro
 
 export async function fetchAuditReport(auditId: string): Promise<AuditReport> {
   return apiGet<AuditReport>(`/audits/${encodeURIComponent(auditId)}/report`)
+}
+
+/** Current regional NASA FIRMS detections for the landing map.
+
+  Proxied by the API rather than fetched from the browser: a FIRMS MAP_KEY
+  cannot be restricted to a domain, and Vite inlines every VITE_-prefixed
+  variable into the public bundle, so the key can only live server-side. The
+  API answers 503 when it has no key or FIRMS did not respond -- the caller
+  renders an explicit unavailable state, never an empty region, which would
+  read as "nothing is burning". */
+export async function fetchLiveFirmsDetections(signal?: AbortSignal): Promise<LiveFirmsDetections> {
+  const response = await fetch(`${API_BASE}/api/firms/live`, { signal })
+  if (!response.ok) throw new Error(`GET /api/firms/live failed with ${response.status}`)
+  return (await response.json()) as LiveFirmsDetections
 }
 
 export async function fetchEvents(opts?: { bbox?: BBox; since?: string; status?: EventStatus }): Promise<FireEvent[]> {

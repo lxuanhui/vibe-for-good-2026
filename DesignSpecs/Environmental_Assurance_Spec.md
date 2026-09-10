@@ -418,7 +418,16 @@ GET  /api/audits/{audit_id}/events/{event_id}/analyse
 POST /api/audits/{audit_id}/events/{event_id}/add-to-pack
 POST /api/audits/{audit_id}/report
 GET  /api/audits/{audit_id}/report
+GET  /api/firms/live
 ```
+
+`GET /api/firms/live` is deliberately not audit-scoped: it serves the landing
+screen's regional live thermal context, which exists *before* an audit scope
+does. It is a server-side proxy of the NASA FIRMS area API — the MAP_KEY
+cannot be domain-restricted, so it can never be shipped to the browser — and
+answers 503 rather than an empty FeatureCollection when the key is absent or
+FIRMS does not respond, because an empty regional layer would read as an
+observation that nothing is burning (decision log, 2026-09-10).
 
 `.../analyse` is asynchronous as built, and the paired `GET` above is what
 that added. POST records a job and returns 202; GET polls it and never spends

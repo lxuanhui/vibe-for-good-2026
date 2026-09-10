@@ -134,6 +134,16 @@ resource "aws_amplify_app" "console" {
     # produce a double slash.
     VITE_API_BASE_URL = trimsuffix(aws_apigatewayv2_stage.default.invoke_url, "/")
 
+    # Carto basemap tiles. Unlike a FIRMS MAP_KEY -- which is why
+    # GET /api/firms/live exists -- this key is designed to ship in the
+    # bundle and is restricted by origin in the Carto dashboard, so baking it
+    # in is the intended use, not a leak. It lives here rather than in the
+    # Amplify console for the same reason as the two variables below: this map
+    # is replaced wholesale on every apply, so a hand-typed value survives
+    # only until the next infra merge and then the basemap silently drops to
+    # unauthenticated, rate-limited tiles with nothing in the repo to explain it.
+    VITE_CARTO_API_KEY = var.carto_api_key
+
     # The monorepo root, and the second setting the console stores as an
     # environment variable rather than as app state -- the connect-repository
     # wizard writes exactly this when you tell it the app lives in a
