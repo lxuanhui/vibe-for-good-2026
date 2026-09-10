@@ -199,13 +199,22 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
   const taggedEdges = useMemo<TaggedGraphEdge[]>(() => {
     const edgeKey = (edge: { sourceEventId: string; targetEventId: string }) => `${edge.sourceEventId} ${edge.targetEventId}`
     const focusKeys = new Set((focusGraph?.edges ?? []).map(edgeKey))
+    const selected = new Set(registerSelection)
     return [
       ...(focusGraph?.edges ?? []).map((edge) => ({ ...edge, origin: 'focus' as const })),
       ...(selectionGraph?.edges ?? [])
         .filter((edge) => !focusKeys.has(edgeKey(edge)))
         .map((edge) => ({ ...edge, origin: 'selection' as const })),
-    ].filter((edge) => edge.distanceKm <= SCOPED_MAP_RELATIONSHIP_DISTANCE_KM)
-  }, [selectionGraph, focusGraph])
+    ].filter((edge) => {
+      if (edge.distanceKm > SCOPED_MAP_RELATIONSHIP_DISTANCE_KM) return false
+      const selectedPair = selected.has(edge.sourceEventId) && selected.has(edge.targetEventId)
+      // A one-event drawer graph can rediscover another selected event as a
+      // contextual neighbour. Do not let its distance-only fallback override
+      // the multi-select rule: selected pairs need an existing deterministic
+      // graph record before they can be drawn as a relationship.
+      return !selectedPair || edge.evidence?.[0]?.type === 'candidate_edge_fire_event_graph'
+    })
+  }, [selectionGraph, focusGraph, registerSelection])
 
   useEffect(() => {
     let active = true
@@ -256,7 +265,7 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
   const visibleGraphNodes = useMemo(() => graphNodes.filter((node) => eventOverlapsDay(node, activeDay)), [graphNodes, activeDay])
   const points = useMemo(() => mapPoints(visibleEvents, visibleGraphNodes), [visibleEvents, visibleGraphNodes])
   const edges = useMemo(() => graphEdges(visibleGraphNodes, taggedEdges), [visibleGraphNodes, taggedEdges])
-  const envelopes = useMemo(() => envelopePolygons(taggedEdges, focusedEventId), [taggedEdges, focusedEventId])
+  const envelopes = useMemo(() => envelopePolygons(taggedEdges, registerSelection), [taggedEdges, registerSelection])
   const [showSpreadEnvelopes, setShowSpreadEnvelopes] = useState(true)
   const center = useMemo<[number, number]>(() => scope.centroid ?? [116.25, -3.8], [scope.centroid])
   const light = southeastAsiaLight(clock)

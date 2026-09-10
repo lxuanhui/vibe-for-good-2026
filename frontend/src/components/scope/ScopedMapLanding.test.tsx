@@ -20,8 +20,8 @@ const edge = (sourceEventId: string, ownerEventId: string) => ({
 })
 
 describe('ScopedMapLanding propagation envelopes', () => {
-  it('renders only envelopes owned by the focused FireEvent', () => {
-    const result = envelopePolygons([edge('FE-ONE', 'FE-ONE'), edge('FE-TWO', 'FE-TWO')], 'FE-ONE')
+  it('renders only envelopes owned by explicitly selected FireEvents', () => {
+    const result = envelopePolygons([edge('FE-ONE', 'FE-ONE'), edge('FE-TWO', 'FE-TWO')], ['FE-ONE'])
 
     expect(result.features).toHaveLength(1)
     expect(result.features[0].properties).toEqual({ state: 'PROPAGATION_COMPATIBLE', sourceEventId: 'FE-ONE', targetEventId: 'FE-TARGET' })
@@ -32,7 +32,8 @@ describe('ScopedMapLanding propagation envelopes', () => {
     const withoutOwner = { ...owned, envelope: { ...owned.envelope, ownerEventId: undefined as unknown as string } }
 
     expect(envelopePolygons([owned])).toEqual({ type: 'FeatureCollection', features: [] })
-    expect(envelopePolygons([withoutOwner], 'FE-ONE')).toEqual({ type: 'FeatureCollection', features: [] })
+    expect(envelopePolygons([withoutOwner], ['FE-ONE'])).toEqual({ type: 'FeatureCollection', features: [] })
+    expect(envelopePolygons([owned], ['FE-OTHER'])).toEqual({ type: 'FeatureCollection', features: [] })
   })
 })
 
