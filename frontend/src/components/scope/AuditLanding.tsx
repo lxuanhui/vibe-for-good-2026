@@ -114,9 +114,17 @@ export function AuditLanding({ onStartAudit, onOpenContext }: { onStartAudit: ()
     return (url: string) => !url.includes('cartocdn.com') ? { url } : { url: `${url}${url.includes('?') ? '&' : '?'}key=${cartoApiKey}` }
   }, [cartoApiKey])
   const light = southeastAsiaLight(clock)
-  const status = firmsStatus === 'ready'
-    ? `${hotspots.features.length.toLocaleString()} thermal detections · past 24 h`
-    : firmsStatus === 'loading' ? 'Loading latest FIRMS detections…' : 'Live FIRMS context unavailable'
+  // Three states, not two. An empty layer and an unanswered one draw the same
+  // blank region, so the label is the only thing keeping them apart -- and a
+  // literal "0 thermal detections · past 24 h" reads as a measurement of the
+  // region rather than of what FIRMS returned.
+  const status = firmsStatus === 'loading'
+    ? 'Loading latest FIRMS detections…'
+    : firmsStatus === 'unavailable'
+      ? 'Live FIRMS context unavailable'
+      : hotspots.features.length === 0
+        ? 'FIRMS returned no detections · past 24 h'
+        : `${hotspots.features.length.toLocaleString()} thermal detections · past 24 h`
 
   return (
     <main className="relative h-screen overflow-hidden bg-bg text-text">
