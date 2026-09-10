@@ -31,7 +31,7 @@ apply an older decision without checking the entries above it.
 
 ## 2026-09-10 - Line endings are normalised by `.gitattributes`, so a Windows commit cannot manufacture a merge conflict
 
-**Status:** done · PR #<PR> · Closes #132
+**Status:** done · PR #184 · Closes #132
 
 **Decision.** A root `.gitattributes` sets `* text=auto eol=lf`: text is stored
 LF in the repository and checked out LF on every platform, whatever a
