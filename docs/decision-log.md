@@ -10,7 +10,7 @@ when changing that subsystem.
 |---|---|---|
 | Product boundary | Evidence supports human review; it never establishes blame, intent, or legal responsibility. | Standing constraints |
 | Audit flow | Scope-first: create an audit from uploaded GeoJSON before rendering FireEvents. The regional landing may show labelled FIRMS context only. | 2026-09-09, audit session / landing |
-| API state | Audit IDs and scope state persist in DynamoDB in deployed environments; in-memory state is local development only. | 2026-09-09, audit session / landing |
+| API state | Audit IDs and scope state persist in DynamoDB in deployed environments; in-memory state is local development only. Every write is revision-checked — there is no unconditional write path — and both backends implement the same compare-and-set. | 2026-09-09, audit session / landing; 2026-09-10, conditional writes |
 | Derived data | Clustered events, weather, imagery selection, peat context, and prepared graph data are offline artifacts, not request-time Lambda work. | 2026-09-09, graph; weather and imagery; 2026-09-08, clustering |
 | Investigation | Scores, review routing, graph edges, and propagation are separate deterministic evidence outputs; none establishes causation. | 2026-09-09, graph; review routing; 2026-09-08, triage / graph / surface growth |
 | AI interpretation | Claude runs only after an explicit auditor request, receives bounded EvidenceObjects plus graph summaries, and returns schema-validated Investigator/Skeptic findings retained with the audit session. | 2026-09-09, structured analysis |
@@ -26,6 +26,66 @@ when changing that subsystem.
 **Use this log:** entries retain the original diagnosis, rejected alternatives,
 and historical context. A later entry can supersede an earlier one; do not
 apply an older decision without checking the entries above it.
+
+---
+
+## 2026-09-10 - Every write to the audit store is revision-checked, in both backends
+
+**Status:** done · PR #190 · Closes #146
+
+**Decision.** `audit_store` has no unconditional write left. A caller picks an
+intent: `create`, which fails if the item already exists, or `update`, which
+re-reads, re-applies the mutation and compare-and-sets on the revision it
+read, retrying up to 8 times before raising. Items are held in the DynamoDB
+shape (`{audit_id, state, revision}`) in memory too, so both backends run the
+same code and differ only in the read and the compare-and-set. `audits`
+scope-setup writes and `analysis_jobs` job rows both go through it.
+
+**Why.** #183 gave pack and analysis mutations a conditional path but left
+`put()` — an unconditional whole-blob write — as the way scope setup and job
+rows persisted. That is only half a fix, and the asymmetry was the dangerous
+direction: a conditional write losing to a blob put *retries*, but a blob put
+landing between another writer's read and its write *wins silently*, dropping
+a pack entry or a completed assessment with no error and nothing in the log.
+Reaching it needed an auditor to re-upload a boundary or rebuild history while
+an assessment was running — narrow, but it is the whole bug class the issue
+exists to remove, and "safe because of the order the routes happen to run in"
+is not a property anything enforces.
+
+**The in-memory store implements the same compare-and-set, not a lock.**
+Wrapping the local read-modify-write in a `threading.Lock` would also prevent
+a lost write and was rejected: it serialises writers, so the retry path never
+runs locally and the two stores agree only by never being compared. The lock
+that is there covers the compare-and-set alone — exactly the span DynamoDB's
+conditional put makes atomic — so the same test bodies run against both and
+the local store fails the same way the deployed one would.
+
+**Rejected: `update_item` with attribute-level expressions** (the issue's
+option 2). It removes the collision rather than detecting it, but the session
+is one JSON blob by design — that is what keeps the auditor's private GeoJSON
+intact without a second scope representation — and attribute-level updates
+would mean decomposing it into DynamoDB attributes. A storage-model change to
+fix a write-path bug.
+
+**Rejected: splitting the analysis result out of the session** (option 3).
+Removes this collision and leaves the next one, which is the criticism the
+issue already makes of it.
+
+**`create` refuses to overwrite.** Audit ids are 96 bits of `token_urlsafe`,
+so a collision means a bug somewhere else — a retried create, an id reused
+deliberately — and overwriting would discard a live audit's scope. Failing is
+the better answer than silently continuing.
+
+**Verified.** The concurrency tests were each checked against the *old*
+behaviour, not just observed to pass: reverting the memory store to a plain
+read-modify-write fails four of them, and simulating the old `_save` (writing
+the blob it loaded, after another writer's read) drops the pack entry outright
+with a `KeyError`. 88 backend tests pass.
+
+**Open.** `analysis_jobs.dispatch` still guards duplicate work with a
+read-then-act: two requests arriving together for the same event can both read
+`NOT_RUN` and both start a job, billing the same assessment twice. The store
+now has the primitive to claim a job atomically; using it is #189.
 
 ---
 
@@ -462,6 +522,11 @@ revision-checked retry in `audit_store`, so overlapping Lambda requests merge
 against the latest session rather than silently replacing another selection.
 The job rows remain separate because their lifecycle and polling cadence are
 still independent of the engagement record.
+
+**Annotated 2026-09-10, PR #190 (#146).** The read-modify-write named above is
+no longer the store's weak point: there is no unconditional write left in
+`audit_store` at all, job rows included. The paragraph stands as the reason
+job rows were separated; it no longer describes a live hazard.
 
 **A stale `RUNNING` job does not wedge the endpoint.** A worker killed before
 it records an outcome would otherwise leave a job running forever, which the
