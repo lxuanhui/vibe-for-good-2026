@@ -18,6 +18,7 @@ when changing that subsystem.
 | Live regional context | The landing map's live NASA FIRMS layer is proxied by the API. A FIRMS MAP_KEY cannot be domain-restricted, so it can never ship in the bundle. Two days are fetched and filtered to a rolling 24 h here; a non-CSV body is an error, not an absence of fires. | 2026-09-10, FIRMS proxy; rolling window |
 | Map and imagery | Camera fitting is bounds-driven; map context is not an unscoped fire browser. Satellite display processing is deterministic and provenance-preserving. Investigation-sized Sentinel-1/2 context images are rendered once by the CDSE Process API, pinned to the scenes the evidence already names, and committed as static files under `frontend/public/imagery/`. | 2026-09-10, processed imagery; 2026-09-09, audit session / landing; 2026-09-08, Copernicus scenes |
 | Infrastructure | Flask runs on Lambda behind API Gateway; Terraform owns the deployed configuration; CORS is Flask-owned. | 2026-09-09, Amplify; 2026-09-07, Lambda / CORS |
+| Pipeline runtime | If the derivation ever moves in-request, the Lambda becomes a container image. The zip was measured at ~258 MB against the 250 MB limit; EC2 is never the answer to package size. Until then the committed artifact stays. | 2026-09-10, pipeline runtime; 2026-09-08, clustering |
 | Service selection | DynamoDB and S3 are authorised without a fresh argument each time; every service switched on gets a cost row in `docs/infra.md` in the same PR. | 2026-09-09, DynamoDB and S3 are authorised |
 | Frontend tests | Vitest + jsdom + Testing Library, run in CI. They guard behaviours the product boundary depends on — explicit trigger, honest not-run state, no chain-of-thought — not the map, which jsdom cannot draw. | 2026-09-10, frontend test runner |
 | Review period | The session's review period filters the register server-side, end-of-day inclusive, and every scope count is recomputed from the filtered set. The scope form's date pickers stay bounded to the coverage the artifact declares in `source.window`. | 2026-09-10, review period is a filter; review period bounds |
@@ -26,6 +27,76 @@ when changing that subsystem.
 **Use this log:** entries retain the original diagnosis, rejected alternatives,
 and historical context. A later entry can supersede an earlier one; do not
 apply an older decision without checking the entries above it.
+
+---
+
+## 2026-09-10 - If the pipeline ever runs in-request it runs as a Lambda container image, not a bigger zip and not EC2
+
+**Status:** decided, nothing built · PR #TBD · Closes #89
+
+**Decision.** The committed artifact stays the served path (the 2026-09-08
+clustering entry, unchanged in substance). The day a scope-driven derivation
+has to run per request, the API Lambda changes packaging to a container
+image: `package_type = "Image"`, an ECR repository, the image built in the
+Infra workflow, 10 GB limit. Same function, same API Gateway, same Terraform
+module; only packaging changes. EC2 is not on the path. Lambda's execution
+model (15 min, 10 GB memory) is not the constraint, only package size is,
+and an always-on instance costs at idle for no gain.
+
+**Why.** Measured on 2026-09-10 for the Lambda target
+(`--platform manylinux_2_28_aarch64 --python-version 3.13 --only-binary=:all:`),
+building the dependency set the closed PR #78 needed:
+
+| | |
+|---|---|
+| Dependencies, unzipped | 246 MB |
+| `data_pipeline/` packages, `golden/`, `backend/app` | 12 MB |
+| Total | ~258 MB against the 250 MB unzipped limit |
+| Zipped | 81 MB, over the 50 MB direct-upload limit, so S3-staged either way |
+
+Largest pieces: scipy 89 MB plus 31 MB of `scipy.libs`, pandas 43 MB, numpy
+27 MB plus 28 MB of `numpy.libs`, `pillow.libs` 16 MB. The 246 MB excludes
+`openmeteo-requests`, which did not resolve at all (below), so the real
+number is higher. No trimming closes a 10 percent gap that is mostly shared
+libraries, and a bundle that fits by a few MB today fails on the next
+Renovate bump.
+
+**Two things block the zip before size does.** Worth knowing whichever
+packaging is used, because the container build pins a platform too.
+
+1. `infra/scripts/build_lambda.sh` pins `manylinux2014_aarch64`
+   (`manylinux_2_17`). pandas 3.0.5, numpy 2.5.3 and scipy 1.18.1 publish
+   only `manylinux_2_28_aarch64` wheels for cp313 on aarch64, so pip fails
+   with `Could not find a version that satisfies the requirement
+   pandas>=3.0.5 (from versions: 2.2.3, ...)`. That reads as "pandas 3 does
+   not exist" and means "not for this tag". The current API bundle carries
+   none of these packages, so the pin is not wrong today; it is a trap for
+   whoever adds them.
+2. `openmeteo-requests` depends on `niquests`, which pulls `wassima` and
+   `jh2`, compiled packages with no wheel for a fixed Lambda platform, and
+   pip backtracks to `ResolutionImpossible`. The pipeline venv resolves it
+   because it builds for the local machine. A container image built on the
+   Lambda base image compiles or resolves them there; a zip cannot.
+
+**Rejected: trimming the zip to fit.** The gap is shared libraries, not
+pure-Python packages, and the platform-tag and `openmeteo-requests` problems
+remain whatever is cut.
+
+**Rejected: EC2 as the pipeline host.** The owner's order (2026-09-08) is
+zip, then container image, then EC2 only if Lambda's execution model is the
+problem. It is not. Recorded so package size is never again the reason an
+instance is proposed.
+
+**Rejected: building the container now, ahead of need.** Nothing serves a
+per-scope derivation yet, the demo path ships on the artifact, and an ECR
+repository plus image build is a deploy the day before the demo for a
+function nobody would call differently.
+
+**Open.** The build script's platform tag deserves a comment saying the error
+it produces is misleading; that file is under `infra/`, so the comment lands
+with the next infra change rather than as its own deploy. Moving the
+derivation in-request at all is a product decision with no issue yet; #161's
+filter was the artifact-side answer to user-defined review periods.
 
 ---
 
@@ -1518,6 +1589,14 @@ on every ruleset call.
 ## 2026-09-08 - Clustering runs offline; the API serves a committed artifact
 
 **Status:** done · PR #74
+
+> **Qualified 2026-09-10 by PR #TBD (#89).** The "about 200 MB" below was
+> measured at ~258 MB unzipped for the full pipeline dependency set, so the
+> zip does not fit at all, not merely "to the edge". The rejection of a
+> container is now conditional rather than open-ended: when the derivation
+> moves in-request, the packaging is a Lambda container image, decided in the
+> entry of that date. Everything else here still stands and the artifact is
+> still what is served.
 
 `GET /api/audits/{id}/events` returns FireEvents derived from real FIRMS
 observations: 20,471 detections in the 2019 haze window, clustered into 3,610
