@@ -24,7 +24,12 @@ from typing import Any
 
 import pandas as pd
 
-from data_pipeline.clustering.firms_clustering import FireEvent, cluster_events
+from data_pipeline.clustering.diagnostics import diagnose, format_summary
+from data_pipeline.clustering.firms_clustering import (
+    ClusteringParameters,
+    FireEvent,
+    cluster_run,
+)
 from data_pipeline.triage.stage1 import (
     Stage1TriageResult,
     summarize_triage,
@@ -167,8 +172,22 @@ def main() -> None:
     observations = load_observations()
     print(f"==> {len(observations):,} usable detections from {SOURCE_JSON.name}")
 
-    events, _annotated = cluster_events(observations)
+    # Thresholds come from the environment only so a developer can regenerate
+    # under a different radius to see what changes; the committed artifact is
+    # always the defaults. Say loudly when it is not, because an artifact
+    # built under an override looks identical from the outside, and the
+    # `source.clustering` block below is the only place it is recorded.
+    parameters = ClusteringParameters.from_env()
+    if not parameters.is_default:
+        print(
+            f"==> WARNING: clustering under {parameters.source} overrides "
+            f"({parameters.spatial_threshold_km:g} km / {parameters.temporal_threshold_hours:g} h), "
+            "not the defaults the committed artifact is built with"
+        )
+    run = cluster_run(observations, parameters)
+    events = run.events
     print(f"==> {len(events):,} FireEvents after clustering")
+    print(format_summary(diagnose(run, raw_observation_count=raw_observations)))
 
     triage_results = triage_events(events, observations)
     summary = summarize_triage(triage_results)
@@ -193,6 +212,14 @@ def main() -> None:
             "qualifiedObservations": len(observations),
             "excluded": "low-confidence detections",
             "note": "Real observations. Clustering and Stage-1 triage are derived, not observed.",
+            # The thresholds this artifact was clustered under, so a reader
+            # can tell a default build from an override without re-running.
+            "clustering": {
+                "algorithmVersion": parameters.to_dict()["algorithm_version"],
+                "spatialThresholdKm": parameters.spatial_threshold_km,
+                "temporalThresholdHours": parameters.temporal_threshold_hours,
+                "source": parameters.source,
+            },
         },
         "audits": {
             AUDIT_ID: {

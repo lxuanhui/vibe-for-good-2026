@@ -29,6 +29,62 @@ apply an older decision without checking the entries above it.
 
 ---
 
+## 2026-09-10 - Clustering thresholds are an explicit, validated value recorded in the artifact; diagnostics are a developer command, not an API field
+
+**Status:** done · PR #215 · Closes #86
+
+**Decision.** `ClusteringParameters` is the one place the spatial and
+temporal thresholds live. It validates at construction (zero, negative,
+NaN, infinite, above 50 km / 720 h, or a non-number all fail at the call
+site), reads developer overrides from `FIRMS_CLUSTER_SPATIAL_KM` /
+`FIRMS_CLUSTER_TEMPORAL_HOURS` only through `from_env()`, and records
+itself in the artifact's `source.clustering` block with an algorithm
+version. The committed artifact is always the defaults (2 km / 72 h); an
+override is printed as a warning at export. `cluster_run` returns the same
+events plus what the run did (pairs within radius, pairs accepted, the
+widest accepted link) and each FireEvent carries its own link count and
+widest link. `data_pipeline.clustering.diagnostics` turns that into the
+compression chain, size distribution, singleton and large-event counts, a
+threshold sweep, and sub-cluster lobes at 1 km for the largest events. It
+runs from the command line and during export; nothing deployed reads it.
+
+**Why.** #86 asked whether a low event count is real structure or
+over-merging. The answer had to be measured, not argued, and the
+measurement had to be repeatable by the other person. Measured on the full
+2019 window at the defaults: 21,519 raw, 20,471 qualified, 3,610 events;
+419,239 pairs within 2 km, 378,619 accepted, 40,620 kept apart by the
+72 h rule; widest accepted link 2.0 km / 71.1 h. Sweep: 4,952 events at
+1 km / 24 h, 3,610 at the defaults, 2,029 at 5 km / 120 h. The largest
+event stays at roughly 1,100 observations across the whole grid, so the
+mega-events are in the data, not in the radius. At 1 km the top five
+events resolve into 6, 2, 10, 2 and 3 lobes, which is the honest way to
+describe them: one complex, several lobes, still one event.
+
+**Rejected: serving diagnostics or lobes through the API for the demo.**
+Either needs a regenerated artifact under `backend/app/data/`, and
+committing that deploys the day before the demo. The scope block already
+carries raw, qualified and event counts from real pipeline execution
+(2026-09-10, review period is a filter), which is the compact compression
+summary the issue's optional item asked for. Surfacing lobes is #214.
+
+**Rejected: silently falling back to the default on a malformed override.**
+A developer who set the variable meant it. A typo that quietly produced the
+default artifact would look identical to a real run and be committed as
+one. Malformed raises naming the variable.
+
+**Rejected: raising a threshold to reduce the event count, or lowering one
+to split mega-events.** Both manufacture a number. The sweep shows either
+direction moves the total by a third without touching the largest events,
+which is the opposite of what a reviewer would want.
+
+**Open.** `complexity/fire_complexity.py` counts thermal lobes at 2 km, the
+same radius the events were clustered at, so `distinct_thermal_lobes` is
+always 1 for every event in the artifact (0 of 1,842 multi-observation
+events have more). That is #213, not fixed here because it
+changes a served metric and so needs regeneration.
+
+---
+
 ## 2026-09-10 - Analysis findings get a register and a word cap in the prompt, not a second model to rewrite them
 
 **Status:** done · PR #200 · Closes #199 · Refs #198, #194
