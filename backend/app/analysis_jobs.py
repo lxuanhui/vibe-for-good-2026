@@ -74,7 +74,13 @@ def _write(audit_id: str, event_id: str, **fields: Any) -> dict[str, Any]:
         record.update({"audit_id": key, "auditId": audit_id, "eventId": event_id, **fields})
 
     record = audit_store.update(key, mutate, create_if_missing=True)
-    assert record is not None  # create_if_missing never returns None
+    if record is None:
+        # Unreachable: `create_if_missing` returns None only for an absent
+        # item, which it has just created. Stated as a raise rather than an
+        # `assert` because asserts are stripped under -O, and this narrows the
+        # type for the line below -- silently passing None on would surface as
+        # a confusing envelope failure instead of the invariant that broke.
+        raise RuntimeError(f"Audit store returned no row for job {key}")
     return _envelope(record)
 
 
