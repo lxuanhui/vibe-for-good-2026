@@ -149,7 +149,7 @@ it('enables the scoped FIRMS overlay without a focused FireEvent', async () => {
   render(<ScopedMapLanding scope={scope} onOpenScope={() => undefined} onOpenRegister={() => undefined} onViewReport={() => undefined} />)
   await screen.findByRole('list', { name: 'Available observation dates' })
   expect(screen.queryByTestId('map')).toBeTruthy()
-  fireEvent.click(screen.getByRole('switch'))
+  fireEvent.click(screen.getByRole('switch', { name: 'FIRMS Hotspots' }))
 
   await waitFor(() => expect(document.querySelector('[data-source-id="scoped-firms-hotspots"]')).toBeTruthy())
   expect(fetchAuditOverlayMock).toHaveBeenCalledWith('audit-1', 'firms', { bbox: scope.buffer_bbox, date: undefined })

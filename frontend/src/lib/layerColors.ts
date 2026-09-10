@@ -23,11 +23,23 @@ export const FIRE_EVENT_COLORS = {
 // doesn't specify exact colors.
 export const LAYER_COLORS: Record<OverlayLayerId, string> = {
   firms: FIRMS_HOTSPOT_COLORS.point,
+  groundwater: '#38bdf8',
+  peatclsm: '#a78bfa',
+  'soil-moisture': '#2dd4bf',
   'sar-backscatter': '#6fb3a6',
   khg: '#f97316',
   concessions: '#8b96a8',
   'fire-complex-links': '#ef4444',
 }
+
+export const HYDROLOGY_RAMP_COLORS = {
+  groundwaterLow: '#2563eb',
+  groundwaterMid: '#38bdf8',
+  groundwaterHigh: '#fbbf24',
+  soilMoistureLow: '#f97316',
+  soilMoistureMid: '#facc15',
+  soilMoistureHigh: '#2dd4bf',
+} as const
 
 export const KHG_CLASSIFICATION_COLORS = {
   protected_dome: '#f97316',

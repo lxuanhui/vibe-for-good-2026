@@ -3,7 +3,7 @@ import { Layer, Map, Source, type MapLayerMouseEvent } from 'react-map-gl/maplib
 import type { Feature, FeatureCollection, Geometry, LineString, Point } from 'geojson'
 import type { AnalysisJob, AuditEventSummary, AuditScope, EventEvidenceResponse, InvestigationMap, InvestigationMapNode, StructuredAnalysis } from '../../api/types'
 import { addToAuditPack, fetchAuditRegister, fetchInvestigationBundle, fetchInvestigationMap, generateInvestigationAnalysis } from '../../api/client'
-import { AUDIT_SCOPE_BOUNDARY_COLOR, AUDIT_SCOPE_BUFFER_COLOR, FIRE_EVENT_COLORS, FIRMS_HOTSPOT_COLORS, SURFACE_FIRE_ENVELOPE_COLOR } from '../../lib/layerColors'
+import { AUDIT_SCOPE_BOUNDARY_COLOR, AUDIT_SCOPE_BUFFER_COLOR, FIRE_EVENT_COLORS, FIRMS_HOTSPOT_COLORS, HYDROLOGY_RAMP_COLORS, LAYER_COLORS, SURFACE_FIRE_ENVELOPE_COLOR } from '../../lib/layerColors'
 import { useAppStore } from '../../store/useAppStore'
 import { useScopedOverlay } from '../../api/hooks'
 import { Button } from '../ui/Button'
@@ -153,6 +153,12 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
   const activeDay = selectedDay && days.includes(selectedDay) ? selectedDay : null
   const firmsVisible = useAppStore((state) => state.layerVisibility.firms)
   const firmsOverlay = useScopedOverlay(scope.audit_id, 'firms', activeDay, scope.buffer_bbox, firmsVisible)
+  const groundwaterVisible = useAppStore((state) => state.layerVisibility.groundwater)
+  const groundwaterOverlay = useScopedOverlay(scope.audit_id, 'groundwater', activeDay, scope.buffer_bbox, groundwaterVisible)
+  const peatclsmVisible = useAppStore((state) => state.layerVisibility.peatclsm)
+  const peatclsmOverlay = useScopedOverlay(scope.audit_id, 'peatclsm', activeDay, scope.buffer_bbox, peatclsmVisible)
+  const soilMoistureVisible = useAppStore((state) => state.layerVisibility['soil-moisture'])
+  const soilMoistureOverlay = useScopedOverlay(scope.audit_id, 'soil-moisture', activeDay, scope.buffer_bbox, soilMoistureVisible)
   const [isPlaying, setIsPlaying] = useState(false)
   const [showPeatland, setShowPeatland] = useState(false)
   const [evidenceReloadToken, setEvidenceReloadToken] = useState(0)
@@ -409,6 +415,9 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
           {buffer && <Source id="audit-context-buffer" type="geojson" data={buffer}><Layer id="audit-context-buffer-line" type="line" paint={{ 'line-color': AUDIT_SCOPE_BUFFER_COLOR, 'line-width': 1.5, 'line-dasharray': [2, 2], 'line-opacity': 0.9 }} /></Source>}
           {boundary && <Source id="audit-scope-boundary" type="geojson" data={boundary}><Layer id="audit-scope-fill" type="fill" paint={{ 'fill-color': AUDIT_SCOPE_BOUNDARY_COLOR, 'fill-opacity': 0.08 }} /><Layer id="audit-scope-line" type="line" paint={{ 'line-color': AUDIT_SCOPE_BOUNDARY_COLOR, 'line-width': 2 }} /></Source>}
           {showPeatland && <Source id="peatland-context" type="geojson" data="/peatland-indonesia.geojson"><Layer id="peatland-context-fill" type="fill" paint={{ 'fill-color': '#a855f7', 'fill-opacity': 0.22 }} /><Layer id="peatland-context-line" type="line" paint={{ 'line-color': '#c084fc', 'line-width': 0.7, 'line-opacity': 0.7 }} /></Source>}
+          {groundwaterVisible && groundwaterOverlay && <Source id="scoped-groundwater" type="geojson" data={groundwaterOverlay}><Layer id="scoped-groundwater-points" type="circle" paint={{ 'circle-radius': 13, 'circle-blur': 0.8, 'circle-color': ['interpolate', ['linear'], ['get', 'value'], -5, HYDROLOGY_RAMP_COLORS.groundwaterLow, -1, HYDROLOGY_RAMP_COLORS.groundwaterMid, 0.15, HYDROLOGY_RAMP_COLORS.groundwaterHigh], 'circle-opacity': 0.5 }} /></Source>}
+          {peatclsmVisible && peatclsmOverlay && <Source id="scoped-peatclsm" type="geojson" data={peatclsmOverlay}><Layer id="scoped-peatclsm-points" type="circle" paint={{ 'circle-radius': 13, 'circle-blur': 0.8, 'circle-color': LAYER_COLORS.peatclsm, 'circle-opacity': 0.45 }} /></Source>}
+          {soilMoistureVisible && soilMoistureOverlay && <Source id="scoped-soil-moisture" type="geojson" data={soilMoistureOverlay}><Layer id="scoped-soil-moisture-points" type="circle" paint={{ 'circle-radius': 13, 'circle-blur': 0.8, 'circle-color': ['interpolate', ['linear'], ['get', 'value'], 0, HYDROLOGY_RAMP_COLORS.soilMoistureLow, 0.2, HYDROLOGY_RAMP_COLORS.soilMoistureMid, 0.45, HYDROLOGY_RAMP_COLORS.soilMoistureHigh], 'circle-opacity': 0.5 }} /></Source>}
           {edges.features.length > 0 && <Source id="fireevent-graph" type="geojson" data={edges}><Layer id="fireevent-graph-line" type="line" paint={{
             'line-color': GRAPH_LINE_COLOR,
             // Use the deterministic relationship state already supplied by
@@ -462,6 +471,7 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
           {loading && <div role="status" className="mt-3 text-sm text-text-muted">Loading real audit FireEvents…</div>}
           {!loading && !error && events.length === 0 && <div className="mt-3 text-sm text-text-muted">No events intersect this audit scope and buffer.</div>}
           <Button className="mt-2 w-full" onClick={() => setShowPeatland((shown) => !shown)}>{showPeatland ? 'HIDE PEATLAND' : 'SHOW PEATLAND'}</Button>
+          {(groundwaterVisible && groundwaterOverlay?.metadata?.status === 'unavailable' || peatclsmVisible && peatclsmOverlay?.metadata?.status === 'unavailable' || soilMoistureVisible && soilMoistureOverlay?.metadata?.status === 'unavailable') && <div role="status" className="mt-2 rounded border border-border bg-bg p-2 text-[11px] leading-4 text-text-faint">Hydrology coverage is unavailable for the selected cache. No values are being substituted.</div>}
           {envelopes.features.length > 0 && <Button className="mt-2 w-full" onClick={() => setShowSpreadEnvelopes((shown) => !shown)}>{showSpreadEnvelopes ? 'HIDE SPREAD ENVELOPES' : 'SHOW SPREAD ENVELOPES'}</Button>}
         </div>
         <div className="p-4">

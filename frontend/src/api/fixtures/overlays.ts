@@ -170,6 +170,9 @@ export function isLayerAvailable(layer: OverlayLayerId | RasterLayerId, date: st
     case 'khg':
     case 'concessions':
     case 'fire-complex-links':
+    case 'groundwater':
+    case 'peatclsm':
+    case 'soil-moisture':
       return true
   }
 }
@@ -186,5 +189,9 @@ export function getOverlay(layer: OverlayLayerId, date: string) {
       return CONCESSIONS
     case 'fire-complex-links':
       return FIRE_COMPLEX_LINKS
+    case 'groundwater':
+    case 'peatclsm':
+    case 'soil-moisture':
+      return featureCollection([])
   }
 }

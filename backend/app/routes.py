@@ -308,7 +308,7 @@ def get_live_firms_detections():
 @api.get("/audits/<audit_id>/overlays/<layer>")
 def get_audit_overlay(audit_id: str, layer: str):
     """Serve an audit-scoped overlay from the same population as the register."""
-    if layer != "firms":
+    if layer not in {"firms", "groundwater", "peatclsm", "soil-moisture"}:
         return jsonify(error=f"Unknown audit overlay {layer}"), 404
     if audit_events.history_status(audit_id) != "AVAILABLE":
         return jsonify(error=f"No reconstructed history for audit {audit_id}"), 404
@@ -323,4 +323,6 @@ def get_audit_overlay(audit_id: str, layer: str):
             date = raw_date
     except audit_events.FilterError as exc:
         return jsonify(error=str(exc)), 400
-    return jsonify(audit_events.firms_overlay(audit_id, bbox=bbox, date=date))
+    if layer == "firms":
+        return jsonify(audit_events.firms_overlay(audit_id, bbox=bbox, date=date))
+    return jsonify(audit_events.hydrology_overlay(audit_id, layer, bbox=bbox, date=date))

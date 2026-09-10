@@ -30,6 +30,29 @@ apply an older decision without checking the entries above it.
 
 ---
 
+## 2026-09-10 - Scoped Map hydrology reads the PEATCLSM cache as sparse heatmap points
+
+**Status.** done · #241
+
+**Decision.** Add audit-scoped `groundwater`, `peatclsm`, and `soil-moisture`
+overlay routes. They read only the deployable SMAP L4 PEATCLSM CSV and
+metadata produced by #240, return sparse point features for MapLibre heatmap
+rendering, and include source, units, coverage, limitations, and availability
+metadata. When #240 has only catalogued CMR or a variable has no valid rows,
+the route returns an empty collection with an explicit unavailable reason.
+
+**Why.** The cache is gridded context, not a collection of interactive events;
+rendering each cell as a feature would add unnecessary map work. An empty
+response without metadata would also look like no hydrology exists, so missing
+coverage must be visible. The layers remain independent and are not used for
+fire-cause or company-level scoring.
+
+**Rejected: frontend fixtures or derived groundwater.** Fixtures would violate
+the real-cache requirement, while deriving a water table from soil moisture
+would contradict #240's source limitation.
+
+---
+
 ## 2026-09-10 - SMAP L4 PEATCLSM cache records peat water level explicitly
 
 **Status:** done · #240

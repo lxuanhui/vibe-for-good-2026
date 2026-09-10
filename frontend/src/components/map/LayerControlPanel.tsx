@@ -34,6 +34,9 @@ const GEOJSON_LAYERS: { id: OverlayLayerId; label: string; swatch: ReactNode; ca
     swatch: <Dot color={LAYER_COLORS.firms} />,
     caption: `Scoped raw observations from NASA FIRMS. Date filtering follows the observation timeline (${PIPELINE_FIRMS_DATE_RANGE[0]} → ${PIPELINE_FIRMS_DATE_RANGE[1]}).`,
   },
+  { id: 'groundwater', label: 'Groundwater / water-table depth', swatch: <Dot color={LAYER_COLORS.groundwater} />, caption: 'PEATCLSM depth relative to peat surface (m); cached coverage only.' },
+  { id: 'peatclsm', label: 'PEATCLSM water flux', swatch: <Dot color={LAYER_COLORS.peatclsm} />, caption: 'Free-surface water flux (kg m-2 s-1); model context.' },
+  { id: 'soil-moisture', label: 'Soil moisture', swatch: <Dot color={LAYER_COLORS['soil-moisture']} />, caption: 'SMAP L4 surface layer, 0-5 cm (m3/m3).' },
   { id: 'sar-backscatter', label: 'SAR backscatter (VH drop)', swatch: <Dot color={LAYER_COLORS['sar-backscatter']} /> },
   {
     id: 'khg',
@@ -62,7 +65,7 @@ export function LayerControlPanel({ scoped = false }: { scoped?: boolean }) {
     <div className="pointer-events-auto w-64 rounded-lg border border-border-strong bg-panel/95 p-3 shadow-lg backdrop-blur">
       <div className="mb-2 text-[11px] font-semibold tracking-wide text-text-faint uppercase">Layers</div>
       <div className="space-y-1">
-        {(scoped ? GEOJSON_LAYERS.filter((layer) => layer.id === 'firms') : GEOJSON_LAYERS).map((l) => (
+        {(scoped ? GEOJSON_LAYERS.filter((layer) => ['firms', 'groundwater', 'peatclsm', 'soil-moisture'].includes(layer.id)) : GEOJSON_LAYERS).map((l) => (
           <Toggle
             key={l.id}
             label={l.label}

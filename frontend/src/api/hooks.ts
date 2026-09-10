@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { FeatureCollection as MapFeatureCollection, GeoJsonProperties, Geometry } from 'geojson'
 import type { FeatureCollection } from './geojson'
-import type { BBox, FireEvent, InvestigationReport, OverlayLayerId } from './types'
+import type { BBox, FireEvent, HydrologyOverlayMetadata, InvestigationReport, OverlayLayerId } from './types'
 import * as client from './client'
 import { fetchPipelineFirms } from './fixtures/pipelineFirms'
 
@@ -47,8 +47,8 @@ export function useScopedOverlay(
   date: string | null,
   bbox: BBox | null | undefined,
   enabled: boolean,
-): MapFeatureCollection<Geometry, GeoJsonProperties> | null {
-  const [data, setData] = useState<MapFeatureCollection<Geometry, GeoJsonProperties> | null>(null)
+): (MapFeatureCollection<Geometry, GeoJsonProperties> & { metadata?: HydrologyOverlayMetadata }) | null {
+  const [data, setData] = useState<(MapFeatureCollection<Geometry, GeoJsonProperties> & { metadata?: HydrologyOverlayMetadata }) | null>(null)
   const minLon = bbox?.minLon
   const minLat = bbox?.minLat
   const maxLon = bbox?.maxLon
@@ -63,7 +63,7 @@ export function useScopedOverlay(
       ? undefined
       : { minLon, minLat, maxLon, maxLat }
     client.fetchAuditOverlay(auditId, layer, { bbox: overlayBbox, date: date ?? undefined }).then((result) => {
-      if (active) setData(result as MapFeatureCollection<Geometry, GeoJsonProperties>)
+      if (active) setData(result as MapFeatureCollection<Geometry, GeoJsonProperties> & { metadata?: HydrologyOverlayMetadata })
     })
     return () => { active = false }
   }, [auditId, layer, date, minLon, minLat, maxLon, maxLat, enabled])

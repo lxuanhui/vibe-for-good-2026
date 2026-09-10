@@ -16,6 +16,7 @@ reconstruction actually runs, and `history_status` says which case a caller is
 in rather than returning a bare 404.
 """
 
+import csv
 import gzip
 import json
 import math
@@ -35,6 +36,14 @@ from app.review_routing import attach_routing, routing_diagnostics
 DATA_DIR = Path(__file__).parent / "data"
 EVENTS_PATH = DATA_DIR / "audit_events.json.gz"
 TRIAGE_PATH = DATA_DIR / "audit_triage_detail.json.gz"
+HYDROLOGY_CSV_PATH = DATA_DIR / "peat_cache" / "smap_peatclsm_2019_demo.csv"
+HYDROLOGY_METADATA_PATH = DATA_DIR / "peat_cache" / "smap_peatclsm_2019_demo.metadata.json"
+HYDROLOGY_WINDOW = ("2019-09-01", "2019-09-10")
+HYDROLOGY_LIMITATIONS = [
+    "SMAP L4 is a model analysis informed by radiometer observations, not a well measurement.",
+    "The 9 km grid is coarser than a management unit and is not a local groundwater observation.",
+    "Hydrology context does not establish fire cause, persistence, or responsibility.",
+]
 
 # Stage-1 outcomes, canonical spec §10.
 VALID_STATES = frozenset({"LIKELY_FIRE", "LIKELY_NON_FIRE", "AMBIGUOUS"})
@@ -732,6 +741,68 @@ def firms_overlay(
                 },
             })
     return {"type": "FeatureCollection", "features": features}
+
+
+def hydrology_overlay(
+    audit_id: str, layer: str, bbox: tuple[float, float, float, float] | None = None,
+    date: str | None = None,
+) -> dict[str, Any] | None:
+    """Read the #240 cached subset as sparse points for MapLibre heatmaps.
+
+    The cache CSV is intentionally a deployable backend artifact rather than a
+    frontend fixture. If #240 only catalogued the source, the response stays a
+    valid empty collection and explains that absence in metadata.
+    """
+    if get_audit(audit_id) is None:
+        return None
+    metadata: dict[str, Any] = {}
+    if HYDROLOGY_METADATA_PATH.exists():
+        try:
+            metadata = json.loads(HYDROLOGY_METADATA_PATH.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            metadata = {}
+    coverage = metadata.get("temporal_coverage") or {"start": HYDROLOGY_WINDOW[0], "end": HYDROLOGY_WINDOW[1]}
+    spatial = metadata.get("spatial_coverage") or {"bbox": [116.0, -4.05, 116.5, -3.55]}
+    variables = metadata.get("variables", {})
+    config = {
+        "groundwater": ("groundwater_water_table_depth", "m", "PEATCLSM water-table depth relative to mean peat surface"),
+        "peatclsm": ("free_surface_water_on_peat_flux", "kg m-2 s-1", "PEATCLSM free-surface water flux"),
+        "soil-moisture": ("surface_soil_moisture", "m3/m3", "SMAP L4 surface soil moisture, 0-5 cm vertical average"),
+    }
+    variable, unit, label = config[layer]
+    variable_info = variables.get(variable, {})
+    field = {
+        "groundwater": "depth_to_water_table_from_surface_in_peat_m",
+        "peatclsm": "free_surface_water_on_peat_flux_kg_m2_s",
+        "soil-moisture": "surface_soil_moisture_m3_m3",
+    }[layer]
+    rows = []
+    if HYDROLOGY_CSV_PATH.exists():
+        with HYDROLOGY_CSV_PATH.open(newline="", encoding="utf-8") as stream:
+            rows = list(csv.DictReader(stream))
+    available = bool(rows) and any(row.get(field) for row in rows) and (
+        layer != "groundwater" or variable_info.get("status") == "available"
+    )
+    reason = "Cached rows are available." if available else (
+        variable_info.get("reason") or "No materialized cached subset is available for this layer."
+    )
+    features: list[dict[str, Any]] = []
+    if available and (date is None or coverage["start"] <= date <= coverage["end"]):
+        for row in rows:
+            if not row.get(field):
+                continue
+            lon, lat = float(row["longitude"]), float(row["latitude"])
+            if bbox and not (bbox[0] <= lon <= bbox[2] and bbox[1] <= lat <= bbox[3]):
+                continue
+            features.append({
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [lon, lat]},
+                "properties": {
+                    "value": float(row[field]), "unit": unit,
+                    "source": "NASA NSIDC DAAC SPL4SMGP v7", "label": label,
+                },
+            })
+    return {"type": "FeatureCollection", "features": features, "metadata": {"layer": layer, "status": "available" if available else "unavailable", "unit": unit if available else None, "source": "NASA NSIDC DAAC SPL4SMGP v7", "coverage": {"start": coverage["start"], "end": coverage["end"], "bbox": spatial.get("bbox")}, "reason": reason, "limitations": HYDROLOGY_LIMITATIONS}}
 
 
 def _evidence_object(
