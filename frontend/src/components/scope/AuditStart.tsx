@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import type { AuditScope } from '../../api/types'
 import { buildFireHistory, createAuditReview, fetchDemoDatasetSummary, uploadAuditScope, uploadAuditScopeGeometry } from '../../api/client'
 import { buildScopePreview, DEFAULT_MANAGEMENT_UNIT_GEOMETRY } from '../../lib/scope'
+import { INDONESIA_FILL_COLOR } from '../../lib/layerColors'
 import { Button } from '../ui/Button'
 import { ScopePreviewMap } from './ScopePreviewMap'
 
@@ -225,6 +226,7 @@ export function AuditStart({ onReady, overlay = false, fullScreen = false, onClo
               <h2 className="mt-1 text-sm font-semibold">Boundary and context buffer</h2>
             </div>
             <div className="space-y-1 text-right text-[10px] text-text-muted">
+              <div><span className="mr-1 inline-block h-2 w-2 rounded-sm" style={{ backgroundColor: INDONESIA_FILL_COLOR }} />Indonesia context</div>
               <div><span className="mr-1 inline-block h-2 w-2 rounded-full bg-accent" />Audit boundary</div>
               <div><span className="mr-1 inline-block h-2 w-2 rounded-full bg-status-moderate" />Context buffer</div>
             </div>

@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { Map, Source, Layer, type MapRef } from 'react-map-gl/maplibre'
+import type { FeatureCollection, Geometry } from 'geojson'
 import type { ScopePreview } from '../../lib/scope'
-import { AUDIT_SCOPE_BOUNDARY_COLOR, AUDIT_SCOPE_BUFFER_COLOR } from '../../lib/layerColors'
+import indonesiaBoundary from '../../assets/indonesia-province-simple.json'
+import { AUDIT_SCOPE_BOUNDARY_COLOR, AUDIT_SCOPE_BUFFER_COLOR, INDONESIA_FILL_COLOR } from '../../lib/layerColors'
 import 'maplibre-gl/dist/maplibre-gl.css'
+
+const indonesiaBoundaryGeoJson = indonesiaBoundary as unknown as FeatureCollection<Geometry>
 
 export function ScopePreviewMap({ scope }: { scope: ScopePreview }) {
   const initialViewState = useMemo(() => {
@@ -31,6 +35,18 @@ export function ScopePreviewMap({ scope }: { scope: ScopePreview }) {
       maxZoom={14}
       attributionControl={false}
     >
+      <Source id="indonesia-geographic-context" type="geojson" data={indonesiaBoundaryGeoJson}>
+        <Layer
+          id="indonesia-geographic-context-fill"
+          type="fill"
+          paint={{ 'fill-color': INDONESIA_FILL_COLOR, 'fill-opacity': 0.5 }}
+        />
+        <Layer
+          id="indonesia-geographic-context-line"
+          type="line"
+          paint={{ 'line-color': INDONESIA_FILL_COLOR, 'line-width': 0.8, 'line-opacity': 0.9 }}
+        />
+      </Source>
       <Source id="audit-context-buffer" type="geojson" data={scope.bufferGeometry}>
         <Layer
           id="audit-context-buffer-fill"
