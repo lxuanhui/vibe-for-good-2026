@@ -5,6 +5,7 @@ import type { AnalysisJob, AuditEventSummary, AuditScope, EventEvidenceResponse,
 import { addToAuditPack, fetchAuditRegister, fetchInvestigationBundle, fetchInvestigationMap, generateInvestigationAnalysis } from '../../api/client'
 import { AUDIT_SCOPE_BOUNDARY_COLOR, AUDIT_SCOPE_BUFFER_COLOR, FIRE_EVENT_COLORS, FIRMS_HOTSPOT_COLORS, HYDROLOGY_RAMP_COLORS, LAYER_COLORS, SOLAR_NIGHT_COLOR, SURFACE_FIRE_ENVELOPE_COLOR } from '../../lib/layerColors'
 import { REGIONAL_MAP_BOUNDS } from '../../lib/regionalBounds'
+import { Brand } from '../brand/Brand'
 import { useAppStore } from '../../store/useAppStore'
 import { useScopedOverlay } from '../../api/hooks'
 import { Button } from '../ui/Button'
@@ -382,7 +383,7 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
 
   return <div className="scoped-map-print-root relative flex h-full w-full flex-col bg-bg text-text">
     <header className="scoped-map-print-hide flex h-14 shrink-0 items-center justify-between border-b border-border-strong bg-panel px-5">
-      <div><div className="text-sm font-semibold tracking-wide">Environmental Assurance Console</div><div className="text-[10px] uppercase tracking-[0.2em] text-text-faint">{scope.review_start} → {scope.review_end}</div></div>
+      <Brand subtitle={<>{scope.review_start} → {scope.review_end}</>} />
       <div className="flex flex-wrap items-center gap-2"><Button onClick={onOpenScope}>EDIT SCOPE</Button><Button onClick={onOpenRegister}>OPEN FIRE REGISTER</Button></div>
     </header>
     <div className="scoped-map-print-hide border-b border-border-strong bg-panel px-5 py-2.5" aria-label="Observation timeline">

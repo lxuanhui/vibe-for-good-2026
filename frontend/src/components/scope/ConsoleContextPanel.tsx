@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { fetchDemoDatasetSummary } from '../../api/client'
 import type { RefObject } from 'react'
 import type { DemoDatasetSummary } from '../../api/types'
+import { APP_DESCRIPTOR } from '../../lib/brand'
+import { Brand } from '../brand/Brand'
 
 function Chevron() {
   return (
@@ -69,6 +71,7 @@ export function ConsoleContextPanel({ onDismiss, closeRef }: { onDismiss: () => 
     <div className="p-6">
       <div className="flex items-start justify-between gap-6">
         <div className="max-w-[68ch]">
+          <Brand subtitle={APP_DESCRIPTOR} className="mb-4" />
           <h2 id="console-context-heading" className="text-lg font-semibold tracking-tight">
             What this console does
           </h2>

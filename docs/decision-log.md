@@ -22,11 +22,53 @@ when changing that subsystem.
 | Service selection | DynamoDB and S3 are authorised without a fresh argument each time; every service switched on gets a cost row in `docs/infra.md` in the same PR. | 2026-09-09, DynamoDB and S3 are authorised |
 | Frontend tests | Vitest + jsdom + Testing Library, run in CI. They guard behaviours the product boundary depends on — explicit trigger, honest not-run state, no chain-of-thought — not the map, which jsdom cannot draw. | 2026-09-10, frontend test runner |
 | Review period | The session's review period filters the register server-side, end-of-day inclusive, and every scope count is recomputed from the filtered set. The scope form's date pickers stay bounded to the coverage the artifact declares in `source.window`. | 2026-09-10, review period is a filter; review period bounds |
+| Brand | The console is `atmosclear.ai`; name, descriptor and description live in `frontend/src/lib/brand.ts`, the earth mark in `components/brand/EarthMark.tsx`, mirrored by hand in `public/favicon.svg` and `index.html`. | 2026-09-10, atmosclear.ai |
 | Line endings | `.gitattributes` normalises all text to LF in the repository and on checkout; binary artifacts are declared explicitly rather than left to git's heuristic. | 2026-09-10, line endings |
 
 **Use this log:** entries retain the original diagnosis, rejected alternatives,
 and historical context. A later entry can supersede an earlier one; do not
 apply an older decision without checking the entries above it.
+
+---
+
+## 2026-09-10 - The console is named atmosclear.ai, and its mark is a graticule earth held in one component
+
+**Status:** done · PR #268 · Closes #257
+
+**Decision.** The product name is `atmosclear.ai`, chosen by the team on
+2026-09-10. It replaces the provisional "Environmental Assurance Console",
+which survives only as the descriptor line under the wordmark
+(`APP_DESCRIPTOR`). The name, descriptor and one-paragraph description live
+in `frontend/src/lib/brand.ts`, and every header renders them through
+`components/brand/Brand.tsx`, so a rename is one constant. The mark is
+`components/brand/EarthMark.tsx`: a line-drawn globe made of a circle, one
+meridian ellipse and three parallels, inheriting `currentColor` so it takes
+the accent token like everything else. `public/favicon.svg` and
+`public/apple-touch-icon.png` (rendered from it at 180 px) repeat the same
+geometry by hand with the dark ground and accent hex baked in, because a
+static asset cannot read Tailwind tokens. `index.html` repeats the name and
+description by hand too, because Vite's entry is static and cannot import
+`brand.ts`; both places carry a comment naming the other.
+
+**Why.** #257 asked for the name, an earth logo and filled HTML headers the
+day before the demo, and the strings had been scattered across seven
+components as literals. Putting them behind one module was the only way to
+change the name in the same PR without missing a header, and it is what
+makes the next rename cheap.
+
+**Rejected: a coastline globe.** A recognisable Indonesia outline at 16 px
+is a blob, and a globe that reads as a specific landmass invites the
+reading that the product covers that landmass and nothing else. The
+graticule reads as "earth" at every size the console uses, from the favicon
+to the report eyebrow, and says nothing about jurisdiction.
+
+**Rejected: importing brand.ts into index.html.** Vite only processes
+`<script type="module">` in the entry; the `<title>` and `<meta>` tags are
+static. A plugin to template them was not worth adding for two strings.
+
+**Open.** The colour palette is still provisional (PRODUCT.md, Brand
+Commitments). The mark is drawn in the accent teal; if the palette changes,
+`favicon.svg` and the touch icon must be re-rendered by hand.
 
 ---
 

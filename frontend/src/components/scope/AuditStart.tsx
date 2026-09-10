@@ -4,6 +4,7 @@ import { buildFireHistory, createAuditReview, fetchDemoDatasetSummary, setAuditS
 import { buildScopePreview, circlePolygon, DEFAULT_MANAGEMENT_UNIT_GEOMETRY, DEFAULT_SCOPE_POINT, POINT_SCOPE_LIMITS } from '../../lib/scope'
 import { INDONESIA_FILL_COLOR } from '../../lib/layerColors'
 import { Button } from '../ui/Button'
+import { Brand } from '../brand/Brand'
 import { ScopePreviewMap } from './ScopePreviewMap'
 
 function errorMessage(error: unknown): string {
@@ -205,10 +206,7 @@ export function AuditStart({ onReady, overlay = false, fullScreen = false, onClo
   return (
     <div className={`flex h-full flex-col overflow-hidden bg-bg text-text ${overlay && !fullScreen ? 'rounded-xl border border-border-strong shadow-2xl' : 'min-h-screen'}`}>
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-border-strong bg-panel px-6">
-        <div>
-          <div className="text-sm font-semibold tracking-wide">Environmental Assurance Console</div>
-          <div className="text-[10px] uppercase tracking-[0.2em] text-text-faint">Create audit review</div>
-        </div>
+        <Brand subtitle="Create audit review" />
         {onClose && <Button onClick={onClose}>CLOSE</Button>}
       </header>
 

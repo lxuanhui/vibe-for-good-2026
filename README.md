@@ -18,7 +18,7 @@ Where any of the three conflict with the canonical file, the canonical file wins
 ## Layout
 
 ```
-frontend/       Environmental Assurance Console — Vite + React + TypeScript
+frontend/       atmosclear.ai console — Vite + React + TypeScript
                 (MapLibre, Tailwind, zustand, recharts). Dev server on :5173.
 backend/        Flask API. Local dev server on :5001 mounted at /api;
                 the same app runs on AWS Lambda via lambda_handler.py.
