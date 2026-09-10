@@ -199,6 +199,7 @@ The demo must never blur which data is real and which is a fixture.
 | Skill | Load when |
 |---|---|
 | `evidence-framing` | Writing any text describing a fire event or an agent prompt |
+| `ui-copy` | Writing or editing any text a console user sees, including fixtures and prompts. No em-dashes |
 | `add-map-layer` | Adding or changing a console overlay layer |
 | `add-data-source` | Adding or re-checking a source in `data_pipeline/` |
 | `deploy-api` | Deploying or debugging the Lambda-hosted API |
