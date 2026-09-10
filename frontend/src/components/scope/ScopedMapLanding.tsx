@@ -464,7 +464,6 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
         <div className="p-4">
           <div className="flex items-center justify-between">
             <div className="text-sm uppercase tracking-[0.16em] text-accent">Investigation candidates</div>
-            <span className="rounded border border-border px-1.5 py-0.5 text-xs text-text-muted">{packed.length} IN REPORT</span>
           </div>
           <p className="mt-2 text-sm leading-5 text-text-muted">Select scoped FireEvents for the audit report.</p>
           {packError && <div role="alert" className="mt-2 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-sm text-red-200">{packError}</div>}
