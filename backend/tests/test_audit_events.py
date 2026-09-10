@@ -334,11 +334,17 @@ def test_new_audit_report_contains_the_events_selected_for_that_audit(client):
     }
     assert client.post(f"/api/audits/{audit_id}/scope/upload", json=scope).status_code == 200
     assert client.post(f"/api/audits/{audit_id}/history/build").status_code == 202
-    event_ids = [event["eventId"] for event in client.get(f"/api/audits/{audit_id}/events?limit=2").get_json()["events"]]
-    assert len(event_ids) == 2 and event_ids[0] != event_ids[1]
+    event_ids = [event["eventId"] for event in client.get(f"/api/audits/{audit_id}/events?limit=4").get_json()["events"]]
+    assert len(event_ids) == 4 and len(set(event_ids)) == 4
     for event_id in event_ids:
         assert client.post(f"/api/audits/{audit_id}/events/{event_id}/add-to-pack", json={}).status_code == 200
 
     report = client.get(f"/api/audits/{audit_id}/report").get_json()
     assert report["auditId"] == audit_id
     assert {item["event"]["eventId"] for item in report["selectedFireEvents"]} == set(event_ids)
+    assert report["maps"]["selectedEventIds"] == event_ids
+    assert {item["eventId"] for item in report["chronology"]} == set(event_ids)
+    # The report's explicit generation controls use this list. Every selected
+    # cached FireEvent must therefore reach the report-generation input, not
+    # merely appear in a transient scoped-map selection.
+    assert report["analysisNotRunEventIds"] == event_ids

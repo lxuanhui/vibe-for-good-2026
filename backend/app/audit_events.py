@@ -45,10 +45,9 @@ VALID_STATES = frozenset({"LIKELY_FIRE", "LIKELY_NON_FIRE", "AMBIGUOUS"})
 DEFAULT_LIMIT = 500
 MAX_LIMIT = 2000
 
-# Persistence is intentionally process-local until the repository chooses a
-# durable metadata store. The pack is engagement-scoped and contains only
-# event IDs plus human review fields; report assembly always re-reads the
-# current structured evidence artifact.
+# The pack is engagement-scoped and contains only event IDs plus human review
+# fields; report assembly always re-reads the current structured evidence
+# artifact.  Session-backed audits persist this through ``audit_store``.
 AUDIT_PACKS: dict[str, dict[str, dict[str, Any]]] = {}
 AUDIT_ANALYSES: dict[str, dict[str, dict[str, Any]]] = {}
 
@@ -777,24 +776,25 @@ def add_to_pack(audit_id: str, event_id: str, note: str = "", disposition: str =
     if pack is None or find_event(audit_id, event_id) is None:
         return None
     existing = pack.get(event_id, {})
-    pack[event_id] = {
+    entry = {
         "eventId": event_id,
         "note": note.strip()[:2000],
         "disposition": disposition.strip()[:80],
         "addedAt": existing.get("addedAt", datetime.now(UTC).isoformat()),
     }
     if get_audit_session(audit_id):
-        audit_store.update_pack(audit_id, pack)
-    return pack[event_id]
+        return audit_store.add_pack_entry(audit_id, entry)
+    pack[event_id] = entry
+    return entry
 
 
 def remove_from_pack(audit_id: str, event_id: str) -> bool | None:
     pack = _pack(audit_id)
     if pack is None:
         return None
-    pack.pop(event_id, None)
     if get_audit_session(audit_id):
-        audit_store.update_pack(audit_id, pack)
+        return audit_store.remove_pack_entry(audit_id, event_id)
+    pack.pop(event_id, None)
     return True
 
 

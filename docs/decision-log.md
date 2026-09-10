@@ -324,6 +324,12 @@ analysis while the console saves a pack review would silently drop one of the
 two writes. That read-modify-write is now the store's weak point rather than
 a theoretical one -- filed as #146 rather than fixed here.
 
+**Annotated 2026-09-10, issue #164.** Pack and analysis mutations now use a
+revision-checked retry in `audit_store`, so overlapping Lambda requests merge
+against the latest session rather than silently replacing another selection.
+The job rows remain separate because their lifecycle and polling cadence are
+still independent of the engagement record.
+
 **A stale `RUNNING` job does not wedge the endpoint.** A worker killed before
 it records an outcome would otherwise leave a job running forever, which the
 console cannot tell from slow work and which blocks every retry. A job whose
