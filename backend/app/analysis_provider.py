@@ -86,6 +86,10 @@ For every supplied hypothesis, return exactly one finding with:
   {REASON_WORD_CAP} words). Include one only where the answer would change
   the support_score.
 
+If the input ends with previous_reply_rejected, a reply to this exact input was
+rejected for the reason it states. Correct that and return the complete
+assessment, every hypothesis included.
+
 Return one to three targeted unresolved_questions across the assessment, each
 an object with question, evidence_ids and reason. Every verification_question
 and every unresolved_question names at least one supplied ID in evidence_ids:

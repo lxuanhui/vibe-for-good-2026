@@ -128,6 +128,29 @@ def test_all_four_calls_in_an_assessment_share_one_cached_prefix(bedrock):
     assert "opponent_assessment" not in next(iter(prefixes))
 
 
+def test_a_retry_carrying_the_rejection_reuses_the_cached_prefix(bedrock):
+    """The reason the first reply was rejected rides in the per-call tail.
+
+    If it landed in the shared block the retry would rewrite the cache it was
+    meant to read, and the four-call assessment would pay for a fifth prefix.
+    """
+    from dataclasses import replace
+
+    bedrock.outcomes = [OK_RESPONSE, OK_RESPONSE]
+    first = _input(AgentRole.SKEPTIC, 1)
+    retry = replace(first, rejection="agent output must contain exactly one finding for each hypothesis")
+
+    analysis_provider.bedrock_runner(first)
+    analysis_provider.bedrock_runner(retry)
+
+    prefixes = [call["messages"][0]["content"][0]["text"] for call in bedrock.calls]
+    tails = [call["messages"][0]["content"][2]["text"] for call in bedrock.calls]
+    assert prefixes[0] == prefixes[1]
+    assert "previous_reply_rejected" not in tails[0]
+    assert tails[1].endswith('"previous_reply_rejected":"agent output must contain exactly one finding for each hypothesis"}')
+    assert "previous_reply_rejected" in analysis_provider._PROMPT
+
+
 def test_a_provider_that_rejects_the_cache_point_is_retried_once_uncached(bedrock):
     bedrock.outcomes = [
         ClientError(
