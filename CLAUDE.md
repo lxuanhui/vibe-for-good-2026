@@ -75,7 +75,7 @@ re-litigating.
 ```bash
 # frontend
 cd frontend && npm install && npm run dev      # :5173, proxies /api -> :5001
-cd frontend && npm run lint && npm run build
+cd frontend && npm run lint && npm test && npm run build
 
 # backend
 cd backend && uv venv && uv pip install -e ".[dev]"
@@ -223,7 +223,7 @@ Wait for CI before merging. Which workflow runs depends on the paths touched:
 
 | Workflow | Runs on | Does |
 |---|---|---|
-| `CI` | every PR | frontend lint + build, backend ruff + pytest, data pipeline pytest |
+| `CI` | every PR | frontend lint + Vitest + build, backend ruff + pytest, data pipeline pytest |
 | `Security` | every PR, plus weekly | gitleaks over the full history; `npm audit` and `pip-audit` |
 | `Infra` | `infra/**`, `backend/**`, or its own file | posts the Terraform plan as a PR comment, applies on merge to `main` |
 

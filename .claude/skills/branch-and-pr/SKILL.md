@@ -118,7 +118,7 @@ Wait for checks. Which workflows run depends on the paths touched:
 
 | Workflow | Runs on | Blocks on |
 |---|---|---|
-| `CI` | every PR | frontend lint + build, backend ruff + pytest |
+| `CI` | every PR | frontend lint + Vitest + build, backend ruff + pytest |
 | `Security` | every PR, plus weekly | committed secrets (gitleaks, full history), `npm audit` and `pip-audit` for runtime deps, `trivy config` over `infra/` at HIGH/CRITICAL, `ruff --select S` |
 | `Infra` | `infra/**`, `backend/**`, or its own file | `terraform plan`; **merging to `main` applies it** |
 
@@ -145,6 +145,11 @@ nothing proves it *runs*. This has already cost the team once: a maplibre-gl
 major passed every check and the map then rendered nothing in the browser,
 because Vite's dependency pre-bundler emitted a broken worker chunk and
 MapLibre blocked silently with no console error.
+
+The frontend Vitest suite narrows this a little and does not close it: jsdom
+renders no canvas and loads no tiles, so a component test can prove the report
+asked the API for an analysis and rendered the result, and still tell you
+nothing about whether the map draws.
 
 So for any change that touches rendering, the map, or a frontend dependency,
 open the app and look at it before merging. If you cannot, say so in the PR
