@@ -5,13 +5,31 @@ import { fetchAuditRegister } from '../../api/client'
 import { useAppStore } from '../../store/useAppStore'
 import { Button } from '../ui/Button'
 
+type RegisterFilters = {
+  triage: AuditEventSummary['triage']['state'] | 'ALL'
+  sufficiency: AuditEventSummary['evidenceSufficiency'] | 'ALL'
+  priority: AuditEventSummary['investigationPriority'] | 'ALL'
+  workflow: AuditEventSummary['reviewState'] | 'ALL'
+  firstDetected: string
+  minMaxFrp: string
+}
+
+type SortKey = 'eventId' | 'firstDetection' | 'observationCount' | 'maxFrp' | 'triage' | 'evidenceSufficiency' | 'investigationPriority' | 'reviewState'
+
+const defaultFilters: RegisterFilters = { triage: 'ALL', sufficiency: 'ALL', priority: 'ALL', workflow: 'ALL', firstDetected: '', minMaxFrp: '' }
+
+const sortLabels: Record<SortKey, string> = {
+  eventId: 'FireEvent ID', firstDetection: 'First detected', observationCount: 'FIRMS observations', maxFrp: 'Max FRP',
+  triage: 'Stage-1 state', evidenceSufficiency: 'Sufficiency', investigationPriority: 'Priority', reviewState: 'Workflow',
+}
+
 function eventRows(events: AuditEventSummary[], selected: string[], toggle: (id: string) => void) {
   return events.map((event) => (
     <tr key={event.eventId} className="border-b border-border/60 hover:bg-panel-raised">
-      <td className="px-3 py-2"><input aria-label={`Select ${event.eventId}`} type="checkbox" checked={selected.includes(event.eventId)} onChange={() => toggle(event.eventId)} /></td>
+      <td className="px-3 py-2"><input className="h-5 w-5 cursor-pointer accent-accent" aria-label={`Select ${event.eventId}`} type="checkbox" checked={selected.includes(event.eventId)} onChange={() => toggle(event.eventId)} /></td>
       <td className="px-3 py-2 font-mono">{event.eventId}</td>
       <td className="px-3 py-2 text-text-muted">{event.firstDetection.slice(0, 10)}</td>
-      <td className="px-3 py-2 text-right">{event.observationCount}</td>
+      <td className="px-3 py-2 text-right tabular-nums" aria-label={`${event.observationCount} FIRMS observations`}>{event.observationCount.toLocaleString()}</td>
       <td className="px-3 py-2 text-text-muted">{event.triage.state}</td>
       <td className="px-3 py-2 text-text-muted">{event.evidenceSufficiency}</td>
       <td className="px-3 py-2">{event.investigationPriority}</td>
@@ -19,6 +37,16 @@ function eventRows(events: AuditEventSummary[], selected: string[], toggle: (id:
       <td className="px-3 py-2 text-right">{event.maxFrp?.toFixed(1) ?? '—'}</td>
     </tr>
   ))
+}
+
+function selectOptions(values: string[]) {
+  return values.map((value) => <option key={value} value={value}>{value.replaceAll('_', ' ')}</option>)
+}
+
+function compareEvents(a: AuditEventSummary, b: AuditEventSummary, key: SortKey) {
+  const aValue = key === 'maxFrp' ? a.maxFrp ?? -Infinity : key === 'triage' ? a.triage.state : a[key]
+  const bValue = key === 'maxFrp' ? b.maxFrp ?? -Infinity : key === 'triage' ? b.triage.state : b[key]
+  return String(aValue).localeCompare(String(bValue), undefined, { numeric: true, sensitivity: 'base' })
 }
 
 function SummaryHelp({ label, children }: { label: string; children: ReactNode }) {
@@ -91,6 +119,9 @@ export function HistoricalInvestigation({ scope, onOpenScopedMap }: { scope: Aud
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [progression, setProgression] = useState<AuditProgression | null>(null)
+  const [filters, setFilters] = useState<RegisterFilters>(defaultFilters)
+  const [sortKey, setSortKey] = useState<SortKey>('firstDetection')
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
 
   const loadRegister = useCallback(async () => {
     setLoading(true)
@@ -110,14 +141,50 @@ export function HistoricalInvestigation({ scope, onOpenScopedMap }: { scope: Aud
   }, [scope.audit_id, scope.review_start, scope.review_end, scope.buffer_bbox])
   useEffect(() => { void loadRegister() }, [loadRegister])
   const selectedEvents = useMemo(() => events.filter((event) => selection.includes(event.eventId)), [events, selection])
+  const filteredEvents = useMemo(() => {
+    const minFrp = filters.minMaxFrp === '' ? null : Number(filters.minMaxFrp)
+    return events.filter((event) => (
+      (filters.triage === 'ALL' || event.triage.state === filters.triage) &&
+      (filters.sufficiency === 'ALL' || event.evidenceSufficiency === filters.sufficiency) &&
+      (filters.priority === 'ALL' || event.investigationPriority === filters.priority) &&
+      (filters.workflow === 'ALL' || event.reviewState === filters.workflow) &&
+      (!filters.firstDetected || event.firstDetection.slice(0, 10) === filters.firstDetected) &&
+      (minFrp === null || (event.maxFrp !== null && event.maxFrp >= minFrp))
+    )).sort((a, b) => {
+      const result = compareEvents(a, b, sortKey)
+      return sortDirection === 'asc' ? result : -result
+    })
+  }, [events, filters, sortDirection, sortKey])
+  const allFilteredSelected = filteredEvents.length > 0 && filteredEvents.every((event) => selection.includes(event.eventId))
+  const updateFilter = <K extends keyof RegisterFilters>(key: K, value: RegisterFilters[K]) => setFilters((current) => ({ ...current, [key]: value }))
+  const changeSort = (key: SortKey) => {
+    if (sortKey === key) setSortDirection((current) => current === 'asc' ? 'desc' : 'asc')
+    else { setSortKey(key); setSortDirection('asc') }
+  }
+  const toggleFilteredSelection = () => filteredEvents.forEach((event) => {
+    const selected = selection.includes(event.eventId)
+    if (allFilteredSelected && selected) toggleSelection(event.eventId)
+    if (!allFilteredSelected && !selected) toggleSelection(event.eventId)
+  })
 
   return <div className="flex h-full flex-col bg-bg text-text">
     <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border-strong bg-panel px-5 py-3"><div><div className="text-sm font-semibold">Historical Fire Register</div><div className="text-xs text-text-muted">{progression ? `${progression.fireEvents.toLocaleString()} FireEvents` : 'FireEvents'} · {scope.review_start} → {scope.review_end} · {scope.context_buffer_km} km context buffer</div></div><div className="flex items-center gap-2">{onOpenScopedMap && <Button onClick={onOpenScopedMap}>VIEW SCOPED MAP</Button>}<Button variant="primary" disabled={!selection.length || !onOpenScopedMap} onClick={onOpenScopedMap}>{`INVESTIGATE ON MAP (${selection.length})`}</Button></div></div>
     {progression && <RegisterSummary progression={progression} />}
-    {scope.historyBuild && <div className="border-b border-border bg-panel px-5 py-2 text-[11px] text-text-muted">Cached real historical dataset · build handoff {scope.historyBuild.duration_ms.toFixed(2)} ms · counts below are from the current audit artifact.</div>}
+    <section aria-label="Register filters" className="shrink-0 border-b border-border bg-panel px-5 py-3">
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="grid gap-1 text-[10px] uppercase tracking-[0.08em] text-text-faint">Stage-1 state<select className="min-w-36 rounded border border-border-strong bg-bg px-2 py-1.5 text-xs normal-case tracking-normal text-text" value={filters.triage} onChange={(event) => updateFilter('triage', event.target.value as RegisterFilters['triage'])}><option value="ALL">All states</option>{selectOptions(['LIKELY_FIRE', 'LIKELY_NON_FIRE', 'AMBIGUOUS'])}</select></label>
+        <label className="grid gap-1 text-[10px] uppercase tracking-[0.08em] text-text-faint">Sufficiency<select className="min-w-32 rounded border border-border-strong bg-bg px-2 py-1.5 text-xs normal-case tracking-normal text-text" value={filters.sufficiency} onChange={(event) => updateFilter('sufficiency', event.target.value as RegisterFilters['sufficiency'])}><option value="ALL">All levels</option>{selectOptions(['SUFFICIENT', 'PARTIAL', 'INSUFFICIENT'])}</select></label>
+        <label className="grid gap-1 text-[10px] uppercase tracking-[0.08em] text-text-faint">Priority<select className="min-w-28 rounded border border-border-strong bg-bg px-2 py-1.5 text-xs normal-case tracking-normal text-text" value={filters.priority} onChange={(event) => updateFilter('priority', event.target.value as RegisterFilters['priority'])}><option value="ALL">All bands</option>{selectOptions(['LOW', 'MEDIUM', 'HIGH', 'URGENT'])}</select></label>
+        <label className="grid gap-1 text-[10px] uppercase tracking-[0.08em] text-text-faint">Workflow<select className="min-w-40 rounded border border-border-strong bg-bg px-2 py-1.5 text-xs normal-case tracking-normal text-text" value={filters.workflow} onChange={(event) => updateFilter('workflow', event.target.value as RegisterFilters['workflow'])}><option value="ALL">All workflow states</option>{selectOptions(['SCREENED', 'REVIEW_RECOMMENDED', 'HUMAN_REVIEW'])}</select></label>
+        <label className="grid gap-1 text-[10px] uppercase tracking-[0.08em] text-text-faint">First detected<input className="rounded border border-border-strong bg-bg px-2 py-1.5 text-xs normal-case tracking-normal text-text" type="date" value={filters.firstDetected} onChange={(event) => updateFilter('firstDetected', event.target.value)} /></label>
+        <label className="grid gap-1 text-[10px] uppercase tracking-[0.08em] text-text-faint">Min Max FRP<input className="w-28 rounded border border-border-strong bg-bg px-2 py-1.5 text-xs normal-case tracking-normal text-text" type="number" min="0" step="0.1" placeholder="MW" value={filters.minMaxFrp} onChange={(event) => updateFilter('minMaxFrp', event.target.value)} /></label>
+        <button className="rounded border border-border-strong px-2 py-1.5 text-[11px] text-text-muted hover:text-text" type="button" onClick={() => setFilters(defaultFilters)}>CLEAR FILTERS</button>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px] text-text-muted"><span>{filteredEvents.length.toLocaleString()} of {events.length.toLocaleString()} FireEvents shown</span><button className="rounded border border-border-strong px-2 py-1 text-text hover:bg-panel-raised" type="button" onClick={toggleFilteredSelection} disabled={!filteredEvents.length}>{allFilteredSelected ? 'CLEAR SHOWN SELECTION' : 'SELECT SHOWN'}</button><label className="flex items-center gap-2">Sort by<select className="rounded border border-border-strong bg-bg px-2 py-1 text-xs text-text" value={sortKey} onChange={(event) => changeSort(event.target.value as SortKey)}>{Object.entries(sortLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label><button className="rounded border border-border-strong px-2 py-1 text-text hover:bg-panel-raised" type="button" onClick={() => setSortDirection((current) => current === 'asc' ? 'desc' : 'asc')} aria-label={`Sort ${sortLabels[sortKey]} ${sortDirection === 'asc' ? 'descending' : 'ascending'}`}>{sortDirection === 'asc' ? '↑ ASC' : '↓ DESC'}</button></div>
+    </section>
     {error && <div role="alert" className="flex items-center justify-between gap-3 border-b border-status-urgent/40 bg-status-urgent/10 px-5 py-2 text-xs text-red-200"><span>{error}</span><Button onClick={() => void loadRegister()}>RETRY</Button></div>}
     {loading && <div role="status" className="flex flex-1 items-center justify-center text-sm text-text-muted">Loading current-audit FireEvent register…</div>}
-    {!loading && <div className="flex-1 overflow-auto"><table className="w-full border-collapse text-xs"><thead className="sticky top-0 bg-panel"><tr className="border-b border-border"><th className="px-3 py-2 text-left">Select</th><th className="px-3 py-2 text-left">FireEvent ID</th><th className="px-3 py-2 text-left">First detected</th><th className="px-3 py-2 text-right">Observations</th><th className="px-3 py-2 text-left">Stage-1 state</th><th className="px-3 py-2 text-left">Sufficiency</th><th className="px-3 py-2 text-left">Priority</th><th className="px-3 py-2 text-left">Workflow</th><th className="px-3 py-2 text-right">Max FRP</th></tr></thead><tbody>{eventRows(events, selection, toggleSelection)}</tbody></table></div>}
+    {!loading && <div className="flex-1 overflow-auto"><table className="w-full min-w-[1060px] border-collapse text-xs"><colgroup><col className="w-20" /><col className="w-[18%]" /><col className="w-[13%]" /><col className="w-[12%]" /><col className="w-[14%]" /><col className="w-[13%]" /><col className="w-[10%]" /><col className="w-[14%]" /><col className="w-[10%]" /></colgroup><thead className="sticky top-0 bg-panel"><tr className="border-b border-border"><th className="px-3 py-2 text-left">Select</th><th className="px-3 py-2 text-left">FireEvent ID</th><th className="px-3 py-2 text-left">First detected</th><th className="px-3 py-2 text-right">FIRMS clustering</th><th className="px-3 py-2 text-left">Stage-1 state</th><th className="px-3 py-2 text-left">Sufficiency</th><th className="px-3 py-2 text-left">Priority</th><th className="px-3 py-2 text-left">Workflow</th><th className="px-3 py-2 text-right">Max FRP (MW)</th></tr></thead><tbody>{eventRows(filteredEvents, selection, toggleSelection)}</tbody></table>{filteredEvents.length === 0 && <p className="p-8 text-center text-sm text-text-muted">No FireEvents match the current register filters.</p>}</div>}
     {selectedEvents.length > 0 && <div className="shrink-0 border-t border-border bg-panel px-5 py-2 text-xs text-text-muted">Selected FireEvents remain selected on the scoped map.</div>}
   </div>
 }
