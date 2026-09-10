@@ -25,9 +25,36 @@ function SummaryHelp({ label, children }: { label: string; children: ReactNode }
   return <details className="relative inline-block align-middle"><summary aria-label={`About ${label}`} className="flex h-4 w-4 cursor-pointer list-none items-center justify-center rounded-full border border-border-strong text-[10px] text-text-muted hover:text-text"><span aria-hidden="true">?</span></summary><div role="note" className="absolute right-0 z-10 mt-2 w-64 rounded border border-border-strong bg-panel-raised p-3 text-left text-[11px] leading-4 text-text shadow-lg">{children}</div></details>
 }
 
+type RoutingDistribution = { count: number; percentage: number }
+
+function distributionCount(distribution: Record<string, RoutingDistribution>, key: string) {
+  return distribution[key]?.count ?? 0
+}
+
+function routingLabel(value: string) {
+  return value.replaceAll('_', ' ')
+}
+
+function RoutingSummary({ progression }: { progression: AuditProgression }) {
+  const { routingDiagnostics: diagnostics } = progression
+  const higherPriorityCount = distributionCount(diagnostics.priorityDistribution, 'HIGH') + distributionCount(diagnostics.priorityDistribution, 'URGENT')
+  const workflowItems = Object.entries(diagnostics.reviewStateDistribution)
+  const sufficiencyItems = Object.entries(diagnostics.evidenceSufficiencyDistribution)
+
+  return <section aria-label="Decision-oriented routing summary" className="border-b border-border bg-panel px-5 py-3">
+    <div className="mb-2 flex items-center gap-2"><h2 className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-faint">How to read routing</h2><SummaryHelp label="routing summary">Priority, workflow, and evidence sufficiency answer different questions. They are separate diagnostics over the same FireEvent population.</SummaryHelp></div>
+    <div className="grid gap-3 md:grid-cols-3">
+      <div className="rounded border border-border bg-bg px-3 py-2"><div className="text-[10px] uppercase tracking-[0.1em] text-text-faint">Higher priority</div><div className="mt-1 text-sm font-semibold text-accent">{higherPriorityCount.toLocaleString()} of {progression.fireEvents.toLocaleString()} FireEvents</div><p className="mt-1 text-[11px] leading-4 text-text-muted">HIGH or URGENT routing bands for review attention; this is not a finding about cause or responsibility.</p></div>
+      <div className="rounded border border-border bg-bg px-3 py-2"><div className="text-[10px] uppercase tracking-[0.1em] text-text-faint">Workflow status</div><div className="mt-1 space-y-0.5 text-[11px] text-text-muted">{workflowItems.map(([state, distribution]) => <div key={state}><span className="font-semibold text-text">{distribution.count.toLocaleString()}</span> {routingLabel(state).toLowerCase()}{state === 'HUMAN_REVIEW' ? ' = enter the human-review queue' : state === 'REVIEW_RECOMMENDED' ? ' = remain available for inspection' : ' = screened without queue escalation'}</div>)}</div><p className="mt-1 text-[11px] leading-4 text-text-muted">Ambiguous events can be review-recommended without automatic human escalation.</p></div>
+      <div className="rounded border border-border bg-bg px-3 py-2"><div className="text-[10px] uppercase tracking-[0.1em] text-text-faint">Evidence sufficiency</div><div className="mt-1 space-y-0.5 text-[11px] text-text-muted">{sufficiencyItems.map(([status, distribution]) => <div key={status}><span className="font-semibold text-text">{distribution.count.toLocaleString()}</span> {routingLabel(status).toLowerCase()}</div>)}</div><p className="mt-1 text-[11px] leading-4 text-text-muted">This describes evidence coverage, independently of priority and workflow.</p></div>
+    </div>
+  </section>
+}
+
 export function RegisterSummary({ progression }: { progression: AuditProgression }) {
   const eventDenominator = progression.fireEvents.toLocaleString()
-  return <section aria-label="Historical register population summary" className="shrink-0 border-b border-border bg-border">
+  return <>
+    <section aria-label="Historical register population summary" className="shrink-0 border-b border-border bg-border">
     <div className="grid gap-px bg-border md:grid-cols-3">
       <section aria-labelledby="clustering-summary" className="bg-panel px-4 py-3">
         <div className="mb-2 flex items-center gap-2"><h2 id="clustering-summary" className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-faint">Observation derivation</h2><SummaryHelp label="observation derivation">Spatially and temporally related FIRMS observations are deterministically clustered into FireEvents. An observation is a satellite detection, not an individual fire.</SummaryHelp></div>
@@ -47,7 +74,9 @@ export function RegisterSummary({ progression }: { progression: AuditProgression
         <p className="mt-2 text-[10px] text-text-muted">{(progression.routingDiagnostics.humanReviewPercentage * 100).toFixed(1)}% of {eventDenominator} FireEvents; this is not a subset count of the In Scope figure.</p>
       </section>
     </div>
-  </section>
+    </section>
+    <RoutingSummary progression={progression} />
+  </>
 }
 
 // The selected-events + graph investigation used to render on its own page
@@ -85,8 +114,6 @@ export function HistoricalInvestigation({ scope, onOpenScopedMap }: { scope: Aud
   return <div className="flex h-full flex-col bg-bg text-text">
     <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border-strong bg-panel px-5 py-3"><div><div className="text-sm font-semibold">Historical Fire Register</div><div className="text-xs text-text-muted">{progression ? `${progression.fireEvents.toLocaleString()} FireEvents` : 'FireEvents'} · {scope.review_start} → {scope.review_end} · {scope.context_buffer_km} km context buffer</div></div><div className="flex items-center gap-2">{onOpenScopedMap && <Button onClick={onOpenScopedMap}>VIEW SCOPED MAP</Button>}<Button variant="primary" disabled={!selection.length || !onOpenScopedMap} onClick={onOpenScopedMap}>{`INVESTIGATE ON MAP (${selection.length})`}</Button></div></div>
     {progression && <RegisterSummary progression={progression} />}
-    {progression && <p className="border-b border-border bg-panel px-5 py-2 text-[11px] text-text-muted">Ambiguous events remain review-recommended; only calibrated HIGH/URGENT routes enter human review. The routing diagnostics below describe the full event population.</p>}
-    {progression && <div className="flex flex-wrap gap-x-5 gap-y-1 border-b border-border bg-panel px-5 py-2 text-[10px] text-text-muted" aria-label="Review routing diagnostics"><span className="font-semibold uppercase tracking-[0.1em] text-text-faint">Routing diagnostics</span>{Object.entries(progression.routingDiagnostics.priorityDistribution).map(([priority, distribution]) => <span key={priority}>Priority {priority}: {distribution.count.toLocaleString()} ({(distribution.percentage * 100).toFixed(1)}%)</span>)}{Object.entries(progression.routingDiagnostics.reviewStateDistribution).map(([state, distribution]) => <span key={state}>Workflow {state}: {distribution.count.toLocaleString()} ({(distribution.percentage * 100).toFixed(1)}%)</span>)}{Object.entries(progression.routingDiagnostics.evidenceSufficiencyDistribution).map(([sufficiency, distribution]) => <span key={sufficiency}>Sufficiency {sufficiency}: {distribution.count.toLocaleString()} ({(distribution.percentage * 100).toFixed(1)}%)</span>)}{Object.entries(progression.routingDiagnostics.escalationReasonCodes).map(([reason, distribution]) => <span key={reason}>Escalation {reason}: {distribution.count.toLocaleString()}</span>)}{Object.entries(progression.routingDiagnostics.componentContributionDistribution).map(([factor, distribution]) => <span key={factor}>Component {factor}: {distribution.totalContribution.toFixed(1)} ({(distribution.percentageOfContribution * 100).toFixed(1)}%)</span>)}</div>}
     {scope.historyBuild && <div className="border-b border-border bg-panel px-5 py-2 text-[11px] text-text-muted">Cached real historical dataset · build handoff {scope.historyBuild.duration_ms.toFixed(2)} ms · counts below are from the current audit artifact.</div>}
     {error && <div role="alert" className="flex items-center justify-between gap-3 border-b border-status-urgent/40 bg-status-urgent/10 px-5 py-2 text-xs text-red-200"><span>{error}</span><Button onClick={() => void loadRegister()}>RETRY</Button></div>}
     {loading && <div role="status" className="flex flex-1 items-center justify-center text-sm text-text-muted">Loading current-audit FireEvent register…</div>}
