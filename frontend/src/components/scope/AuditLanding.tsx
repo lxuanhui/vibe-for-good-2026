@@ -7,6 +7,8 @@ import { Button } from '../ui/Button'
 import { illuminationReference, nightCoverage } from '../../lib/illumination'
 import { SOLAR_NIGHT_COLOR } from '../../lib/layerColors'
 import { REGIONAL_MAP_BOUNDS } from '../../lib/regionalBounds'
+import { APP_DESCRIPTOR } from '../../lib/brand'
+import { Brand } from '../brand/Brand'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
 type FirmsProperties = { confidence: string; frp: number; ageHours: number }
@@ -155,6 +157,7 @@ export function AuditLanding({ onStartAudit, onOpenContext }: { onStartAudit: ()
         </div>}
       </div>
       <section className="absolute right-5 top-5 z-10 max-w-md rounded-xl border border-border-strong bg-panel/95 p-5 shadow-2xl backdrop-blur">
+        <Brand subtitle={APP_DESCRIPTOR} className="mb-4" />
         <p className="text-xs uppercase tracking-[0.18em] text-accent">Southeast Asia · live satellite watch</p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">Start with an audit scope.</h1>
         <p className="mt-3 text-sm leading-6 text-text-muted">Live FIRMS thermal detections provide regional context only. FireEvents appear after you define an authorised management-unit boundary and review period.</p>
