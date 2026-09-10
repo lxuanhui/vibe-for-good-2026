@@ -16,6 +16,7 @@ for _candidate in Path(__file__).resolve().parents:
             sys.path.insert(0, str(_candidate))
         break
 
+from app import firms_live
 from app.routes import api
 
 
@@ -31,5 +32,11 @@ def create_app(config: dict | None = None) -> Flask:
 
     CORS(app, resources={r"/api/*": {"origins": os.environ.get("CORS_ORIGINS", "*")}})
     app.register_blueprint(api, url_prefix="/api")
+
+    # On Lambda this runs in the init phase, which has a full CPU; the first
+    # cold request then finds the S3 client built and its connection open,
+    # instead of paying for both on the handler's fraction of one (#251).
+    # After load_dotenv, so a local run with the bucket set warms too.
+    firms_live.warm_shared_cache()
 
     return app

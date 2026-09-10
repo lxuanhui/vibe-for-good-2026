@@ -1,7 +1,10 @@
 import pandas as pd
 import pytest
 
-from data_pipeline.clustering.firms_clustering import cluster_events
+from data_pipeline.clustering.firms_clustering import (
+    ClusteringParameters,
+    cluster_events,
+)
 from data_pipeline.complexity.fire_complexity import (
     ALGORITHM_VERSION,
     FIELD_NAMES,
@@ -117,3 +120,36 @@ def test_missing_optional_context_is_explicitly_not_evaluated():
         result.evidence[0]["time_window"]
         == f"{event.first_detection} to {event.last_detection}"
     )
+
+
+def test_two_groups_inside_the_clustering_radius_but_apart_at_the_lobe_radius_are_two_lobes():
+    # 0.0135 degrees of latitude is 1.5 km: one event at the 2 km clustering
+    # radius, two components at the 1 km lobe radius (#213).
+    observations = pd.DataFrame(
+        [
+            _row(-2.5000, 114.0000, time=1200),
+            _row(-2.5027, 114.0000, time=1300),
+            _row(-2.5162, 114.0000, time=1400),
+            _row(-2.5189, 114.0000, time=1500),
+        ]
+    )
+    events, _ = cluster_events(observations)
+    assert len(events) == 1
+
+    result = compute_fire_complexity(events[0], observations)
+
+    assert result.distinct_thermal_lobes.value == 2
+    assert result.distinct_thermal_lobes.details["connectivity_distance_km"] == 1.0
+    assert result.distinct_thermal_lobes.details["clustering_spatial_threshold_km"] == 2.0
+
+
+def test_a_lobe_radius_at_or_above_the_clustering_radius_is_rejected():
+    observations = pd.DataFrame([_row(-2.5000, 114.0000), _row(-2.5010, 114.0000)])
+    event = cluster_events(observations)[0][0]
+
+    with pytest.raises(ValueError, match="below the clustering radius"):
+        compute_fire_complexity(event, observations, lobe_distance_km=2.0)
+    with pytest.raises(ValueError, match="below the clustering radius"):
+        compute_fire_complexity(
+            event, observations, lobe_distance_km=1.5, clustering_parameters=ClusteringParameters(spatial_threshold_km=1.5)
+        )
