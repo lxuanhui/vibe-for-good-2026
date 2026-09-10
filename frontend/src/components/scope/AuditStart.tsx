@@ -204,11 +204,10 @@ export function AuditStart({ onReady, overlay = false, fullScreen = false, onClo
                 onChange={(event) => void handleFileChange(event.target.files?.[0] ?? null)}
                 className="block w-full cursor-pointer rounded border border-border-strong bg-bg px-3 py-2 text-xs text-text file:mr-3 file:rounded file:border-0 file:bg-panel-raised file:px-2 file:py-1 file:text-xs file:text-text"
               />
-              <span className="block text-[11px] text-text-faint">
-                Accepts Polygon, MultiPolygon, Feature, or FeatureCollection GeoJSON. No boundary to
-                upload yet? Leave this empty to use a small default area inside the committed real
-                2019 Kalimantan haze window -- the only period this demo has real FireEvents for.
-              </span>
+              <ul className="list-disc space-y-1 pl-4 text-[11px] text-text-faint">
+                <li>Accepts Polygon, MultiPolygon, Feature, or FeatureCollection GeoJSON.</li>
+                <li>Leave empty to use the default area; invalid or unsupported geometry is rejected.</li>
+              </ul>
             </label>
 
             {(fileError || submitError) && <p className="rounded border border-status-urgent/40 bg-status-urgent/10 px-3 py-2 text-xs leading-5 text-red-200" role="alert">{fileError || submitError}</p>}
@@ -231,13 +230,12 @@ export function AuditStart({ onReady, overlay = false, fullScreen = false, onClo
             </div>
           </div>
           {submitting && <div role="status" className="border-t border-border px-5 py-3 text-xs text-text-muted">Scope uploaded. Checking the cached real historical dataset and preparing the register…</div>}
-          {!file && !submitting && <div className="border-t border-border bg-panel-raised px-5 py-2 text-[11px] text-text-faint">Showing the default demo area (no file uploaded) -- choose a file above to replace it.</div>}
           <div className="relative min-h-[360px] flex-1 bg-bg">
             {preview ? (
               <ScopePreviewMap scope={preview} />
             ) : (
               <div className="flex h-full min-h-[360px] items-center justify-center px-10 text-center text-sm text-text-faint">
-                That file could not be read as a GeoJSON polygon. Fix it and re-upload, or remove the file to use the default demo area.
+                That file could not be previewed. Fix it and re-upload, or remove the file to use the default area.
               </div>
             )}
           </div>
