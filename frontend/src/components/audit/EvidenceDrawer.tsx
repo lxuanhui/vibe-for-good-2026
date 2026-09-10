@@ -160,42 +160,54 @@ function ImageLightbox({ url, caption, onClose }: { url: string; caption: string
   )
 }
 
-// Same idea for imagery: 4 scenes is not 38, but a compact one-line-each
-// list matches the same pattern rather than 4 full expandable cards for
-// what is, per scene, three facts an auditor actually scans for.
+// Four scenes is not a reason to make the actual imagery tiny. Processed
+// artifacts use the drawer width; catalogue quicklooks remain metadata-only
+// until a processed artifact is supplied.
+type ProcessedImagery = { url: string; width?: number; height?: number; processing?: string }
+
+function processedImagery(value: Record<string, unknown>): ProcessedImagery | null {
+  const descriptor = ['processed_image', 'processed_visualization', 'processed_artifact', 'processed_display', 'processed']
+    .map((key) => value[key])
+    .find((candidate) => candidate != null)
+  const source = typeof descriptor === 'string' ? { url: descriptor } : descriptor && typeof descriptor === 'object' ? descriptor as Record<string, unknown> : value
+  const url = ['processed_image_url', 'processed_visualization_url', 'processed_url', 'display_url', 'image_url', 'url', 'href', 'uri']
+    .map((key) => source[key])
+    .find((candidate): candidate is string => typeof candidate === 'string' && candidate.length > 0)
+  if (!url) return null
+  return { url, width: typeof source.width === 'number' ? source.width : undefined, height: typeof source.height === 'number' ? source.height : undefined, processing: typeof source.processing === 'string' ? source.processing : undefined }
+}
+
 function ImagerySummary({ items }: { items: EvidenceObject[] }) {
   const [lightbox, setLightbox] = useState<{ url: string; caption: string } | null>(null)
-  if (!items.length) return <p className="text-[11px] text-text-faint">No EvidenceObjects are available for this metric in the current audit artifact.</p>
+  if (!items.length) return <p className="text-[11px] text-text-faint">Processed imagery unavailable; no imagery EvidenceObjects are present in the current audit artifact.</p>
   return <div className="space-y-1.5">{items.map((item) => {
     const v = (item.value ?? {}) as Record<string, unknown>
     const sensor = typeof v.sensor === 'string' ? v.sensor : item.type
     const position = typeof v.position === 'string' ? v.position.replace('_', '-') : ''
     const cloud = v.cloud_cover
-    const thumbnailUrl = typeof v.thumbnail_url === 'string' ? v.thumbnail_url : undefined
+    const processed = processedImagery(v)
     const caption = `${sensor} ${position}`.trim()
     const processing = typeof v.display_processing === 'string' ? v.display_processing : undefined
     const product = typeof v.product === 'string' ? v.product : undefined
-    return <div key={item.evidence_id} className="flex gap-2 rounded border border-border bg-bg/60 p-2 text-[11px] print:border-black/20 print:bg-transparent">
-      {/* The catalogue's own quicklook JPEG, not the product -- a glance at
-          cloud/vegetation/burn-scar context beats acquisition metadata alone.
-          Hidden on load failure rather than showing a broken-image icon.
-          Clickable: the list thumbnail is ~56px, too small to actually read
-          for cloud/burn-scar context -- clicking opens the same image larger. */}
-      {thumbnailUrl && <button
+    return <div key={item.evidence_id ?? item.evidenceId ?? `${sensor}-${position}`} className="rounded border border-border bg-bg/60 p-2 text-[11px] print:border-black/20 print:bg-transparent">
+      {processed && <button
         type="button"
-        onClick={() => setLightbox({ url: thumbnailUrl, caption })}
-        className="shrink-0 print:hidden"
-        aria-label={`Enlarge ${caption} quicklook`}
+        onClick={() => setLightbox({ url: processed.url, caption })}
+        className="mb-2 block w-full print:pointer-events-none"
+        aria-label={`Enlarge ${caption} processed imagery`}
       >
         <img
-          src={thumbnailUrl}
-          alt={`${caption} quicklook`}
+          src={processed.url}
+          alt={`${caption} processed imagery`}
           loading="lazy"
-          className="h-14 w-14 cursor-zoom-in rounded border border-border object-cover hover:border-accent"
+          width={processed.width}
+          height={processed.height}
+          className="max-h-[420px] w-full cursor-zoom-in rounded border border-border object-contain object-center hover:border-accent"
           onError={(event) => { event.currentTarget.style.display = 'none' }}
         />
       </button>}
-      <div className="min-w-0 flex-1">
+      {!processed && <p className="mb-2 rounded border border-status-moderate/30 bg-status-moderate/5 p-2 text-text-faint">Processed imagery unavailable for this scene. Catalogue quicklook metadata is retained, but no small legacy preview is displayed as investigation evidence.</p>}
+      <div className="min-w-0">
         <div className="flex items-center justify-between gap-2"><span className="font-mono text-accent print:text-black">{sensor} {position}</span>{typeof cloud === 'number' && <span className="text-text-muted">{cloud.toFixed(0)}% cloud</span>}</div>
         <div className="mt-0.5 text-text-muted">{item.time_window}</div>
         {(product || processing) && <div className="mt-1 text-[10px] text-text-faint">{product && <>Product: {product}</>}{product && processing && ' · '}{processing && <>Display: {processing}</>}</div>}

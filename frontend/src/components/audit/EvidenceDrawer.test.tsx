@@ -1,5 +1,5 @@
-import { render, screen, within } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { cleanup, render, screen, within } from '@testing-library/react'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { EventEvidenceResponse } from '../../api/types'
 import { EvidenceDrawer } from './EvidenceDrawer'
 
@@ -34,6 +34,8 @@ const evidence = {
   provenance: { source: { provider: 'FIRMS' }, algorithmVersions: ['triage-v1'] },
 } satisfies EventEvidenceResponse
 
+afterEach(cleanup)
+
 describe('EvidenceDrawer sidebar hierarchy', () => {
   it('puts availability near the summary and omits sidebar provenance and surface sections', () => {
     render(
@@ -59,5 +61,33 @@ describe('EvidenceDrawer sidebar hierarchy', () => {
     expect(headings.slice(0, 2)).toEqual(['Summary', 'Availability / limitations'])
     expect(headings).not.toContain('Surface compatibility')
     expect(headings).not.toContain('Provenance')
+  })
+
+  it('prefers a processed imagery artifact and renders it at drawer width', () => {
+    const imagery = {
+      ...evidence,
+      derivedEvidence: [{
+        evidence_id: 'ENV-IMG', category: 'imagery', type: 'imagery-scene', observation: 'scene', source: 'pipeline', time_window: '2019-09-01',
+        value: { sensor: 'Sentinel-2', position: 'post_event', thumbnail_url: '/legacy-small.jpg', processed_image_url: '/processed-large.png', width: 2048, height: 1536 },
+      }],
+    } satisfies EventEvidenceResponse
+    render(<EvidenceDrawer {...{ eventId: 'FE-1', loading: false, data: imagery, showObservations: false, onToggleObservations: () => undefined, onClose: () => undefined, onRetry: () => undefined, analysisLoading: false, onGenerateAnalysis: () => undefined }} />)
+    const image = screen.getByAltText('Sentinel-2 post-event processed imagery')
+    expect(image.getAttribute('src')).toBe('/processed-large.png')
+    expect(image.className).toContain('w-full')
+    expect(screen.queryByAltText('Sentinel-2 post-event quicklook')).toBeNull()
+  })
+
+  it('states that processed imagery is unavailable without showing a legacy thumbnail', () => {
+    const imagery = {
+      ...evidence,
+      derivedEvidence: [{
+        evidence_id: 'ENV-IMG', category: 'imagery', type: 'imagery-scene', observation: 'scene', source: 'pipeline', time_window: '2019-09-01',
+        value: { sensor: 'Sentinel-1', position: 'pre_event', thumbnail_url: '/legacy-small.jpg' },
+      }],
+    } satisfies EventEvidenceResponse
+    render(<EvidenceDrawer {...{ eventId: 'FE-1', loading: false, data: imagery, showObservations: false, onToggleObservations: () => undefined, onClose: () => undefined, onRetry: () => undefined, analysisLoading: false, onGenerateAnalysis: () => undefined }} />)
+    expect(screen.getByText(/Processed imagery unavailable for this scene/)).toBeTruthy()
+    expect(screen.queryByRole('img')).toBeNull()
   })
 })
