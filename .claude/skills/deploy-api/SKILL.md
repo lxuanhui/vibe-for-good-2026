@@ -30,6 +30,17 @@ curl "$(terraform output -raw api_health_url)"   # -> {"status":"ok"}
 `terraform apply` creates real, billable AWS resources — confirm with the
 user before running it. `plan`, `validate`, and `fmt` are safe.
 
+**What a backend-only PR's plan looks like.** `Plan: 0 to add, 3 to change`:
+the `source_code_hash` of `aws_lambda_function.api` and
+`aws_lambda_function.analysis_worker`, plus
+`aws_iam_role_policy.invoke_analysis_worker` shown as
+`policy = (known after apply)`. The third is not drift. Its policy document
+reads the worker's ARN, and Terraform defers that data source whenever the
+worker resource is being updated, so the plan cannot print the JSON; at
+apply time the ARN is unchanged and the policy is rewritten identically. It
+appeared on #190 and #200 the same way. Anything *else* in a backend PR's plan
+is the reason to stop.
+
 `infra/bootstrap/` (state bucket + GitHub OIDC role) is already applied and
 is not part of the pipeline. Touch it only when the state bucket or CI role
 needs changing, and apply it by hand.
