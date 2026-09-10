@@ -1,42 +1,42 @@
 {
-  "asset_id": "IMG_FE-20190904-0fb85076c0_s2-swir-false-colour-v1_pre_event",
-  "event_id": "FE-20190904-0fb85076c0",
-  "source_evidence_id": "ENV_IMAGERY_FE-20190904-0fb85076c0_Sentinel-2_pre_event",
+  "asset_id": "IMG_FE-20190903-b0c6090b34_s2-swir-false-colour-v1_post_event",
+  "event_id": "FE-20190903-b0c6090b34",
+  "source_evidence_id": "ENV_IMAGERY_FE-20190903-b0c6090b34_Sentinel-2_post_event",
   "sensor": "Sentinel-2",
-  "position": "pre_event",
+  "position": "post_event",
   "label": "Optical context",
-  "path": "/imagery/FE-20190904-0fb85076c0/s2-pre.jpg",
+  "path": "/imagery/FE-20190903-b0c6090b34/s2-post.jpg",
   "format": "image/jpeg",
   "width": 1024,
   "height": 1024,
-  "bytes": 269126,
+  "bytes": 292371,
   "coverage_fraction": 1.0,
   "aoi": {
     "bbox": [
-      116.032372,
-      -3.519566,
-      116.122368,
-      -3.429734
+      115.858183,
+      -3.500146,
+      115.948177,
+      -3.410314
     ],
     "crs": "EPSG:4326",
     "half_size_km": 5.0
   },
   "acquisition": {
     "collection": "sentinel-2-l2a",
-    "product_id": "S2B_MSIL2A_20190829T022559_N0500_R046_T50MLB_20230523T130339",
-    "acquisition_time": "2019-08-29T02:25:59.024000Z",
+    "product_id": "S2A_MSIL2A_20190913T022551_N0500_R046_T50MLB_20230428T131005",
+    "acquisition_time": "2019-09-13T02:25:51.024000Z",
     "time_range": {
-      "from": "2019-08-29T00:00:00Z",
-      "to": "2019-08-29T23:59:59Z"
+      "from": "2019-09-13T00:00:00Z",
+      "to": "2019-09-13T23:59:59Z"
     },
     "orbit": {
-      "absolute": 12942,
+      "absolute": 22065,
       "relative": 46,
       "state": "descending"
     },
-    "cloud_cover_pct": 36.72,
-    "temporal_distance_hours": 159.933604,
-    "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2B_MSIL2A_20190829T022559_N0500_R046_T50MLB_20230523T130339"
+    "cloud_cover_pct": 22.78,
+    "temporal_distance_hours": 236.464173,
+    "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2A_MSIL2A_20190913T022551_N0500_R046_T50MLB_20230428T131005"
   },
   "processing": {
     "recipe_id": "s2-swir-false-colour-v1",
@@ -44,8 +44,8 @@
     "evalscript_sha256": "8e21166251255a78f28e081e40a5bf5ba40a0f42445ac5a77f67fa6b1b13ed71",
     "data_filter": {
       "timeRange": {
-        "from": "2019-08-29T00:00:00Z",
-        "to": "2019-08-29T23:59:59Z"
+        "from": "2019-09-13T00:00:00Z",
+        "to": "2019-09-13T23:59:59Z"
       },
       "mosaickingOrder": "leastCC"
     },
@@ -53,7 +53,7 @@
       "upsampling": "BILINEAR",
       "downsampling": "BILINEAR"
     },
-    "request_sha256": "d373e783587c37e6d849578eae77023bb30ea7bf74c0216ba11604ee0253d1f3"
+    "request_sha256": "0ecf645a9dd5ee958b61dcf0afc1a9948e62a24fd09f5bd6785ff0d6516f5594"
   },
   "limitations": [
     "A display product for human orientation; it is not analytical imagery and no burned area, cause, or responsibility is derived from it.",

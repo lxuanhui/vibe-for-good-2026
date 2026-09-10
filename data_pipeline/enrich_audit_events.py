@@ -46,6 +46,22 @@ every event's pre/post scene selection (`scene_selection.select_scenes()`,
 already a pure, no-network function) reuses those two shared feature lists.
 3,610 events x 2 collections becomes 2 catalogue searches total.
 
+The shared list is every product that touches the scope bbox, so each
+event's selection is also handed the event centroid and the selector keeps
+only products whose footprint contains it (#193). Before that, all sixteen
+demo events got the same four products, the ones closest in time to the
+scope's window, and the four events at the scope's western and eastern
+edges were named a tile that stopped short of them. The searches are still
+two, but the search must not be truncated: a page shorter than the catalogue
+holds would silently drop the candidates a footprint check needs, so a
+page at the limit is an error, not a warning.
+
+`--reselect-imagery` redoes only that: it fetches (or reuses) the two
+searches, re-selects scenes for every event that already carries imagery
+evidence in the committed artifact, and rewrites that evidence in place.
+Weather is untouched, the checkpoint's imagery columns are updated so a
+later `--finalize` agrees, and nothing else about the artifact changes.
+
 ## Rate limits: wait and retry, not skip
 
 Open-Meteo returns a rate-limit hit as HTTP 200 with `{"error": true,
@@ -408,6 +424,15 @@ def fetch_imagery_searches(conn: sqlite3.Connection, bbox: tuple[float, float, f
             continue
         print(f"Imagery: searching {collection} across the whole geoshape + review period...")
         features = rate_limited_call(copernicus_cds.search, collection, bbox, start_date, end_date, limit=STAC_SEARCH_LIMIT)
+        returned = len(features.get("features", [])) if isinstance(features, dict) else 0
+        has_next = isinstance(features, dict) and any(
+            isinstance(link, dict) and link.get("rel") == "next" for link in features.get("links", [])
+        )
+        if returned >= STAC_SEARCH_LIMIT or has_next:
+            raise RuntimeError(
+                f"{collection}: the STAC search returned {returned} items with more available; raise "
+                "STAC_SEARCH_LIMIT or narrow the window. A truncated page would drop candidates silently."
+            )
         conn.execute(
             "INSERT OR REPLACE INTO imagery_search (collection, features_json, fetched_at) VALUES (?, ?, datetime('now'))",
             (collection, json.dumps(features)),
@@ -424,7 +449,13 @@ def compute_imagery_evidence(conn: sqlite3.Connection, event: dict[str, Any]) ->
         raise RuntimeError("imagery searches have not been fetched yet")
     s1_features = json.loads(s1_row[0])
     s2_features = json.loads(s2_row[0])
-    selection = select_scenes(s1_features, s2_features, event["firstDetection"], event["lastDetection"])
+    selection = select_scenes(
+        s1_features,
+        s2_features,
+        event["firstDetection"],
+        event["lastDetection"],
+        location=(event["centroid"]["lat"], event["centroid"]["lon"]),
+    )
     objects = []
     for scene in selection.selected_scenes:
         evidence = scene.to_evidence_object(f"ENV_IMAGERY_{event['eventId']}_{scene.sensor}_{scene.position.value}")
@@ -572,6 +603,62 @@ def finalize() -> None:
     print("Run the data_pipeline and backend test suites, then commit the regenerated artifact when you're happy with coverage.")
 
 
+def reselect_imagery() -> None:
+    """Redo scene selection for every event that already carries imagery evidence.
+
+    Deliberately narrower than a full run: the weather grid is expensive
+    and unchanged, and this exists so a selector fix reaches the committed
+    artifact without refetching anything but the two catalogue searches.
+    """
+    events = load_event_summaries()
+    min_lat, max_lat, min_lon, max_lon, earliest, latest = scope_bounds(events)
+    imagery_bbox = (min_lon, min_lat, max_lon, max_lat)
+    imagery_start = (pd.Timestamp(earliest) - pd.Timedelta(days=IMAGERY_SEARCH_MARGIN_DAYS)).strftime("%Y-%m-%d")
+    imagery_end = (pd.Timestamp(latest) + pd.Timedelta(days=IMAGERY_SEARCH_MARGIN_DAYS)).strftime("%Y-%m-%d")
+
+    with gzip.open(DETAIL_PATH, "rt", encoding="utf-8") as handle:
+        detail = json.load(handle)
+    demo = detail[AUDIT_ID]
+
+    conn = _db()
+    try:
+        fetch_imagery_searches(conn, imagery_bbox, imagery_start, imagery_end)
+        changed = unchanged = 0
+        for event in events:
+            event_id = event["eventId"]
+            existing = demo.get(event_id, {}).get("evidence", [])
+            before = [item for item in existing if item.get("category") == "imagery"]
+            if not before:
+                continue
+            after = compute_imagery_evidence(conn, event)
+            kept = [item for item in existing if item.get("category") != "imagery"]
+            demo[event_id]["evidence"] = kept + after
+            conn.execute(
+                """INSERT INTO enrichment (event_id, imagery_status, imagery_evidence, imagery_error, updated_at)
+                   VALUES (?, 'ok', ?, NULL, datetime('now'))
+                   ON CONFLICT(event_id) DO UPDATE SET
+                     imagery_status = 'ok', imagery_evidence = excluded.imagery_evidence,
+                     imagery_error = NULL, updated_at = excluded.updated_at""",
+                (event_id, json.dumps(after)),
+            )
+            conn.commit()
+            old_ids = {item["value"]["product_id"] for item in before}
+            new_ids = {item["value"]["product_id"] for item in after}
+            if old_ids != new_ids or len(before) != len(after):
+                changed += 1
+                print(f"{event_id}: {len(before)} -> {len(after)} scene(s); now " + ", ".join(sorted(new_ids)))
+            else:
+                unchanged += 1
+    finally:
+        conn.close()
+
+    body = json.dumps(detail, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    with gzip.GzipFile(DETAIL_PATH, "wb", mtime=0) as handle:
+        handle.write(body)
+    print(f"Re-selected imagery for {changed + unchanged} event(s): {changed} changed, {unchanged} unchanged.")
+    print(f"Wrote {DETAIL_PATH.relative_to(REPO_ROOT)}. Re-render the changed events with generate_processed_imagery.py --force --event <id>.")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--limit", type=int, default=None, help="Stop after N newly-computed events this run (smoke test)")
@@ -579,10 +666,14 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE, help=f"Grid points per Open-Meteo request (default {DEFAULT_BATCH_SIZE})")
     parser.add_argument("--dry-run", action="store_true", help="Print grid size and request-count estimate, fetch nothing")
     parser.add_argument("--finalize", action="store_true", help="Do not fetch anything -- fold checkpointed results into the committed artifact instead")
+    parser.add_argument("--reselect-imagery", action="store_true", help="Only redo scene selection for events that already carry imagery evidence, and write the artifact")
     args = parser.parse_args()
 
     if args.finalize:
         finalize()
+        return
+    if args.reselect_imagery:
+        reselect_imagery()
         return
     run(limit=args.limit, grid_spacing=args.grid_spacing, batch_size=args.batch_size, dry_run=args.dry_run)
 

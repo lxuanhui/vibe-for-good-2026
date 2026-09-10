@@ -1,6 +1,6 @@
 {
   "generator_version": "cdse-process-imagery-v1",
-  "generated_at": "2026-09-10T05:56:08+00:00",
+  "generated_at": "2026-09-10T11:38:02+00:00",
   "audit_id": "demo-2019-haze",
   "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
   "recipes": {
@@ -106,7 +106,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:55:42+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190901-1ecb99d2e4_s1-vvvh-db-composite-v1_pre_event",
@@ -184,7 +184,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:55:42+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190901-1ecb99d2e4_s2-swir-false-colour-v1_post_event",
@@ -211,7 +211,7 @@
           },
           "acquisition": {
             "collection": "sentinel-2-l2a",
-            "product_id": "S2B_MSIL2A_20190905T021609_N0500_R003_T50MLB_20230502T060337",
+            "product_id": "S2B_MSIL2A_20190905T021609_N0500_R003_T50MMB_20230502T060337",
             "acquisition_time": "2019-09-05T02:16:09.024000Z",
             "time_range": {
               "from": "2019-09-05T00:00:00Z",
@@ -222,9 +222,9 @@
               "relative": 3,
               "state": "descending"
             },
-            "cloud_cover_pct": 32.54,
+            "cloud_cover_pct": 39.65,
             "temporal_distance_hours": 44.302507,
-            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2B_MSIL2A_20190905T021609_N0500_R003_T50MLB_20230502T060337"
+            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2B_MSIL2A_20190905T021609_N0500_R003_T50MMB_20230502T060337"
           },
           "processing": {
             "recipe_id": "s2-swir-false-colour-v1",
@@ -250,7 +250,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190901-1ecb99d2e4_s2-swir-false-colour-v1_pre_event",
@@ -277,7 +277,7 @@
           },
           "acquisition": {
             "collection": "sentinel-2-l2a",
-            "product_id": "S2A_MSIL2A_20190831T021601_N0500_R003_T50MMA_20230524T231442",
+            "product_id": "S2A_MSIL2A_20190831T021601_N0500_R003_T50MMB_20230524T231442",
             "acquisition_time": "2019-08-31T02:16:01.024000Z",
             "time_range": {
               "from": "2019-08-31T00:00:00Z",
@@ -288,9 +288,9 @@
               "relative": 3,
               "state": "descending"
             },
-            "cloud_cover_pct": 15.31,
+            "cloud_cover_pct": 34.09,
             "temporal_distance_hours": 26.649716,
-            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2A_MSIL2A_20190831T021601_N0500_R003_T50MMA_20230524T231442"
+            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2A_MSIL2A_20190831T021601_N0500_R003_T50MMB_20230524T231442"
           },
           "processing": {
             "recipe_id": "s2-swir-false-colour-v1",
@@ -316,7 +316,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         }
       ],
       "missing": []
@@ -399,7 +399,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190901-bc7fee6571_s1-vvvh-db-composite-v1_pre_event",
@@ -477,7 +477,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190901-bc7fee6571_s2-swir-false-colour-v1_post_event",
@@ -504,7 +504,7 @@
           },
           "acquisition": {
             "collection": "sentinel-2-l2a",
-            "product_id": "S2B_MSIL2A_20190905T021609_N0500_R003_T50MLB_20230502T060337",
+            "product_id": "S2B_MSIL2A_20190905T021609_N0500_R003_T50MLA_20230502T060337",
             "acquisition_time": "2019-09-05T02:16:09.024000Z",
             "time_range": {
               "from": "2019-09-05T00:00:00Z",
@@ -515,9 +515,9 @@
               "relative": 3,
               "state": "descending"
             },
-            "cloud_cover_pct": 32.54,
+            "cloud_cover_pct": 40.34,
             "temporal_distance_hours": 44.302507,
-            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2B_MSIL2A_20190905T021609_N0500_R003_T50MLB_20230502T060337"
+            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2B_MSIL2A_20190905T021609_N0500_R003_T50MLA_20230502T060337"
           },
           "processing": {
             "recipe_id": "s2-swir-false-colour-v1",
@@ -543,7 +543,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190901-bc7fee6571_s2-swir-false-colour-v1_pre_event",
@@ -609,7 +609,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         }
       ],
       "missing": []
@@ -692,7 +692,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190901-f0d0bb0675_s1-vvvh-db-composite-v1_pre_event",
@@ -770,7 +770,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190901-f0d0bb0675_s2-swir-false-colour-v1_post_event",
@@ -797,7 +797,7 @@
           },
           "acquisition": {
             "collection": "sentinel-2-l2a",
-            "product_id": "S2B_MSIL2A_20190905T021609_N0500_R003_T50MLB_20230502T060337",
+            "product_id": "S2B_MSIL2A_20190905T021609_N0500_R003_T50MMA_20230502T060337",
             "acquisition_time": "2019-09-05T02:16:09.024000Z",
             "time_range": {
               "from": "2019-09-05T00:00:00Z",
@@ -808,9 +808,9 @@
               "relative": 3,
               "state": "descending"
             },
-            "cloud_cover_pct": 32.54,
+            "cloud_cover_pct": 45.5,
             "temporal_distance_hours": 80.63584,
-            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2B_MSIL2A_20190905T021609_N0500_R003_T50MLB_20230502T060337"
+            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2B_MSIL2A_20190905T021609_N0500_R003_T50MMA_20230502T060337"
           },
           "processing": {
             "recipe_id": "s2-swir-false-colour-v1",
@@ -836,7 +836,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190901-f0d0bb0675_s2-swir-false-colour-v1_pre_event",
@@ -902,7 +902,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         }
       ],
       "missing": []
@@ -985,7 +985,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190901-f300bcd6f8_s1-vvvh-db-composite-v1_pre_event",
@@ -1063,7 +1063,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190901-f300bcd6f8_s2-swir-false-colour-v1_post_event",
@@ -1090,7 +1090,7 @@
           },
           "acquisition": {
             "collection": "sentinel-2-l2a",
-            "product_id": "S2B_MSIL2A_20190905T021609_N0500_R003_T50MLB_20230502T060337",
+            "product_id": "S2B_MSIL2A_20190905T021609_N0500_R003_T50MMA_20230502T060337",
             "acquisition_time": "2019-09-05T02:16:09.024000Z",
             "time_range": {
               "from": "2019-09-05T00:00:00Z",
@@ -1101,9 +1101,9 @@
               "relative": 3,
               "state": "descending"
             },
-            "cloud_cover_pct": 32.54,
+            "cloud_cover_pct": 45.5,
             "temporal_distance_hours": 80.63584,
-            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2B_MSIL2A_20190905T021609_N0500_R003_T50MLB_20230502T060337"
+            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2B_MSIL2A_20190905T021609_N0500_R003_T50MMA_20230502T060337"
           },
           "processing": {
             "recipe_id": "s2-swir-false-colour-v1",
@@ -1129,7 +1129,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190901-f300bcd6f8_s2-swir-false-colour-v1_pre_event",
@@ -1195,7 +1195,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         }
       ],
       "missing": []
@@ -1278,7 +1278,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190902-084096404c_s1-vvvh-db-composite-v1_pre_event",
@@ -1356,7 +1356,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190902-084096404c_s2-swir-false-colour-v1_post_event",
@@ -1422,7 +1422,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190902-084096404c_s2-swir-false-colour-v1_pre_event",
@@ -1449,7 +1449,7 @@
           },
           "acquisition": {
             "collection": "sentinel-2-l2a",
-            "product_id": "S2A_MSIL2A_20190831T021601_N0500_R003_T50MMA_20230524T231442",
+            "product_id": "S2A_MSIL2A_20190831T021601_N0500_R003_T50MMB_20230524T231442",
             "acquisition_time": "2019-08-31T02:16:01.024000Z",
             "time_range": {
               "from": "2019-08-31T00:00:00Z",
@@ -1460,9 +1460,9 @@
               "relative": 3,
               "state": "descending"
             },
-            "cloud_cover_pct": 15.31,
+            "cloud_cover_pct": 34.09,
             "temporal_distance_hours": 52.016382,
-            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2A_MSIL2A_20190831T021601_N0500_R003_T50MMA_20230524T231442"
+            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2A_MSIL2A_20190831T021601_N0500_R003_T50MMB_20230524T231442"
           },
           "processing": {
             "recipe_id": "s2-swir-false-colour-v1",
@@ -1488,7 +1488,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         }
       ],
       "missing": []
@@ -1571,7 +1571,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190902-1669d60fb3_s1-vvvh-db-composite-v1_pre_event",
@@ -1649,7 +1649,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190902-1669d60fb3_s2-swir-false-colour-v1_post_event",
@@ -1676,7 +1676,7 @@
           },
           "acquisition": {
             "collection": "sentinel-2-l2a",
-            "product_id": "S2B_MSIL2A_20190905T021609_N0500_R003_T50MLB_20230502T060337",
+            "product_id": "S2B_MSIL2A_20190905T021609_N0500_R003_T50MMB_20230502T060337",
             "acquisition_time": "2019-09-05T02:16:09.024000Z",
             "time_range": {
               "from": "2019-09-05T00:00:00Z",
@@ -1687,9 +1687,9 @@
               "relative": 3,
               "state": "descending"
             },
-            "cloud_cover_pct": 32.54,
+            "cloud_cover_pct": 39.65,
             "temporal_distance_hours": 44.302507,
-            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2B_MSIL2A_20190905T021609_N0500_R003_T50MLB_20230502T060337"
+            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2B_MSIL2A_20190905T021609_N0500_R003_T50MMB_20230502T060337"
           },
           "processing": {
             "recipe_id": "s2-swir-false-colour-v1",
@@ -1715,7 +1715,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190902-1669d60fb3_s2-swir-false-colour-v1_pre_event",
@@ -1742,7 +1742,7 @@
           },
           "acquisition": {
             "collection": "sentinel-2-l2a",
-            "product_id": "S2A_MSIL2A_20190831T021601_N0500_R003_T50MMA_20230524T231442",
+            "product_id": "S2A_MSIL2A_20190831T021601_N0500_R003_T50MMB_20230524T231442",
             "acquisition_time": "2019-08-31T02:16:01.024000Z",
             "time_range": {
               "from": "2019-08-31T00:00:00Z",
@@ -1753,9 +1753,9 @@
               "relative": 3,
               "state": "descending"
             },
-            "cloud_cover_pct": 15.31,
+            "cloud_cover_pct": 34.09,
             "temporal_distance_hours": 52.016382,
-            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2A_MSIL2A_20190831T021601_N0500_R003_T50MMA_20230524T231442"
+            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2A_MSIL2A_20190831T021601_N0500_R003_T50MMB_20230524T231442"
           },
           "processing": {
             "recipe_id": "s2-swir-false-colour-v1",
@@ -1781,7 +1781,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         }
       ],
       "missing": []
@@ -1864,7 +1864,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190903-03c81fa6e7_s1-vvvh-db-composite-v1_pre_event",
@@ -1942,7 +1942,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190903-03c81fa6e7_s2-swir-false-colour-v1_post_event",
@@ -1969,7 +1969,7 @@
           },
           "acquisition": {
             "collection": "sentinel-2-l2a",
-            "product_id": "S2B_MSIL2A_20190905T021609_N0500_R003_T50MLB_20230502T060337",
+            "product_id": "S2B_MSIL2A_20190905T021609_N0500_R003_T50MLA_20230502T060337",
             "acquisition_time": "2019-09-05T02:16:09.024000Z",
             "time_range": {
               "from": "2019-09-05T00:00:00Z",
@@ -1980,9 +1980,9 @@
               "relative": 3,
               "state": "descending"
             },
-            "cloud_cover_pct": 32.54,
+            "cloud_cover_pct": 40.34,
             "temporal_distance_hours": 44.302507,
-            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2B_MSIL2A_20190905T021609_N0500_R003_T50MLB_20230502T060337"
+            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2B_MSIL2A_20190905T021609_N0500_R003_T50MLA_20230502T060337"
           },
           "processing": {
             "recipe_id": "s2-swir-false-colour-v1",
@@ -2008,7 +2008,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190903-03c81fa6e7_s2-swir-false-colour-v1_pre_event",
@@ -2074,7 +2074,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         }
       ],
       "missing": []
@@ -2157,10 +2157,8 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
-        }
-      ],
-      "missing": [
+          "generated_at": "2026-09-10T11:38:02+00:00"
+        },
         {
           "asset_id": "IMG_FE-20190903-b0c6090b34_s1-vvvh-db-composite-v1_pre_event",
           "event_id": "FE-20190903-b0c6090b34",
@@ -2168,11 +2166,76 @@
           "sensor": "Sentinel-1",
           "position": "pre_event",
           "label": "Radar context",
-          "product_id": "S1A_IW_GRDH_1SDV_20190830T215154_20190830T215219_028804_034359_EDA4_COG",
-          "acquisition_time": "2019-08-30T21:51:54.917759Z",
-          "reason": "only 0.0% of the 10 km square carried data on 2019-08-30; the selected product does not cover this event's surroundings",
+          "path": "/imagery/FE-20190903-b0c6090b34/s1-pre.jpg",
+          "format": "image/jpeg",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 367487,
+          "coverage_fraction": 1.0,
+          "aoi": {
+            "bbox": [
+              115.858183,
+              -3.500146,
+              115.948177,
+              -3.410314
+            ],
+            "crs": "EPSG:4326",
+            "half_size_km": 5.0
+          },
+          "acquisition": {
+            "collection": "sentinel-1-grd",
+            "product_id": "S1A_IW_GRDH_1SDV_20190823T215955_20190823T220020_028702_033FC1_E5AD_COG",
+            "acquisition_time": "2019-08-23T21:59:55.157483Z",
+            "time_range": {
+              "from": "2019-08-23T00:00:00Z",
+              "to": "2019-08-23T23:59:59Z"
+            },
+            "orbit": {
+              "absolute": 28702,
+              "cycle": 178,
+              "relative": 105,
+              "state": "descending"
+            },
+            "cloud_cover_pct": null,
+            "temporal_distance_hours": 247.968012,
+            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-1-grd/items/S1A_IW_GRDH_1SDV_20190823T215955_20190823T220020_028702_033FC1_E5AD_COG"
+          },
+          "processing": {
+            "recipe_id": "s1-vvvh-db-composite-v1",
+            "description": "Sentinel-1 GRD IW dual-polarisation, calibrated by CDSE to Gamma0 with terrain correction (Copernicus DEM 30 m), orthorectified, thermal noise removed, Lee 3x3 speckle filter; rendered as VV dB (-20..0) / VH dB (-25..-5) / VV-VH dB (0..15) with fixed stretches; bilinear resampling to 1024 px over a 10 km square; no-data black.",
+            "evalscript_sha256": "c776fd06c79cc04c8200fee0876f93d6dcf98ab4376f099ecee5e795916a56c5",
+            "data_filter": {
+              "timeRange": {
+                "from": "2019-08-23T00:00:00Z",
+                "to": "2019-08-23T23:59:59Z"
+              },
+              "acquisitionMode": "IW",
+              "polarization": "DV",
+              "resolution": "HIGH",
+              "orbitDirection": "DESCENDING"
+            },
+            "options": {
+              "orthorectify": true,
+              "backCoeff": "GAMMA0_TERRAIN",
+              "demInstance": "COPERNICUS_30",
+              "speckleFilter": {
+                "type": "LEE",
+                "windowSizeX": 3,
+                "windowSizeY": 3
+              },
+              "upsampling": "BILINEAR",
+              "downsampling": "BILINEAR"
+            },
+            "request_sha256": "1cfe1bb86a81b5b84282e5f5a93f54e242ec3c0bbc5dc0d125f962c06eba8351"
+          },
+          "limitations": [
+            "Radar backscatter is surface and structural context, cloud-independent; it does not observe sub-surface peat combustion, and a backscatter change is not a burn map.",
+            "A display product for human orientation; it is not analytical imagery and no burned area, cause, or responsibility is derived from it.",
+            "Pre- and post-event images from different orbit directions or relative orbits are not directly comparable pixel for pixel; the orbit is recorded with each image."
+          ],
+          "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190903-b0c6090b34_s2-swir-false-colour-v1_post_event",
@@ -2181,11 +2244,64 @@
           "sensor": "Sentinel-2",
           "position": "post_event",
           "label": "Optical context",
-          "product_id": "S2B_MSIL2A_20190905T021609_N0500_R003_T50MLB_20230502T060337",
-          "acquisition_time": "2019-09-05T02:16:09.024000Z",
-          "reason": "only 0.0% of the 10 km square carried data on 2019-09-05; the selected product does not cover this event's surroundings",
+          "path": "/imagery/FE-20190903-b0c6090b34/s2-post.jpg",
+          "format": "image/jpeg",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 292371,
+          "coverage_fraction": 1.0,
+          "aoi": {
+            "bbox": [
+              115.858183,
+              -3.500146,
+              115.948177,
+              -3.410314
+            ],
+            "crs": "EPSG:4326",
+            "half_size_km": 5.0
+          },
+          "acquisition": {
+            "collection": "sentinel-2-l2a",
+            "product_id": "S2A_MSIL2A_20190913T022551_N0500_R046_T50MLB_20230428T131005",
+            "acquisition_time": "2019-09-13T02:25:51.024000Z",
+            "time_range": {
+              "from": "2019-09-13T00:00:00Z",
+              "to": "2019-09-13T23:59:59Z"
+            },
+            "orbit": {
+              "absolute": 22065,
+              "relative": 46,
+              "state": "descending"
+            },
+            "cloud_cover_pct": 22.78,
+            "temporal_distance_hours": 236.464173,
+            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2A_MSIL2A_20190913T022551_N0500_R046_T50MLB_20230428T131005"
+          },
+          "processing": {
+            "recipe_id": "s2-swir-false-colour-v1",
+            "description": "Sentinel-2 L2A surface reflectance rendered as SWIR2 (B12) / NIR (B08) / Red (B04) false colour with a fixed 2.5x gain; bilinear resampling to 1024 px over a 10 km square; no-data black. No per-scene stretch, so the pre- and post-event images share one scale.",
+            "evalscript_sha256": "8e21166251255a78f28e081e40a5bf5ba40a0f42445ac5a77f67fa6b1b13ed71",
+            "data_filter": {
+              "timeRange": {
+                "from": "2019-09-13T00:00:00Z",
+                "to": "2019-09-13T23:59:59Z"
+              },
+              "mosaickingOrder": "leastCC"
+            },
+            "options": {
+              "upsampling": "BILINEAR",
+              "downsampling": "BILINEAR"
+            },
+            "request_sha256": "0ecf645a9dd5ee958b61dcf0afc1a9948e62a24fd09f5bd6785ff0d6516f5594"
+          },
+          "limitations": [
+            "A display product for human orientation; it is not analytical imagery and no burned area, cause, or responsibility is derived from it.",
+            "Cloud and smoke in the image are what the sensor saw on that date; the catalogue cloud percentage is for the whole tile, not this 10 km square.",
+            "Colour differences between the pre- and post-event images may reflect atmospheric conditions, sun angle, or different tiles as well as surface change."
+          ],
+          "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190903-b0c6090b34_s2-swir-false-colour-v1_pre_event",
@@ -2194,13 +2310,67 @@
           "sensor": "Sentinel-2",
           "position": "pre_event",
           "label": "Optical context",
-          "product_id": "S2A_MSIL2A_20190831T021601_N0500_R003_T50MMA_20230524T231442",
-          "acquisition_time": "2019-08-31T02:16:01.024000Z",
-          "reason": "only 0.0% of the 10 km square carried data on 2019-08-31; the selected product does not cover this event's surroundings",
+          "path": "/imagery/FE-20190903-b0c6090b34/s2-pre.jpg",
+          "format": "image/jpeg",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 270150,
+          "coverage_fraction": 1.0,
+          "aoi": {
+            "bbox": [
+              115.858183,
+              -3.500146,
+              115.948177,
+              -3.410314
+            ],
+            "crs": "EPSG:4326",
+            "half_size_km": 5.0
+          },
+          "acquisition": {
+            "collection": "sentinel-2-l2a",
+            "product_id": "S2B_MSIL2A_20190829T022559_N0500_R046_T50MLB_20230523T130339",
+            "acquisition_time": "2019-08-29T02:25:59.024000Z",
+            "time_range": {
+              "from": "2019-08-29T00:00:00Z",
+              "to": "2019-08-29T23:59:59Z"
+            },
+            "orbit": {
+              "absolute": 12942,
+              "relative": 46,
+              "state": "descending"
+            },
+            "cloud_cover_pct": 36.72,
+            "temporal_distance_hours": 123.533604,
+            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2B_MSIL2A_20190829T022559_N0500_R046_T50MLB_20230523T130339"
+          },
+          "processing": {
+            "recipe_id": "s2-swir-false-colour-v1",
+            "description": "Sentinel-2 L2A surface reflectance rendered as SWIR2 (B12) / NIR (B08) / Red (B04) false colour with a fixed 2.5x gain; bilinear resampling to 1024 px over a 10 km square; no-data black. No per-scene stretch, so the pre- and post-event images share one scale.",
+            "evalscript_sha256": "8e21166251255a78f28e081e40a5bf5ba40a0f42445ac5a77f67fa6b1b13ed71",
+            "data_filter": {
+              "timeRange": {
+                "from": "2019-08-29T00:00:00Z",
+                "to": "2019-08-29T23:59:59Z"
+              },
+              "mosaickingOrder": "leastCC"
+            },
+            "options": {
+              "upsampling": "BILINEAR",
+              "downsampling": "BILINEAR"
+            },
+            "request_sha256": "ee178091c486a34a6bd5bad5b1a98bd460dfccff66f953628b12413b46e2b760"
+          },
+          "limitations": [
+            "A display product for human orientation; it is not analytical imagery and no burned area, cause, or responsibility is derived from it.",
+            "Cloud and smoke in the image are what the sensor saw on that date; the catalogue cloud percentage is for the whole tile, not this 10 km square.",
+            "Colour differences between the pre- and post-event images may reflect atmospheric conditions, sun angle, or different tiles as well as surface change."
+          ],
+          "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         }
-      ]
+      ],
+      "missing": []
     },
     "FE-20190903-f4804c12c7": {
       "assets": [
@@ -2280,7 +2450,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190903-f4804c12c7_s1-vvvh-db-composite-v1_pre_event",
@@ -2358,7 +2528,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190903-f4804c12c7_s2-swir-false-colour-v1_post_event",
@@ -2385,7 +2555,7 @@
           },
           "acquisition": {
             "collection": "sentinel-2-l2a",
-            "product_id": "S2B_MSIL2A_20190905T021609_N0500_R003_T50MLB_20230502T060337",
+            "product_id": "S2B_MSIL2A_20190905T021609_N0500_R003_T50MMB_20230502T060337",
             "acquisition_time": "2019-09-05T02:16:09.024000Z",
             "time_range": {
               "from": "2019-09-05T00:00:00Z",
@@ -2396,9 +2566,9 @@
               "relative": 3,
               "state": "descending"
             },
-            "cloud_cover_pct": 32.54,
+            "cloud_cover_pct": 39.65,
             "temporal_distance_hours": 44.302507,
-            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2B_MSIL2A_20190905T021609_N0500_R003_T50MLB_20230502T060337"
+            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2B_MSIL2A_20190905T021609_N0500_R003_T50MMB_20230502T060337"
           },
           "processing": {
             "recipe_id": "s2-swir-false-colour-v1",
@@ -2424,7 +2594,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190903-f4804c12c7_s2-swir-false-colour-v1_pre_event",
@@ -2451,7 +2621,7 @@
           },
           "acquisition": {
             "collection": "sentinel-2-l2a",
-            "product_id": "S2A_MSIL2A_20190831T021601_N0500_R003_T50MMA_20230524T231442",
+            "product_id": "S2A_MSIL2A_20190831T021601_N0500_R003_T50MMB_20230524T231442",
             "acquisition_time": "2019-08-31T02:16:01.024000Z",
             "time_range": {
               "from": "2019-08-31T00:00:00Z",
@@ -2462,9 +2632,9 @@
               "relative": 3,
               "state": "descending"
             },
-            "cloud_cover_pct": 15.31,
+            "cloud_cover_pct": 34.09,
             "temporal_distance_hours": 75.699716,
-            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2A_MSIL2A_20190831T021601_N0500_R003_T50MMA_20230524T231442"
+            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2A_MSIL2A_20190831T021601_N0500_R003_T50MMB_20230524T231442"
           },
           "processing": {
             "recipe_id": "s2-swir-false-colour-v1",
@@ -2490,7 +2660,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         }
       ],
       "missing": []
@@ -2573,7 +2743,85 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
+        },
+        {
+          "asset_id": "IMG_FE-20190904-0fb85076c0_s1-vvvh-db-composite-v1_pre_event",
+          "event_id": "FE-20190904-0fb85076c0",
+          "source_evidence_id": "ENV_IMAGERY_FE-20190904-0fb85076c0_Sentinel-1_pre_event",
+          "sensor": "Sentinel-1",
+          "position": "pre_event",
+          "label": "Radar context",
+          "path": "/imagery/FE-20190904-0fb85076c0/s1-pre.jpg",
+          "format": "image/jpeg",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 400041,
+          "coverage_fraction": 0.9999,
+          "aoi": {
+            "bbox": [
+              116.032372,
+              -3.519566,
+              116.122368,
+              -3.429734
+            ],
+            "crs": "EPSG:4326",
+            "half_size_km": 5.0
+          },
+          "acquisition": {
+            "collection": "sentinel-1-grd",
+            "product_id": "S1A_IW_GRDH_1SDV_20190823T215955_20190823T220020_028702_033FC1_E5AD_COG",
+            "acquisition_time": "2019-08-23T21:59:55.157483Z",
+            "time_range": {
+              "from": "2019-08-23T00:00:00Z",
+              "to": "2019-08-23T23:59:59Z"
+            },
+            "orbit": {
+              "absolute": 28702,
+              "cycle": 178,
+              "relative": 105,
+              "state": "descending"
+            },
+            "cloud_cover_pct": null,
+            "temporal_distance_hours": 284.368012,
+            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-1-grd/items/S1A_IW_GRDH_1SDV_20190823T215955_20190823T220020_028702_033FC1_E5AD_COG"
+          },
+          "processing": {
+            "recipe_id": "s1-vvvh-db-composite-v1",
+            "description": "Sentinel-1 GRD IW dual-polarisation, calibrated by CDSE to Gamma0 with terrain correction (Copernicus DEM 30 m), orthorectified, thermal noise removed, Lee 3x3 speckle filter; rendered as VV dB (-20..0) / VH dB (-25..-5) / VV-VH dB (0..15) with fixed stretches; bilinear resampling to 1024 px over a 10 km square; no-data black.",
+            "evalscript_sha256": "c776fd06c79cc04c8200fee0876f93d6dcf98ab4376f099ecee5e795916a56c5",
+            "data_filter": {
+              "timeRange": {
+                "from": "2019-08-23T00:00:00Z",
+                "to": "2019-08-23T23:59:59Z"
+              },
+              "acquisitionMode": "IW",
+              "polarization": "DV",
+              "resolution": "HIGH",
+              "orbitDirection": "DESCENDING"
+            },
+            "options": {
+              "orthorectify": true,
+              "backCoeff": "GAMMA0_TERRAIN",
+              "demInstance": "COPERNICUS_30",
+              "speckleFilter": {
+                "type": "LEE",
+                "windowSizeX": 3,
+                "windowSizeY": 3
+              },
+              "upsampling": "BILINEAR",
+              "downsampling": "BILINEAR"
+            },
+            "request_sha256": "bee1c18deca0d554e217f6bb79e08f44d0363bc30e6e07993c8e2841861a4f41"
+          },
+          "limitations": [
+            "Radar backscatter is surface and structural context, cloud-independent; it does not observe sub-surface peat combustion, and a backscatter change is not a burn map.",
+            "A display product for human orientation; it is not analytical imagery and no burned area, cause, or responsibility is derived from it.",
+            "Pre- and post-event images from different orbit directions or relative orbits are not directly comparable pixel for pixel; the orbit is recorded with each image."
+          ],
+          "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
+          "generator_version": "cdse-process-imagery-v1",
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190904-0fb85076c0_s2-swir-false-colour-v1_post_event",
@@ -2639,7 +2887,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190904-0fb85076c0_s2-swir-false-colour-v1_pre_event",
@@ -2652,7 +2900,7 @@
           "format": "image/jpeg",
           "width": 1024,
           "height": 1024,
-          "bytes": 158024,
+          "bytes": 269126,
           "coverage_fraction": 1.0,
           "aoi": {
             "bbox": [
@@ -2666,20 +2914,20 @@
           },
           "acquisition": {
             "collection": "sentinel-2-l2a",
-            "product_id": "S2A_MSIL2A_20190831T021601_N0500_R003_T50MMA_20230524T231442",
-            "acquisition_time": "2019-08-31T02:16:01.024000Z",
+            "product_id": "S2B_MSIL2A_20190829T022559_N0500_R046_T50MLB_20230523T130339",
+            "acquisition_time": "2019-08-29T02:25:59.024000Z",
             "time_range": {
-              "from": "2019-08-31T00:00:00Z",
-              "to": "2019-08-31T23:59:59Z"
+              "from": "2019-08-29T00:00:00Z",
+              "to": "2019-08-29T23:59:59Z"
             },
             "orbit": {
-              "absolute": 21879,
-              "relative": 3,
+              "absolute": 12942,
+              "relative": 46,
               "state": "descending"
             },
-            "cloud_cover_pct": 15.31,
-            "temporal_distance_hours": 112.099716,
-            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2A_MSIL2A_20190831T021601_N0500_R003_T50MMA_20230524T231442"
+            "cloud_cover_pct": 36.72,
+            "temporal_distance_hours": 159.933604,
+            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2B_MSIL2A_20190829T022559_N0500_R046_T50MLB_20230523T130339"
           },
           "processing": {
             "recipe_id": "s2-swir-false-colour-v1",
@@ -2687,8 +2935,8 @@
             "evalscript_sha256": "8e21166251255a78f28e081e40a5bf5ba40a0f42445ac5a77f67fa6b1b13ed71",
             "data_filter": {
               "timeRange": {
-                "from": "2019-08-31T00:00:00Z",
-                "to": "2019-08-31T23:59:59Z"
+                "from": "2019-08-29T00:00:00Z",
+                "to": "2019-08-29T23:59:59Z"
               },
               "mosaickingOrder": "leastCC"
             },
@@ -2696,7 +2944,7 @@
               "upsampling": "BILINEAR",
               "downsampling": "BILINEAR"
             },
-            "request_sha256": "f181b580d8bdb291578b6e3124538f7cb47f57bfcd51a25ce81e52f88d14eea2"
+            "request_sha256": "d373e783587c37e6d849578eae77023bb30ea7bf74c0216ba11604ee0253d1f3"
           },
           "limitations": [
             "A display product for human orientation; it is not analytical imagery and no burned area, cause, or responsibility is derived from it.",
@@ -2705,27 +2953,91 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         }
       ],
-      "missing": [
-        {
-          "asset_id": "IMG_FE-20190904-0fb85076c0_s1-vvvh-db-composite-v1_pre_event",
-          "event_id": "FE-20190904-0fb85076c0",
-          "source_evidence_id": "ENV_IMAGERY_FE-20190904-0fb85076c0_Sentinel-1_pre_event",
-          "sensor": "Sentinel-1",
-          "position": "pre_event",
-          "label": "Radar context",
-          "product_id": "S1A_IW_GRDH_1SDV_20190830T215154_20190830T215219_028804_034359_EDA4_COG",
-          "acquisition_time": "2019-08-30T21:51:54.917759Z",
-          "reason": "only 3.6% of the 10 km square carried data on 2019-08-30; the selected product does not cover this event's surroundings",
-          "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
-        }
-      ]
+      "missing": []
     },
     "FE-20190904-4c8c830928": {
       "assets": [
+        {
+          "asset_id": "IMG_FE-20190904-4c8c830928_s1-vvvh-db-composite-v1_post_event",
+          "event_id": "FE-20190904-4c8c830928",
+          "source_evidence_id": "ENV_IMAGERY_FE-20190904-4c8c830928_Sentinel-1_post_event",
+          "sensor": "Sentinel-1",
+          "position": "post_event",
+          "label": "Radar context",
+          "path": "/imagery/FE-20190904-4c8c830928/s1-post.jpg",
+          "format": "image/jpeg",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 373230,
+          "coverage_fraction": 1.0,
+          "aoi": {
+            "bbox": [
+              116.347646,
+              -3.646826,
+              116.437654,
+              -3.556994
+            ],
+            "crs": "EPSG:4326",
+            "half_size_km": 5.0
+          },
+          "acquisition": {
+            "collection": "sentinel-1-grd",
+            "product_id": "S1A_IW_GRDH_1SDV_20190911T215155_20190911T215220_028979_03496E_B91E_COG",
+            "acquisition_time": "2019-09-11T21:51:55.436487Z",
+            "time_range": {
+              "from": "2019-09-11T00:00:00Z",
+              "to": "2019-09-11T23:59:59Z"
+            },
+            "orbit": {
+              "absolute": 28979,
+              "cycle": 180,
+              "relative": 32,
+              "state": "descending"
+            },
+            "cloud_cover_pct": null,
+            "temporal_distance_hours": 184.215399,
+            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-1-grd/items/S1A_IW_GRDH_1SDV_20190911T215155_20190911T215220_028979_03496E_B91E_COG"
+          },
+          "processing": {
+            "recipe_id": "s1-vvvh-db-composite-v1",
+            "description": "Sentinel-1 GRD IW dual-polarisation, calibrated by CDSE to Gamma0 with terrain correction (Copernicus DEM 30 m), orthorectified, thermal noise removed, Lee 3x3 speckle filter; rendered as VV dB (-20..0) / VH dB (-25..-5) / VV-VH dB (0..15) with fixed stretches; bilinear resampling to 1024 px over a 10 km square; no-data black.",
+            "evalscript_sha256": "c776fd06c79cc04c8200fee0876f93d6dcf98ab4376f099ecee5e795916a56c5",
+            "data_filter": {
+              "timeRange": {
+                "from": "2019-09-11T00:00:00Z",
+                "to": "2019-09-11T23:59:59Z"
+              },
+              "acquisitionMode": "IW",
+              "polarization": "DV",
+              "resolution": "HIGH",
+              "orbitDirection": "DESCENDING"
+            },
+            "options": {
+              "orthorectify": true,
+              "backCoeff": "GAMMA0_TERRAIN",
+              "demInstance": "COPERNICUS_30",
+              "speckleFilter": {
+                "type": "LEE",
+                "windowSizeX": 3,
+                "windowSizeY": 3
+              },
+              "upsampling": "BILINEAR",
+              "downsampling": "BILINEAR"
+            },
+            "request_sha256": "09f0a54d87e662ba97b8aa40889afced611a006f9755be706ebfd1d3da46df67"
+          },
+          "limitations": [
+            "Radar backscatter is surface and structural context, cloud-independent; it does not observe sub-surface peat combustion, and a backscatter change is not a burn map.",
+            "A display product for human orientation; it is not analytical imagery and no burned area, cause, or responsibility is derived from it.",
+            "Pre- and post-event images from different orbit directions or relative orbits are not directly comparable pixel for pixel; the orbit is recorded with each image."
+          ],
+          "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
+          "generator_version": "cdse-process-imagery-v1",
+          "generated_at": "2026-09-10T11:38:02+00:00"
+        },
         {
           "asset_id": "IMG_FE-20190904-4c8c830928_s1-vvvh-db-composite-v1_pre_event",
           "event_id": "FE-20190904-4c8c830928",
@@ -2802,7 +3114,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190904-4c8c830928_s2-swir-false-colour-v1_post_event",
@@ -2829,7 +3141,7 @@
           },
           "acquisition": {
             "collection": "sentinel-2-l2a",
-            "product_id": "S2B_MSIL2A_20190905T021609_N0500_R003_T50MLB_20230502T060337",
+            "product_id": "S2B_MSIL2A_20190905T021609_N0500_R003_T50MMB_20230502T060337",
             "acquisition_time": "2019-09-05T02:16:09.024000Z",
             "time_range": {
               "from": "2019-09-05T00:00:00Z",
@@ -2840,9 +3152,9 @@
               "relative": 3,
               "state": "descending"
             },
-            "cloud_cover_pct": 32.54,
+            "cloud_cover_pct": 39.65,
             "temporal_distance_hours": 20.619173,
-            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2B_MSIL2A_20190905T021609_N0500_R003_T50MLB_20230502T060337"
+            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2B_MSIL2A_20190905T021609_N0500_R003_T50MMB_20230502T060337"
           },
           "processing": {
             "recipe_id": "s2-swir-false-colour-v1",
@@ -2868,7 +3180,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190904-4c8c830928_s2-swir-false-colour-v1_pre_event",
@@ -2895,7 +3207,7 @@
           },
           "acquisition": {
             "collection": "sentinel-2-l2a",
-            "product_id": "S2A_MSIL2A_20190831T021601_N0500_R003_T50MMA_20230524T231442",
+            "product_id": "S2A_MSIL2A_20190831T021601_N0500_R003_T50MMB_20230524T231442",
             "acquisition_time": "2019-08-31T02:16:01.024000Z",
             "time_range": {
               "from": "2019-08-31T00:00:00Z",
@@ -2906,9 +3218,9 @@
               "relative": 3,
               "state": "descending"
             },
-            "cloud_cover_pct": 15.31,
+            "cloud_cover_pct": 34.09,
             "temporal_distance_hours": 99.383049,
-            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2A_MSIL2A_20190831T021601_N0500_R003_T50MMA_20230524T231442"
+            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2A_MSIL2A_20190831T021601_N0500_R003_T50MMB_20230524T231442"
           },
           "processing": {
             "recipe_id": "s2-swir-false-colour-v1",
@@ -2934,24 +3246,10 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         }
       ],
-      "missing": [
-        {
-          "asset_id": "IMG_FE-20190904-4c8c830928_s1-vvvh-db-composite-v1_post_event",
-          "event_id": "FE-20190904-4c8c830928",
-          "source_evidence_id": "ENV_IMAGERY_FE-20190904-4c8c830928_Sentinel-1_post_event",
-          "sensor": "Sentinel-1",
-          "position": "post_event",
-          "label": "Radar context",
-          "product_id": "S1A_IW_GRDH_1SDV_20190904T215955_20190904T220020_028877_0345E3_7233_COG",
-          "acquisition_time": "2019-09-04T21:59:55.687449Z",
-          "reason": "only 1.1% of the 10 km square carried data on 2019-09-04; the selected product does not cover this event's surroundings",
-          "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
-        }
-      ]
+      "missing": []
     },
     "FE-20190904-7d0ad45635": {
       "assets": [
@@ -3031,7 +3329,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190904-7d0ad45635_s1-vvvh-db-composite-v1_pre_event",
@@ -3109,7 +3407,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190904-7d0ad45635_s2-swir-false-colour-v1_post_event",
@@ -3136,7 +3434,7 @@
           },
           "acquisition": {
             "collection": "sentinel-2-l2a",
-            "product_id": "S2B_MSIL2A_20190905T021609_N0500_R003_T50MLB_20230502T060337",
+            "product_id": "S2B_MSIL2A_20190905T021609_N0500_R003_T50MMA_20230502T060337",
             "acquisition_time": "2019-09-05T02:16:09.024000Z",
             "time_range": {
               "from": "2019-09-05T00:00:00Z",
@@ -3147,9 +3445,9 @@
               "relative": 3,
               "state": "descending"
             },
-            "cloud_cover_pct": 32.54,
+            "cloud_cover_pct": 45.5,
             "temporal_distance_hours": 20.619173,
-            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2B_MSIL2A_20190905T021609_N0500_R003_T50MLB_20230502T060337"
+            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2B_MSIL2A_20190905T021609_N0500_R003_T50MMA_20230502T060337"
           },
           "processing": {
             "recipe_id": "s2-swir-false-colour-v1",
@@ -3175,7 +3473,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190904-7d0ad45635_s2-swir-false-colour-v1_pre_event",
@@ -3241,7 +3539,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         }
       ],
       "missing": []
@@ -3324,7 +3622,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190904-c297199844_s1-vvvh-db-composite-v1_pre_event",
@@ -3402,7 +3700,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190904-c297199844_s2-swir-false-colour-v1_post_event",
@@ -3429,7 +3727,7 @@
           },
           "acquisition": {
             "collection": "sentinel-2-l2a",
-            "product_id": "S2B_MSIL2A_20190905T021609_N0500_R003_T50MLB_20230502T060337",
+            "product_id": "S2B_MSIL2A_20190905T021609_N0500_R003_T50MMB_20230502T060337",
             "acquisition_time": "2019-09-05T02:16:09.024000Z",
             "time_range": {
               "from": "2019-09-05T00:00:00Z",
@@ -3440,9 +3738,9 @@
               "relative": 3,
               "state": "descending"
             },
-            "cloud_cover_pct": 32.54,
+            "cloud_cover_pct": 39.65,
             "temporal_distance_hours": 20.619173,
-            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2B_MSIL2A_20190905T021609_N0500_R003_T50MLB_20230502T060337"
+            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2B_MSIL2A_20190905T021609_N0500_R003_T50MMB_20230502T060337"
           },
           "processing": {
             "recipe_id": "s2-swir-false-colour-v1",
@@ -3468,7 +3766,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190904-c297199844_s2-swir-false-colour-v1_pre_event",
@@ -3495,7 +3793,7 @@
           },
           "acquisition": {
             "collection": "sentinel-2-l2a",
-            "product_id": "S2A_MSIL2A_20190831T021601_N0500_R003_T50MMA_20230524T231442",
+            "product_id": "S2A_MSIL2A_20190831T021601_N0500_R003_T50MMB_20230524T231442",
             "acquisition_time": "2019-08-31T02:16:01.024000Z",
             "time_range": {
               "from": "2019-08-31T00:00:00Z",
@@ -3506,9 +3804,9 @@
               "relative": 3,
               "state": "descending"
             },
-            "cloud_cover_pct": 15.31,
+            "cloud_cover_pct": 34.09,
             "temporal_distance_hours": 99.383049,
-            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2A_MSIL2A_20190831T021601_N0500_R003_T50MMA_20230524T231442"
+            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2A_MSIL2A_20190831T021601_N0500_R003_T50MMB_20230524T231442"
           },
           "processing": {
             "recipe_id": "s2-swir-false-colour-v1",
@@ -3534,7 +3832,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         }
       ],
       "missing": []
@@ -3566,8 +3864,8 @@
           },
           "acquisition": {
             "collection": "sentinel-1-grd",
-            "product_id": "S1A_IW_GRDH_1SDV_20190904T215955_20190904T220020_028877_0345E3_7233_COG",
-            "acquisition_time": "2019-09-04T21:59:55.687449Z",
+            "product_id": "S1A_IW_GRDH_1SDV_20190904T220020_20190904T220045_028877_0345E3_4185_COG",
+            "acquisition_time": "2019-09-04T22:00:20.687603Z",
             "time_range": {
               "from": "2019-09-04T00:00:00Z",
               "to": "2019-09-04T23:59:59Z"
@@ -3579,8 +3877,8 @@
               "state": "descending"
             },
             "cloud_cover_pct": null,
-            "temporal_distance_hours": 16.348802,
-            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-1-grd/items/S1A_IW_GRDH_1SDV_20190904T215955_20190904T220020_028877_0345E3_7233_COG"
+            "temporal_distance_hours": 16.355747,
+            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-1-grd/items/S1A_IW_GRDH_1SDV_20190904T220020_20190904T220045_028877_0345E3_4185_COG"
           },
           "processing": {
             "recipe_id": "s1-vvvh-db-composite-v1",
@@ -3617,7 +3915,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190904-d40ebe2600_s1-vvvh-db-composite-v1_pre_event",
@@ -3695,7 +3993,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190904-d40ebe2600_s2-swir-false-colour-v1_post_event",
@@ -3722,7 +4020,7 @@
           },
           "acquisition": {
             "collection": "sentinel-2-l2a",
-            "product_id": "S2B_MSIL2A_20190905T021609_N0500_R003_T50MLB_20230502T060337",
+            "product_id": "S2B_MSIL2A_20190905T021609_N0500_R003_T50MLA_20230502T060337",
             "acquisition_time": "2019-09-05T02:16:09.024000Z",
             "time_range": {
               "from": "2019-09-05T00:00:00Z",
@@ -3733,9 +4031,9 @@
               "relative": 3,
               "state": "descending"
             },
-            "cloud_cover_pct": 32.54,
+            "cloud_cover_pct": 40.34,
             "temporal_distance_hours": 20.619173,
-            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2B_MSIL2A_20190905T021609_N0500_R003_T50MLB_20230502T060337"
+            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2B_MSIL2A_20190905T021609_N0500_R003_T50MLA_20230502T060337"
           },
           "processing": {
             "recipe_id": "s2-swir-false-colour-v1",
@@ -3761,7 +4059,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190904-d40ebe2600_s2-swir-false-colour-v1_pre_event",
@@ -3827,7 +4125,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         }
       ],
       "missing": []
@@ -3910,7 +4208,85 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
+        },
+        {
+          "asset_id": "IMG_FE-20190904-f9e5a502d6_s1-vvvh-db-composite-v1_pre_event",
+          "event_id": "FE-20190904-f9e5a502d6",
+          "source_evidence_id": "ENV_IMAGERY_FE-20190904-f9e5a502d6_Sentinel-1_pre_event",
+          "sensor": "Sentinel-1",
+          "position": "pre_event",
+          "label": "Radar context",
+          "path": "/imagery/FE-20190904-f9e5a502d6/s1-pre.jpg",
+          "format": "image/jpeg",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 408088,
+          "coverage_fraction": 0.9999,
+          "aoi": {
+            "bbox": [
+              116.024243,
+              -3.492956,
+              116.114237,
+              -3.403124
+            ],
+            "crs": "EPSG:4326",
+            "half_size_km": 5.0
+          },
+          "acquisition": {
+            "collection": "sentinel-1-grd",
+            "product_id": "S1A_IW_GRDH_1SDV_20190823T215955_20190823T220020_028702_033FC1_E5AD_COG",
+            "acquisition_time": "2019-08-23T21:59:55.157483Z",
+            "time_range": {
+              "from": "2019-08-23T00:00:00Z",
+              "to": "2019-08-23T23:59:59Z"
+            },
+            "orbit": {
+              "absolute": 28702,
+              "cycle": 178,
+              "relative": 105,
+              "state": "descending"
+            },
+            "cloud_cover_pct": null,
+            "temporal_distance_hours": 271.651345,
+            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-1-grd/items/S1A_IW_GRDH_1SDV_20190823T215955_20190823T220020_028702_033FC1_E5AD_COG"
+          },
+          "processing": {
+            "recipe_id": "s1-vvvh-db-composite-v1",
+            "description": "Sentinel-1 GRD IW dual-polarisation, calibrated by CDSE to Gamma0 with terrain correction (Copernicus DEM 30 m), orthorectified, thermal noise removed, Lee 3x3 speckle filter; rendered as VV dB (-20..0) / VH dB (-25..-5) / VV-VH dB (0..15) with fixed stretches; bilinear resampling to 1024 px over a 10 km square; no-data black.",
+            "evalscript_sha256": "c776fd06c79cc04c8200fee0876f93d6dcf98ab4376f099ecee5e795916a56c5",
+            "data_filter": {
+              "timeRange": {
+                "from": "2019-08-23T00:00:00Z",
+                "to": "2019-08-23T23:59:59Z"
+              },
+              "acquisitionMode": "IW",
+              "polarization": "DV",
+              "resolution": "HIGH",
+              "orbitDirection": "DESCENDING"
+            },
+            "options": {
+              "orthorectify": true,
+              "backCoeff": "GAMMA0_TERRAIN",
+              "demInstance": "COPERNICUS_30",
+              "speckleFilter": {
+                "type": "LEE",
+                "windowSizeX": 3,
+                "windowSizeY": 3
+              },
+              "upsampling": "BILINEAR",
+              "downsampling": "BILINEAR"
+            },
+            "request_sha256": "56262e89249d82e2ecb2ba4fa61986a30f99e0f3dda2a15064a831fa2e8000bf"
+          },
+          "limitations": [
+            "Radar backscatter is surface and structural context, cloud-independent; it does not observe sub-surface peat combustion, and a backscatter change is not a burn map.",
+            "A display product for human orientation; it is not analytical imagery and no burned area, cause, or responsibility is derived from it.",
+            "Pre- and post-event images from different orbit directions or relative orbits are not directly comparable pixel for pixel; the orbit is recorded with each image."
+          ],
+          "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
+          "generator_version": "cdse-process-imagery-v1",
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190904-f9e5a502d6_s2-swir-false-colour-v1_post_event",
@@ -3976,7 +4352,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190904-f9e5a502d6_s2-swir-false-colour-v1_pre_event",
@@ -3989,7 +4365,7 @@
           "format": "image/jpeg",
           "width": 1024,
           "height": 1024,
-          "bytes": 162513,
+          "bytes": 252315,
           "coverage_fraction": 1.0,
           "aoi": {
             "bbox": [
@@ -4003,20 +4379,20 @@
           },
           "acquisition": {
             "collection": "sentinel-2-l2a",
-            "product_id": "S2A_MSIL2A_20190831T021601_N0500_R003_T50MMA_20230524T231442",
-            "acquisition_time": "2019-08-31T02:16:01.024000Z",
+            "product_id": "S2B_MSIL2A_20190829T022559_N0500_R046_T50MLB_20230523T130339",
+            "acquisition_time": "2019-08-29T02:25:59.024000Z",
             "time_range": {
-              "from": "2019-08-31T00:00:00Z",
-              "to": "2019-08-31T23:59:59Z"
+              "from": "2019-08-29T00:00:00Z",
+              "to": "2019-08-29T23:59:59Z"
             },
             "orbit": {
-              "absolute": 21879,
-              "relative": 3,
+              "absolute": 12942,
+              "relative": 46,
               "state": "descending"
             },
-            "cloud_cover_pct": 15.31,
-            "temporal_distance_hours": 99.383049,
-            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2A_MSIL2A_20190831T021601_N0500_R003_T50MMA_20230524T231442"
+            "cloud_cover_pct": 36.72,
+            "temporal_distance_hours": 147.216938,
+            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2B_MSIL2A_20190829T022559_N0500_R046_T50MLB_20230523T130339"
           },
           "processing": {
             "recipe_id": "s2-swir-false-colour-v1",
@@ -4024,8 +4400,8 @@
             "evalscript_sha256": "8e21166251255a78f28e081e40a5bf5ba40a0f42445ac5a77f67fa6b1b13ed71",
             "data_filter": {
               "timeRange": {
-                "from": "2019-08-31T00:00:00Z",
-                "to": "2019-08-31T23:59:59Z"
+                "from": "2019-08-29T00:00:00Z",
+                "to": "2019-08-29T23:59:59Z"
               },
               "mosaickingOrder": "leastCC"
             },
@@ -4033,7 +4409,7 @@
               "upsampling": "BILINEAR",
               "downsampling": "BILINEAR"
             },
-            "request_sha256": "a7f0222620a29367c25b4892b927e727b525477d3c63811d51b2c4636d4b5728"
+            "request_sha256": "6a696f7a488bdac2dc078f5d1c9d33a2c9850a8bb57003eb25621afdfc8f91f6"
           },
           "limitations": [
             "A display product for human orientation; it is not analytical imagery and no burned area, cause, or responsibility is derived from it.",
@@ -4042,24 +4418,10 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         }
       ],
-      "missing": [
-        {
-          "asset_id": "IMG_FE-20190904-f9e5a502d6_s1-vvvh-db-composite-v1_pre_event",
-          "event_id": "FE-20190904-f9e5a502d6",
-          "source_evidence_id": "ENV_IMAGERY_FE-20190904-f9e5a502d6_Sentinel-1_pre_event",
-          "sensor": "Sentinel-1",
-          "position": "pre_event",
-          "label": "Radar context",
-          "product_id": "S1A_IW_GRDH_1SDV_20190830T215154_20190830T215219_028804_034359_EDA4_COG",
-          "acquisition_time": "2019-08-30T21:51:54.917759Z",
-          "reason": "only 0.0% of the 10 km square carried data on 2019-08-30; the selected product does not cover this event's surroundings",
-          "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
-        }
-      ]
+      "missing": []
     },
     "FE-20190905-f47a306aba": {
       "assets": [
@@ -4139,7 +4501,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190905-f47a306aba_s1-vvvh-db-composite-v1_pre_event",
@@ -4217,7 +4579,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190905-f47a306aba_s2-swir-false-colour-v1_post_event",
@@ -4230,8 +4592,8 @@
           "format": "image/jpeg",
           "width": 1024,
           "height": 1024,
-          "bytes": 72735,
-          "coverage_fraction": 0.2407,
+          "bytes": 275331,
+          "coverage_fraction": 1.0,
           "aoi": {
             "bbox": [
               116.020245,
@@ -4244,20 +4606,20 @@
           },
           "acquisition": {
             "collection": "sentinel-2-l2a",
-            "product_id": "S2B_MSIL2A_20190908T022549_N0500_R046_T50MLA_20230502T141805",
-            "acquisition_time": "2019-09-08T02:25:49.024000Z",
+            "product_id": "S2A_MSIL2A_20190910T021601_N0500_R003_T50MLA_20230613T222421",
+            "acquisition_time": "2019-09-10T02:16:01.024000Z",
             "time_range": {
-              "from": "2019-09-08T00:00:00Z",
-              "to": "2019-09-08T23:59:59Z"
+              "from": "2019-09-10T00:00:00Z",
+              "to": "2019-09-10T23:59:59Z"
             },
             "orbit": {
-              "absolute": 13085,
-              "relative": 46,
+              "absolute": 22022,
+              "relative": 3,
               "state": "descending"
             },
-            "cloud_cover_pct": 28.31,
-            "temporal_distance_hours": 56.380284,
-            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2B_MSIL2A_20190908T022549_N0500_R046_T50MLA_20230502T141805"
+            "cloud_cover_pct": 20.1,
+            "temporal_distance_hours": 104.216951,
+            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2A_MSIL2A_20190910T021601_N0500_R003_T50MLA_20230613T222421"
           },
           "processing": {
             "recipe_id": "s2-swir-false-colour-v1",
@@ -4265,8 +4627,8 @@
             "evalscript_sha256": "8e21166251255a78f28e081e40a5bf5ba40a0f42445ac5a77f67fa6b1b13ed71",
             "data_filter": {
               "timeRange": {
-                "from": "2019-09-08T00:00:00Z",
-                "to": "2019-09-08T23:59:59Z"
+                "from": "2019-09-10T00:00:00Z",
+                "to": "2019-09-10T23:59:59Z"
               },
               "mosaickingOrder": "leastCC"
             },
@@ -4274,7 +4636,7 @@
               "upsampling": "BILINEAR",
               "downsampling": "BILINEAR"
             },
-            "request_sha256": "6bcc3d8eec08be388785f6b9d223d0da3f1e491bd84ba9575c692aec94eaebe0"
+            "request_sha256": "37c53fd301030c04402a52e4dff27265441e810e08e76c19d05bf5785db4a877"
           },
           "limitations": [
             "A display product for human orientation; it is not analytical imagery and no burned area, cause, or responsibility is derived from it.",
@@ -4283,7 +4645,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         },
         {
           "asset_id": "IMG_FE-20190905-f47a306aba_s2-swir-false-colour-v1_pre_event",
@@ -4310,7 +4672,7 @@
           },
           "acquisition": {
             "collection": "sentinel-2-l2a",
-            "product_id": "S2B_MSIL2A_20190905T021609_N0500_R003_T50MLB_20230502T060337",
+            "product_id": "S2B_MSIL2A_20190905T021609_N0500_R003_T50MLA_20230502T060337",
             "acquisition_time": "2019-09-05T02:16:09.024000Z",
             "time_range": {
               "from": "2019-09-05T00:00:00Z",
@@ -4321,9 +4683,9 @@
               "relative": 3,
               "state": "descending"
             },
-            "cloud_cover_pct": 32.54,
+            "cloud_cover_pct": 40.34,
             "temporal_distance_hours": 15.780827,
-            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2B_MSIL2A_20190905T021609_N0500_R003_T50MLB_20230502T060337"
+            "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2B_MSIL2A_20190905T021609_N0500_R003_T50MLA_20230502T060337"
           },
           "processing": {
             "recipe_id": "s2-swir-false-colour-v1",
@@ -4349,7 +4711,7 @@
           ],
           "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
           "generator_version": "cdse-process-imagery-v1",
-          "generated_at": "2026-09-10T05:56:08+00:00"
+          "generated_at": "2026-09-10T11:38:02+00:00"
         }
       ],
       "missing": []

@@ -9,7 +9,7 @@
   "format": "image/jpeg",
   "width": 1024,
   "height": 1024,
-  "bytes": 162513,
+  "bytes": 252315,
   "coverage_fraction": 1.0,
   "aoi": {
     "bbox": [
@@ -23,20 +23,20 @@
   },
   "acquisition": {
     "collection": "sentinel-2-l2a",
-    "product_id": "S2A_MSIL2A_20190831T021601_N0500_R003_T50MMA_20230524T231442",
-    "acquisition_time": "2019-08-31T02:16:01.024000Z",
+    "product_id": "S2B_MSIL2A_20190829T022559_N0500_R046_T50MLB_20230523T130339",
+    "acquisition_time": "2019-08-29T02:25:59.024000Z",
     "time_range": {
-      "from": "2019-08-31T00:00:00Z",
-      "to": "2019-08-31T23:59:59Z"
+      "from": "2019-08-29T00:00:00Z",
+      "to": "2019-08-29T23:59:59Z"
     },
     "orbit": {
-      "absolute": 21879,
-      "relative": 3,
+      "absolute": 12942,
+      "relative": 46,
       "state": "descending"
     },
-    "cloud_cover_pct": 15.31,
-    "temporal_distance_hours": 99.383049,
-    "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2A_MSIL2A_20190831T021601_N0500_R003_T50MMA_20230524T231442"
+    "cloud_cover_pct": 36.72,
+    "temporal_distance_hours": 147.216938,
+    "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2B_MSIL2A_20190829T022559_N0500_R046_T50MLB_20230523T130339"
   },
   "processing": {
     "recipe_id": "s2-swir-false-colour-v1",
@@ -44,8 +44,8 @@
     "evalscript_sha256": "8e21166251255a78f28e081e40a5bf5ba40a0f42445ac5a77f67fa6b1b13ed71",
     "data_filter": {
       "timeRange": {
-        "from": "2019-08-31T00:00:00Z",
-        "to": "2019-08-31T23:59:59Z"
+        "from": "2019-08-29T00:00:00Z",
+        "to": "2019-08-29T23:59:59Z"
       },
       "mosaickingOrder": "leastCC"
     },
@@ -53,7 +53,7 @@
       "upsampling": "BILINEAR",
       "downsampling": "BILINEAR"
     },
-    "request_sha256": "a7f0222620a29367c25b4892b927e727b525477d3c63811d51b2c4636d4b5728"
+    "request_sha256": "6a696f7a488bdac2dc078f5d1c9d33a2c9850a8bb57003eb25621afdfc8f91f6"
   },
   "limitations": [
     "A display product for human orientation; it is not analytical imagery and no burned area, cause, or responsibility is derived from it.",
@@ -62,5 +62,5 @@
   ],
   "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
   "generator_version": "cdse-process-imagery-v1",
-  "generated_at": "2026-09-10T05:56:08+00:00"
+  "generated_at": "2026-09-10T11:38:02+00:00"
 }

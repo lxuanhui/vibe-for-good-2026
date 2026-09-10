@@ -13,6 +13,15 @@ keeps network access, selection, and later imagery processing as separate
 pipeline stages and makes a selection reproducible from the STAC response.
 Scene metadata is environmental evidence provenance only; it is not a causal
 or responsibility finding.
+
+Closeness in time is not enough on its own.  A STAC search over a scope
+bounding box returns every product that touches the box, and the product
+closest to an event's window can be a tile that stops short of the event
+(#193: four of the sixteen demo events were handed a Sentinel-2 tile or a
+Sentinel-1 frame with 0-4 % data over their surroundings).  So when the
+caller supplies the event's location, a candidate must contain that point,
+judged against the item's own geometry or, failing that, its bbox, and the
+check is written into the scene's provenance.
 """
 from __future__ import annotations
 
@@ -24,8 +33,12 @@ from enum import StrEnum
 from typing import Any
 
 STAC_SEARCH_ENDPOINT = "https://stac.dataspace.copernicus.eu/v1/search"
-ALGORITHM_VERSION = "copernicus-scene-selector-v1"
+ALGORITHM_VERSION = "copernicus-scene-selector-v2"
 DEFAULT_MAX_CLOUD_COVER_PCT = 50.0
+
+# (lat, lon) in degrees. A mapping with ``lat``/``lon`` keys, which is what
+# the committed artifact's ``centroid`` is, is accepted in the same place.
+Location = tuple[float, float] | Mapping[str, Any]
 
 
 class ScenePosition(StrEnum):
@@ -350,6 +363,95 @@ def _orbit_metadata(properties: Mapping[str, Any]) -> dict[str, Any]:
     return orbit
 
 
+def _location(value: Location | None) -> tuple[float, float] | None:
+    if value is None:
+        return None
+    if isinstance(value, Mapping):
+        lat, lon = _numeric(value.get("lat")), _numeric(value.get("lon"))
+    else:
+        lat, lon = _numeric(value[0]), _numeric(value[1])
+    if lat is None or lon is None or not -90 <= lat <= 90 or not -180 <= lon <= 180:
+        raise ValueError(f"location must be a (lat, lon) pair in degrees, got {value!r}")
+    return lat, lon
+
+
+def _event_location(event: Any) -> tuple[float, float] | None:
+    """The centroid of a FireEvent-like mapping or object, if it carries one."""
+
+    if isinstance(event, Mapping):
+        centroid = event.get("centroid")
+    else:
+        centroid = getattr(event, "centroid", None)
+    if centroid is None:
+        return None
+    try:
+        return _location(centroid)
+    except (ValueError, TypeError, KeyError, IndexError):
+        return None
+
+
+def _ring_contains(ring: Sequence[Any], lat: float, lon: float) -> bool:
+    """Even-odd ray cast in plain lon/lat degrees.
+
+    Sentinel footprints are small against the globe and nowhere near the
+    antimeridian in this project's scope, so planar geometry is honest here;
+    a scene whose footprint edge passes within metres of the centroid is not
+    a scene that usefully covers it either way.
+    """
+
+    inside = False
+    count = len(ring)
+    if count < 3:
+        return False
+    j = count - 1
+    for i in range(count):
+        xi, yi = float(ring[i][0]), float(ring[i][1])
+        xj, yj = float(ring[j][0]), float(ring[j][1])
+        if (yi > lat) != (yj > lat):
+            crossing = (xj - xi) * (lat - yi) / (yj - yi) + xi
+            if lon < crossing:
+                inside = not inside
+        j = i
+    return inside
+
+
+def _polygon_contains(coordinates: Sequence[Any], lat: float, lon: float) -> bool:
+    if not coordinates:
+        return False
+    if not _ring_contains(coordinates[0], lat, lon):
+        return False
+    return not any(_ring_contains(hole, lat, lon) for hole in coordinates[1:])
+
+
+def footprint_contains(feature: Mapping[str, Any], location: Location) -> tuple[bool | None, str]:
+    """Whether a STAC item's footprint contains the point.
+
+    Returns the verdict and how it was reached: ``"geometry"`` for a Polygon
+    or MultiPolygon test, ``"bbox"`` when the item has no usable geometry, and
+    ``(None, "none")`` when it has neither, which a caller with a location
+    must treat as not covered rather than as covered.
+    """
+
+    lat, lon = _location(location)
+    geometry = feature.get("geometry")
+    if isinstance(geometry, Mapping):
+        kind = str(geometry.get("type", "")).lower()
+        coordinates = geometry.get("coordinates")
+        try:
+            if kind == "polygon":
+                return _polygon_contains(coordinates, lat, lon), "geometry"
+            if kind == "multipolygon":
+                return any(_polygon_contains(polygon, lat, lon) for polygon in coordinates), "geometry"
+        except (TypeError, ValueError, IndexError):
+            pass
+    bbox = feature.get("bbox")
+    if isinstance(bbox, Sequence) and not isinstance(bbox, (str, bytes)) and len(bbox) >= 4:
+        west, south, east, north = (_numeric(bbox[0]), _numeric(bbox[1]), _numeric(bbox[-2]), _numeric(bbox[-1]))
+        if None not in (west, south, east, north):
+            return (west <= lon <= east and south <= lat <= north), "bbox"
+    return None, "none"
+
+
 def _sensor_name(collection: str, properties: Mapping[str, Any]) -> str:
     constellation = str(properties.get("constellation", "")).lower()
     normalized_collection = collection.lower().replace("_", "-")
@@ -365,6 +467,7 @@ def _feature_scene(
     collection: str,
     position: ScenePosition,
     event_boundary: datetime,
+    footprint_check: Mapping[str, Any] | None = None,
 ) -> SelectedScene | None:
     properties = feature.get("properties")
     if not isinstance(properties, Mapping):
@@ -392,6 +495,9 @@ def _feature_scene(
         "catalogue_item": catalogue_reference,
         "collection": collection,
         "product_id": str(product_id),
+        # Present even when no location was supplied, so a consumer can tell
+        # "checked and contains the event" from "never checked".
+        "footprint_check": dict(footprint_check) if footprint_check else {"performed": False},
     }
     return SelectedScene(
         product_id=str(product_id),
@@ -420,11 +526,23 @@ def _select_for_position(
     *,
     max_cloud_cover_pct: float,
     apply_cloud_filter: bool,
+    location: tuple[float, float] | None = None,
 ) -> SelectedScene | None:
     candidates: list[SelectedScene] = []
     for feature in _feature_list(features):
         if not isinstance(feature, Mapping):
             continue
+        footprint_check: dict[str, Any] | None = None
+        if location is not None:
+            contains, method = footprint_contains(feature, location)
+            if not contains:
+                continue
+            footprint_check = {
+                "performed": True,
+                "method": method,
+                "event_centroid": {"lat": location[0], "lon": location[1]},
+                "contains_event_centroid": True,
+            }
         properties = feature.get("properties")
         if not isinstance(properties, Mapping):
             properties = {}
@@ -441,7 +559,7 @@ def _select_for_position(
         cloud_cover = _cloud_cover(properties)
         if apply_cloud_filter and (cloud_cover is None or cloud_cover > max_cloud_cover_pct):
             continue
-        scene = _feature_scene(feature, collection, position, event_boundary)
+        scene = _feature_scene(feature, collection, position, event_boundary, footprint_check)
         if scene is not None:
             candidates.append(scene)
 
@@ -465,11 +583,19 @@ def select_closest_scene(
     collection: str,
     event_end: str | datetime | None = None,
     max_cloud_cover_pct: float = DEFAULT_MAX_CLOUD_COVER_PCT,
+    location: Location | None = None,
 ) -> SelectedScene | None:
-    """Select one closest usable scene for one sensor and event position."""
+    """Select one closest usable scene for one sensor and event position.
+
+    With ``location`` (or a FireEvent-like ``event_start`` that carries a
+    ``centroid``), only items whose footprint contains that point are
+    candidates. Without either, selection is by time and cloud alone, as
+    before, and the scene's provenance says the check was not performed.
+    """
 
     if not math.isfinite(float(max_cloud_cover_pct)) or not 0 <= max_cloud_cover_pct <= 100:
         raise ValueError("max_cloud_cover_pct must be finite and between 0 and 100")
+    point = _location(location) if location is not None else _event_location(event_start)
     start_dt, end_dt, _, _ = _event_window(event_start, event_end)
     selected_position = ScenePosition(position)
     boundary = start_dt if selected_position is ScenePosition.PRE_EVENT else end_dt
@@ -481,6 +607,7 @@ def select_closest_scene(
         boundary,
         max_cloud_cover_pct=float(max_cloud_cover_pct),
         apply_cloud_filter=is_sentinel2,
+        location=point,
     )
 
 
@@ -492,6 +619,7 @@ def select_scenes(
     *,
     max_cloud_cover_pct: float = DEFAULT_MAX_CLOUD_COVER_PCT,
     cloud_cover_threshold_pct: float | None = None,
+    location: Location | None = None,
 ) -> CopernicusSceneSelection:
     """Select pre/post Sentinel scenes around an event.
 
@@ -499,13 +627,16 @@ def select_scenes(
     object, or a mapping with ``first_detection``/``last_detection`` fields.
     A point-in-time event uses the same timestamp for both boundaries.  The
     cloud threshold applies only to Sentinel-2 and scenes without a usable
-    catalogue cloud value are conservatively excluded.
+    catalogue cloud value are conservatively excluded.  ``location`` is the
+    event's (lat, lon); a FireEvent-like ``event_start`` with a ``centroid``
+    supplies it implicitly. Given either, a scene must contain the point.
     """
 
     if cloud_cover_threshold_pct is not None:
         max_cloud_cover_pct = cloud_cover_threshold_pct
     if not math.isfinite(float(max_cloud_cover_pct)) or not 0 <= max_cloud_cover_pct <= 100:
         raise ValueError("max_cloud_cover_pct must be finite and between 0 and 100")
+    point = _location(location) if location is not None else _event_location(event_start)
     start_dt, end_dt, start_text, end_text = _event_window(event_start, event_end)
 
     return CopernicusSceneSelection(
@@ -519,6 +650,7 @@ def select_scenes(
             collection="sentinel-2-l2a",
             event_end=end_dt,
             max_cloud_cover_pct=float(max_cloud_cover_pct),
+            location=point,
         ),
         sentinel2_post_event=select_closest_scene(
             sentinel2_features,
@@ -527,6 +659,7 @@ def select_scenes(
             collection="sentinel-2-l2a",
             event_end=end_dt,
             max_cloud_cover_pct=float(max_cloud_cover_pct),
+            location=point,
         ),
         sentinel1_pre_event=select_closest_scene(
             sentinel1_features,
@@ -535,6 +668,7 @@ def select_scenes(
             collection="sentinel-1-grd",
             event_end=end_dt,
             max_cloud_cover_pct=float(max_cloud_cover_pct),
+            location=point,
         ),
         sentinel1_post_event=select_closest_scene(
             sentinel1_features,
@@ -543,6 +677,7 @@ def select_scenes(
             collection="sentinel-1-grd",
             event_end=end_dt,
             max_cloud_cover_pct=float(max_cloud_cover_pct),
+            location=point,
         ),
     )
 

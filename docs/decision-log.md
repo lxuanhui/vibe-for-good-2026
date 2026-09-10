@@ -30,6 +30,70 @@ apply an older decision without checking the entries above it.
 
 ---
 
+## 2026-09-10 - A scene is selected for an event only if its footprint contains the event centroid, and the check is recorded in provenance
+
+**Status:** done · PR #253 · Closes #193 · Refs #171
+
+**Decision.** `scene_selection.select_scenes()` takes the event's location
+(explicitly, or from a FireEvent-like mapping's `centroid`) and drops every
+catalogue item whose footprint does not contain that point before choosing
+the closest in time. The test runs against the STAC item's `geometry`
+(Polygon or MultiPolygon, holes respected) and falls back to its `bbox`; an
+item with neither is treated as not covering. Each selected scene's
+`provenance.footprint_check` says what was checked, against what, and how
+(`geometry` or `bbox`); a selection made without a location says
+`performed: false` rather than implying a check that never ran. The
+algorithm version is `copernicus-scene-selector-v2`. `enrich_audit_events.py`
+passes every event's centroid, refuses a catalogue page at the search limit
+or with a `next` link instead of silently working from a truncated candidate
+list, and has a `--reselect-imagery` mode that redoes only scene selection
+for events that already carry imagery evidence and rewrites that evidence in
+place, leaving weather alone.
+
+**Why.** The two catalogue searches are over the whole scope bounding box
+(one per collection, see 2026-09-09 "weather and imagery"), so they return
+every product that touches the box. The selector then chose by time and
+cloud alone, and closest-in-time was the same product for every event: all
+sixteen demo events were named the Sentinel-2 tile T50MLB for the post scene
+and T50MMA for the pre scene, whichever sorted first among four tiles with
+identical timestamps, and the same two Sentinel-1 frames. The renderer pins
+by time range, not product id, and the Process API mosaics whatever tiles
+exist at that time, so ten events still rendered fine while the evidence
+named a tile that did not contain them. The four events nearest the scope's
+western and eastern edges did not: their nearest-in-time products stop short
+of them, and six of their images came back with 0-4 % data. After the
+footprint check every one of the sixteen events names a product that
+contains its centroid; the six sidecar-recorded gaps change to scenes from
+adjacent orbits (Sentinel-1 2019-08-23 instead of 08-30, Sentinel-2 relative
+orbit R046 on 08-29 and 09-13 instead of R003) that do cover them, at the
+cost of a few more days' temporal distance, which the scene metadata
+records.
+
+**Rejected: intersecting the 10 km render AOI instead of the centroid.** A
+tile clipping one corner of the AOI would pass and still leave most of the
+image empty; the centroid is what the renderer centres on and what the
+auditor is looking at. The AOI's own coverage fraction is still measured at
+render time and a scene below `MIN_COVERAGE_FRACTION` is still recorded as
+missing.
+
+**Rejected: searching per event with the event's own bbox.** It would make
+the footprint question disappear, at 16 (or 3,610) searches instead of two
+and a rate-limited catalogue. Two searches plus a pure in-memory point test
+is the same answer without the network cost, and the selection stays
+reproducible from the frozen response.
+
+**Rejected: a geodesic point-in-polygon.** Sentinel footprints are tens of
+kilometres across and nowhere near the antimeridian in this project's scope;
+a planar ray cast on lon/lat degrees is exact enough that any scene whose
+edge passes within metres of the centroid is not a useful scene either way.
+
+**Open.** The check is a point test. An event whose detections spread across
+a tile boundary can be named a scene that covers its centroid but not all of
+its detections; the rendered image's coverage fraction is the honest measure
+of that and is already in the manifest.
+
+---
+
 ## 2026-09-10 - An analysis job is claimed inside the store's compare-and-set, and every claim carries a job id its worker must present to write
 
 **Status:** done · PR #252 · Closes #189 · Refs #146, #143
@@ -769,6 +833,12 @@ attached the same four products to every event, so events at the western edge
 of the scope are told their scene is a tile that does not reach them. That is
 #193; the manifest records the gaps honestly rather than filling them from
 another date.
+
+> **Corrected 2026-09-10 by PR #253 (#193).** The selector did run per
+> event; what it lacked was a footprint test, so closest-in-time picked the
+> same products for everyone. The selector now requires a product to contain
+> the event centroid, and the six gaps are filled by scenes from adjacent
+> orbits. See the entry of that date.
 
 **Open.** #171 builds the drawer surface that reads `manifest.json`. Folding
 each image into the evidence response as a display attribute of its source

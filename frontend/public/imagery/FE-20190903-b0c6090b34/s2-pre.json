@@ -1,22 +1,22 @@
 {
-  "asset_id": "IMG_FE-20190904-0fb85076c0_s2-swir-false-colour-v1_pre_event",
-  "event_id": "FE-20190904-0fb85076c0",
-  "source_evidence_id": "ENV_IMAGERY_FE-20190904-0fb85076c0_Sentinel-2_pre_event",
+  "asset_id": "IMG_FE-20190903-b0c6090b34_s2-swir-false-colour-v1_pre_event",
+  "event_id": "FE-20190903-b0c6090b34",
+  "source_evidence_id": "ENV_IMAGERY_FE-20190903-b0c6090b34_Sentinel-2_pre_event",
   "sensor": "Sentinel-2",
   "position": "pre_event",
   "label": "Optical context",
-  "path": "/imagery/FE-20190904-0fb85076c0/s2-pre.jpg",
+  "path": "/imagery/FE-20190903-b0c6090b34/s2-pre.jpg",
   "format": "image/jpeg",
   "width": 1024,
   "height": 1024,
-  "bytes": 269126,
+  "bytes": 270150,
   "coverage_fraction": 1.0,
   "aoi": {
     "bbox": [
-      116.032372,
-      -3.519566,
-      116.122368,
-      -3.429734
+      115.858183,
+      -3.500146,
+      115.948177,
+      -3.410314
     ],
     "crs": "EPSG:4326",
     "half_size_km": 5.0
@@ -35,7 +35,7 @@
       "state": "descending"
     },
     "cloud_cover_pct": 36.72,
-    "temporal_distance_hours": 159.933604,
+    "temporal_distance_hours": 123.533604,
     "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-2-l2a/items/S2B_MSIL2A_20190829T022559_N0500_R046_T50MLB_20230523T130339"
   },
   "processing": {
@@ -53,7 +53,7 @@
       "upsampling": "BILINEAR",
       "downsampling": "BILINEAR"
     },
-    "request_sha256": "d373e783587c37e6d849578eae77023bb30ea7bf74c0216ba11604ee0253d1f3"
+    "request_sha256": "ee178091c486a34a6bd5bad5b1a98bd460dfccff66f953628b12413b46e2b760"
   },
   "limitations": [
     "A display product for human orientation; it is not analytical imagery and no burned area, cause, or responsibility is derived from it.",
