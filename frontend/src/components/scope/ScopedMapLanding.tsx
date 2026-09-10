@@ -3,7 +3,7 @@ import { Layer, Map, Source, type MapLayerMouseEvent } from 'react-map-gl/maplib
 import type { Feature, FeatureCollection, Geometry, LineString, Point } from 'geojson'
 import type { AnalysisJob, AuditEventSummary, AuditScope, EventEvidenceResponse, InvestigationMap, InvestigationMapNode, StructuredAnalysis } from '../../api/types'
 import { addToAuditPack, fetchAuditRegister, fetchInvestigationBundle, fetchInvestigationMap, generateInvestigationAnalysis } from '../../api/client'
-import { AUDIT_EVENT_COLORS, AUDIT_SCOPE_BOUNDARY_COLOR, AUDIT_SCOPE_BUFFER_COLOR, SURFACE_FIRE_ENVELOPE_COLOR } from '../../lib/layerColors'
+import { AUDIT_SCOPE_BOUNDARY_COLOR, AUDIT_SCOPE_BUFFER_COLOR, FIRE_EVENT_COLORS, FIRMS_HOTSPOT_COLORS, SURFACE_FIRE_ENVELOPE_COLOR } from '../../lib/layerColors'
 import { useAppStore } from '../../store/useAppStore'
 import { Button } from '../ui/Button'
 import { EvidenceDrawer } from '../audit/EvidenceDrawer'
@@ -12,7 +12,6 @@ import { eventOverlapsDay, observationDays, observationsForDay, type ScopedMapDa
 import 'maplibre-gl/dist/maplibre-gl.css'
 
 const GRAPH_LINE_COLOR = '#f97316'
-const OBSERVATION_COLOR = '#fbbf24'
 const SCOPED_MAP_RELATIONSHIP_DISTANCE_KM = 10
 const CLOCK_REFRESH_MS = 60 * 1000
 const TIMELINE_STEP_MS = 750
@@ -426,16 +425,16 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
               not a solid wash; the dashed outline (not subject to the same
               compounding) carries the actual boundary. */}
           {showSpreadEnvelopes && envelopes.features.length > 0 && <Source id="fireevent-spread-envelope" type="geojson" data={envelopes}><Layer id="fireevent-spread-envelope-fill" type="fill" paint={{ 'fill-color': SURFACE_FIRE_ENVELOPE_COLOR, 'fill-opacity': 0.05 }} /><Layer id="fireevent-spread-envelope-line" type="line" paint={{ 'line-color': SURFACE_FIRE_ENVELOPE_COLOR, 'line-width': 1.5, 'line-dasharray': [3, 3] }} /></Source>}
-          {showObservations && observations.features.length > 0 && <Source id="fireevent-observations" type="geojson" data={observations}><Layer id="fireevent-observations-points" type="circle" paint={{ 'circle-radius': 3, 'circle-color': OBSERVATION_COLOR, 'circle-opacity': 0.85, 'circle-stroke-color': '#0a0d12', 'circle-stroke-width': 1 }} /></Source>}
+          {showObservations && observations.features.length > 0 && <Source id="fireevent-observations" type="geojson" data={observations}><Layer id="fireevent-observations-points" type="circle" paint={{ 'circle-radius': 3, 'circle-color': FIRMS_HOTSPOT_COLORS.point, 'circle-opacity': 0.85, 'circle-stroke-color': FIRMS_HOTSPOT_COLORS.stroke, 'circle-stroke-width': 1 }} /></Source>}
           <Source id="audit-events" type="geojson" data={points}>
             <Layer
               id="audit-event-points"
               type="circle"
               paint={{
                 'circle-radius': ['match', ['get', 'focus'], 'SELECTED', 8, 'EXTERNAL_CONTEXT', 6, 5],
-                'circle-color': ['match', ['get', 'state'], 'LIKELY_FIRE', AUDIT_EVENT_COLORS.LIKELY_FIRE, 'LIKELY_NON_FIRE', AUDIT_EVENT_COLORS.LIKELY_NON_FIRE, AUDIT_EVENT_COLORS.AMBIGUOUS],
+                'circle-color': FIRE_EVENT_COLORS.point,
                 'circle-opacity': 0.9,
-                'circle-stroke-color': ['match', ['get', 'focus'], 'SELECTED', GRAPH_LINE_COLOR, AUDIT_SCOPE_BOUNDARY_COLOR],
+                'circle-stroke-color': ['match', ['get', 'focus'], 'SELECTED', FIRE_EVENT_COLORS.focused, AUDIT_SCOPE_BOUNDARY_COLOR],
                 'circle-stroke-width': ['match', ['get', 'focus'], 'SELECTED', 2.5, 'EXTERNAL_CONTEXT', 1.5, 0.75],
               }}
             />
