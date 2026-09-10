@@ -20,10 +20,66 @@ when changing that subsystem.
 | Infrastructure | Flask runs on Lambda behind API Gateway; Terraform owns the deployed configuration; CORS is Flask-owned. | 2026-09-09, Amplify; 2026-09-07, Lambda / CORS |
 | Service selection | DynamoDB and S3 are authorised without a fresh argument each time; every service switched on gets a cost row in `docs/infra.md` in the same PR. | 2026-09-09, DynamoDB and S3 are authorised |
 | Frontend tests | Vitest + jsdom + Testing Library, run in CI. They guard behaviours the product boundary depends on — explicit trigger, honest not-run state, no chain-of-thought — not the map, which jsdom cannot draw. | 2026-09-10, frontend test runner |
+| Review period | The scope form's date pickers are bounded to the coverage the committed artifact declares in `source.window`, read at runtime. The window is still a label rather than a filter (#161). | 2026-09-10, review period bounds |
 
 **Use this log:** entries retain the original diagnosis, rejected alternatives,
 and historical context. A later entry can supersede an earlier one; do not
 apply an older decision without checking the entries above it.
+
+---
+
+## 2026-09-10 - The review period is bounded by the dataset, because it is printed as fact
+
+**Status:** done · PR #162 · Closes #95
+
+#95 asked for a datepicker on the date inputs. Both inputs were already
+`type="date"`, so a native picker and a date-typed value were there; the
+premise was stale. What was missing is the part the issue was reaching for
+when it said the input should be "date time instead of random strings": the
+pickers accepted *any* date, and this build cannot answer for any date.
+
+The register is served from one committed artifact covering
+`2019-09-01..2019-09-05`, and `get_audit` copies the session's review window
+onto the scope without filtering the events by it (#161). So an out-of-range
+period does not come back empty — it comes back as the same 3,610 September
+2019 FireEvents under someone else's dates. That window is then printed as
+fact in two places: the engagement report's `Audit scope · start → end`
+header, which is what the exported PDF carries, and the evidence drawer's
+detection bar, which positions each event's detection *inside* the chosen
+span. A 2024 review therefore renders 2019 evidence against a 2024 axis and
+prints a 2024 period on the report. That is the demo blurring real data with
+a fixture, which `CLAUDE.md` forbids.
+
+**The bound is read from the artifact, not hardcoded.** The obvious
+implementation is two more constants beside `DEFAULT_REVIEW_START` /
+`DEFAULT_REVIEW_END` in `AuditStart.tsx`. Rejected: a second copy of the
+dates in the component would keep passing lint, build and every test while
+the committed dataset moved underneath it, and the bound would then be a
+confident claim about a window nothing holds — the same class of failure as
+a stale "State of things" line. The window is already served, as
+`source.window`, through the `fetchDemoDatasetSummary` call the first-load
+context panel makes; the form parses it from there.
+
+**A failed fetch leaves the pickers unbounded.** Not knowing the coverage is
+not the same as knowing it is unlimited, and no fallback range is invented:
+stating one from a failed request would be the fabrication this avoids. The
+defaults are inside the real window, so the form stays usable.
+
+**The submit-time check is kept even though the browser refuses the click.**
+`min`/`max` make an out-of-range value fail interactive validation in Chrome
+and in jsdom, so the guard is unreachable through the button — the test
+submits the form directly to cover it. It stays because a caller that reaches
+the form without interactive validation (`form.submit()`, an automation
+driver, a later `noValidate`) must not be able to create an audit whose
+printed period the evidence cannot support.
+
+`[color-scheme:dark]` on both inputs is what makes Chrome draw the calendar
+indicator and the picker panel for the dark surface they sit on; without it
+the control is a black glyph on a near-black field.
+
+This does not make the window a filter. A sub-range inside the coverage still
+returns all 3,610 events. That is #161, and it touches the backend, so it
+deploys on merge — deliberately not done the day before the demo.
 
 ---
 

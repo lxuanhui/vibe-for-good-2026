@@ -202,9 +202,12 @@ The demo must never blur which data is real and which is a fixture.
 deliverables and acceptance criteria written down. Work to it rather than
 beside it. If nothing covers the work, open one first; if the work
 *contradicts* an existing issue, say so in the issue before building the
-opposite of what it specifies. The queue runs `#56 → #57 → #58 → #59 → #60 →
-#61 → #62 → #64`; a new issue joins that order rather than jumping it.
-Exceptions and the full rule are in the `branch-and-pr` skill.
+opposite of what it specifies. The documented queue `#56 → #57 → #58 → #59 →
+#60 → #61 → #62 → #64` is **exhausted** — every one of those is closed — so
+there is no running order to join any more. Pick the next issue on what the
+demo needs, say in the PR why that one, and prefer work that does not deploy
+when the demo is close: merging an `infra/**` or `backend/**` PR applies
+Terraform. Exceptions and the full rule are in the `branch-and-pr` skill.
 
 **Never commit to `main`.** Every change goes on a branch and lands through a
 pull request, so the two of us can see what the other's Claude did before it
