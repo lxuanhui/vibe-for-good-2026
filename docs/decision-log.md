@@ -29,6 +29,45 @@ apply an older decision without checking the entries above it.
 
 ---
 
+## 2026-09-10 - The Amplify SPA rewrite is the documented regex 200 rule, because 404-200 on `/<*>` never rewrote the status
+
+**Status:** done · PR #TBD · Closes #115
+
+**Decision.** `infra/console.tf` carries AWS's documented single-page-app
+rule: a regex source that matches any path without a dot, or with an
+extension not in an explicit asset list, rewritten to `/index.html` with
+status `200`. The asset list is every extension the console serves from
+`public/` or `dist/`, with `geojson` spelled out because the regex treats
+`.geojson` and `.json` as different extensions.
+
+**Why.** The rule shipped on 2026-09-09 was `/<*>` with status `404-200`, and
+its comment described a negative lookahead the rule did not have. Measured
+on the live app: `/some/client/route` returned a 301 to the trailing-slash
+form, and that returned a 404 whose body was the app shell. The order of
+operations explains it. Amplify's clean-URL handling runs first (try
+`/route.html`, then redirect to `/route/` and try `/route/index.html`), and
+a `404-200` rule only fires on the resulting miss, so it can swap the body
+in but the redirect has already happened and the status stays 404. A 200
+rewrite on a regex source matches before any of that, so the URL is kept
+and the status is honest. Nothing in the console needs it today (no router;
+`App.tsx` switches views on state), but anything that reads status codes
+rather than bodies, an uptime check or a link unfurl, saw a dead page.
+
+**Rejected: a second rule added in the Amplify console.** `custom_rule` is
+Terraform-managed and replaced wholesale on apply, the same trap as #108,
+#110 and #113.
+
+**Rejected: keeping `/<*>` and only changing the status to 200.** A bare
+wildcard with a 200 rewrite catches every miss including a missing image or
+chunk, which then returns HTML and fails as a parse error instead of a 404.
+The lookahead is the whole point.
+
+**Open.** A path segment containing a dot (`/v1.2/route`) is treated as an
+extension by this regex and not rewritten. AWS's rule has the same
+behaviour; no console route is shaped that way.
+
+---
+
 ## 2026-09-10 - Clustering thresholds are an explicit, validated value recorded in the artifact; diagnostics are a developer command, not an API field
 
 **Status:** done · PR #215 · Closes #86
