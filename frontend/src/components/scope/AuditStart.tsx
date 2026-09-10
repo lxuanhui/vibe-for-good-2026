@@ -1,6 +1,6 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import type { AuditScope } from '../../api/types'
-import { buildFireHistory, createAuditReview, uploadAuditScope, uploadAuditScopeGeometry } from '../../api/client'
+import { buildFireHistory, createAuditReview, fetchDemoDatasetSummary, uploadAuditScope, uploadAuditScopeGeometry } from '../../api/client'
 import { buildScopePreview, DEFAULT_MANAGEMENT_UNIT_GEOMETRY } from '../../lib/scope'
 import { Button } from '../ui/Button'
 import { ScopePreviewMap } from './ScopePreviewMap'
@@ -15,6 +15,17 @@ function errorMessage(error: unknown): string {
 const DEFAULT_REVIEW_START = '2019-09-01'
 const DEFAULT_REVIEW_END = '2019-09-05'
 
+/** The artifact states its own coverage as "YYYY-MM-DD..YYYY-MM-DD".
+
+  Read at runtime rather than hardcoded beside the defaults above: a second
+  copy of the dates in this file would keep passing every check while the
+  committed dataset moved underneath it, and the bound would then be a claim
+  about a window nothing holds. */
+function parseCoverage(window: string): { start: string; end: string } | null {
+  const match = /^(\d{4}-\d{2}-\d{2})\.\.(\d{4}-\d{2}-\d{2})$/.exec(window.trim())
+  return match ? { start: match[1], end: match[2] } : null
+}
+
 export function AuditStart({ onReady, overlay = false, fullScreen = false, onClose }: { onReady: (scope: AuditScope) => void; overlay?: boolean; fullScreen?: boolean; onClose?: () => void }) {
   const [reviewStart, setReviewStart] = useState(DEFAULT_REVIEW_START)
   const [reviewEnd, setReviewEnd] = useState(DEFAULT_REVIEW_END)
@@ -24,6 +35,23 @@ export function AuditStart({ onReady, overlay = false, fullScreen = false, onClo
   const [fileError, setFileError] = useState('')
   const [submitError, setSubmitError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [coverage, setCoverage] = useState<{ start: string; end: string } | null>(null)
+
+  // The register is served from one committed artifact, and the review window
+  // is currently a label on it rather than a filter (#161). A period outside
+  // the artifact's coverage therefore does not return nothing -- it returns
+  // the same 2019 events under someone else's dates, and the engagement
+  // report prints that period as the audit scope. Bounding the pickers is
+  // what keeps the printed window a period the evidence actually comes from.
+  useEffect(() => {
+    let live = true
+    fetchDemoDatasetSummary()
+      // No fallback bound on failure. An unreachable API is not knowledge of
+      // what the dataset covers, and inventing a range here would state one.
+      .then((summary) => { if (live) setCoverage(parseCoverage(summary.window)) })
+      .catch(() => undefined)
+    return () => { live = false }
+  }, [])
 
   const preview = useMemo(() => {
     if (!geometry) return null
@@ -61,6 +89,14 @@ export function AuditStart({ onReady, overlay = false, fullScreen = false, onClo
     }
     if (reviewEnd < reviewStart) {
       setSubmitError('Review end must be on or after review start.')
+      return
+    }
+    // Belt and braces. `min`/`max` already make the browser refuse the
+    // submit, so this is unreachable through the button -- it is here for a
+    // caller that reaches the form without interactive validation, which must
+    // not produce an audit whose printed period the evidence cannot support.
+    if (coverage && (reviewStart < coverage.start || reviewEnd > coverage.end)) {
+      setSubmitError(`This build holds real FireEvents for ${coverage.start} to ${coverage.end} only. Choose a review period inside it.`)
       return
     }
     if (file && !preview) {
@@ -106,27 +142,43 @@ export function AuditStart({ onReady, overlay = false, fullScreen = false, onClo
           </p>
 
           <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
-            <div className="grid grid-cols-2 gap-3">
-              <label className="space-y-2 text-xs text-text-muted">
-                <span className="block uppercase tracking-wider">Review start</span>
-                <input
-                  required
-                  type="date"
-                  value={reviewStart}
-                  onChange={(event) => setReviewStart(event.target.value)}
-                  className="w-full rounded border border-border-strong bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent"
-                />
-              </label>
-              <label className="space-y-2 text-xs text-text-muted">
-                <span className="block uppercase tracking-wider">Review end</span>
-                <input
-                  required
-                  type="date"
-                  value={reviewEnd}
-                  onChange={(event) => setReviewEnd(event.target.value)}
-                  className="w-full rounded border border-border-strong bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent"
-                />
-              </label>
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-3">
+                <label className="space-y-2 text-xs text-text-muted">
+                  <span className="block uppercase tracking-wider">Review start</span>
+                  <input
+                    required
+                    type="date"
+                    value={reviewStart}
+                    min={coverage?.start}
+                    max={coverage?.end}
+                    onChange={(event) => setReviewStart(event.target.value)}
+                    className="w-full rounded border border-border-strong bg-bg px-3 py-2 text-sm text-text outline-none [color-scheme:dark] focus:border-accent"
+                  />
+                </label>
+                {/* The end picker's floor tracks the chosen start, so an
+                    inverted range is unreachable rather than only refused
+                    after submitting. */}
+                <label className="space-y-2 text-xs text-text-muted">
+                  <span className="block uppercase tracking-wider">Review end</span>
+                  <input
+                    required
+                    type="date"
+                    value={reviewEnd}
+                    min={reviewStart || coverage?.start}
+                    max={coverage?.end}
+                    onChange={(event) => setReviewEnd(event.target.value)}
+                    className="w-full rounded border border-border-strong bg-bg px-3 py-2 text-sm text-text outline-none [color-scheme:dark] focus:border-accent"
+                  />
+                </label>
+              </div>
+              {coverage && (
+                <span className="block text-[11px] text-text-faint">
+                  Selectable range is {coverage.start} to {coverage.end} — the window this build holds real
+                  observations for. A period outside it would label the register with dates the evidence
+                  does not come from.
+                </span>
+              )}
             </div>
 
             <label className="block space-y-2 text-xs text-text-muted">
