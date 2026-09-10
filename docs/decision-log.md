@@ -30,6 +30,41 @@ apply an older decision without checking the entries above it.
 
 ---
 
+## 2026-09-10 - The served scope names the population behind each review-queue figure, and the two are never divided into each other
+
+**Status:** done · PR #244 · Closes #187
+
+**Decision.** `GET /api/audits/{id}/events` keeps serving `reviewQueueCount`
+(the calibrated HIGH/URGENT routing count) and `compression` (Stage-1's
+events-to-review-queue ratio) at their existing values, and now serves beside
+them what each was computed over: `reviewQueueBasis` names the routing
+population, and `stage1ReviewQueueCount` plus `compressionBasis` carry the
+ratio's real denominator. One helper, `review_queue_fields`, produces the
+block for both the artifact-backed and the session-backed scope so the two
+paths cannot describe the same number differently.
+
+**Why.** The two figures read as a count and its ratio and are not: on the
+demo scope they are 396 and 1.0 over 3,610. The artifact's own
+`reviewQueueCount` is Stage-1's 3,610, and the API was overwriting it with
+the routing count under the same name, so the inconsistency was created at
+the override and inspectable nowhere. The first thing a maintainer did on
+#161 was recompute `compression` as `eventCount / reviewQueueCount`, turning
+a documented 1.0x (2026-09-08, Stage-1 is a classifier) into a 9.1x reduction
+nothing measured. A code comment caught it once; a field in the response
+catches it every time.
+
+**Rejected: renaming either field.** Nothing in the console reads them from
+the scope object, so a rename would have broken nobody and helped nobody. The
+trap is the missing denominator, not the names.
+
+**Rejected: not serving the Stage-1 count.** It is the denominator of a ratio
+that is served. Withholding it is what made the ratio unreproducible.
+
+**Unchanged.** No threshold, no definition, no artifact regeneration. Stage-1
+still does not compress FIRMS-only haze-season data and must not be tuned to.
+
+---
+
 ## 2026-09-10 - The Amplify SPA rewrite is the documented regex 200 rule, because 404-200 on `/<*>` never rewrote the status
 
 **Status:** done · PR #218 · Closes #115
