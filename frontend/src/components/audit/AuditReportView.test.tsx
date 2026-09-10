@@ -126,7 +126,11 @@ function report({ analysed }: { analysed: boolean }): AuditReport {
     })),
     maps: { selectedEventIds: events.map((summary) => summary.eventId), layers: {} },
     chronology: [],
-    deterministicEvidence: [],
+    deterministicEvidence: [{
+      eventId: ANALYSED,
+      observed: [{ evidence_id: 'E-OBS-014', category: 'thermal', type: 'observation', observation: 'Six FIRMS detections across the event window.', source: 'NASA FIRMS' }],
+      derived: [{ evidence_id: 'E-DER-003', category: 'triage', type: 'repeat_geometry', observation: 'The repeat detections share the same mapped geometry.', source: 'deterministic event reconstruction' }],
+    }],
     graphRelationships: [],
     aiAnalysis: analysed ? [{ eventId: ANALYSED, analysis: analysis() }] : [],
     analysisNotRunEventIds: analysed ? [NOT_RUN] : [ANALYSED, NOT_RUN],
@@ -181,6 +185,8 @@ test('a completed analysis renders its findings with evidence IDs, and keeps the
   expect(await screen.findByText('INVESTIGATOR')).toBeTruthy()
   expect(screen.getByText('SKEPTIC')).toBeTruthy()
   expect(screen.getByText('Detections persist across the same KHG unit for 49 h (E-OBS-014).')).toBeTruthy()
+  expect(screen.getAllByText('Six FIRMS detections across the event window.')).toHaveLength(3)
+  expect(screen.getAllByText('The repeat detections share the same mapped geometry.')).toHaveLength(3)
   // Support and sufficiency are rendered together but stay distinct values:
   // 72/100 of support at PARTIAL evidence is not 72% of a conclusion.
   expect(screen.getByText('72/100 · PARTIAL')).toBeTruthy()
@@ -196,6 +202,20 @@ test('a completed analysis renders its findings with evidence IDs, and keeps the
   if (!notRun) throw new Error('The not-run block has no container to search.')
   expect(within(notRun).getByText(NOT_RUN)).toBeTruthy()
   expect(within(notRun).queryByText(ANALYSED)).toBeNull()
+})
+
+test('main findings precede the selected-event and comprehensive evidence sections', async () => {
+  fetchAuditReportMock.mockResolvedValue(report({ analysed: true }))
+
+  render(<AuditReportView auditId={AUDIT_ID} onBack={() => {}} />)
+
+  const findings = await screen.findByTestId('main-findings')
+  const selected = screen.getByText('Selected FireEvents')
+  const evidenceLog = screen.getByTestId('evidence-log')
+  expect(findings.compareDocumentPosition(selected) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(selected.compareDocumentPosition(evidenceLog) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(within(findings).getByText('INVESTIGATOR')).toBeTruthy()
+  expect(within(findings).getByText('SKEPTIC')).toBeTruthy()
 })
 
 test('a failed run is reported without inventing an assessment', async () => {
