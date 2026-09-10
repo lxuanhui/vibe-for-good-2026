@@ -1,6 +1,6 @@
 import type { OverlayLayerId } from '../api/types'
 
-// Single source of truth for overlay layer colors — used both for MapLibre
+// Single source of truth for overlay layer colors: used both for MapLibre
 // paint expressions (ScopedMapLanding) and the layer legend
 // (LayerControlPanel), so the two can never drift apart. One color scheme,
 // reused everywhere -- this repo's own convention; `Environmental_Assurance_Spec.md`

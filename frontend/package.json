@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "oxlint",
+    "lint": "npm run lint:copy && oxlint",
+    "lint:copy": "node scripts/check-no-em-dashes.mjs src",
     "test": "vitest run",
     "preview": "vite preview"
   },

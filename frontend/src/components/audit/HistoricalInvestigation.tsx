@@ -34,7 +34,7 @@ function eventRows(events: AuditEventSummary[], selected: string[], toggle: (id:
       <td className="px-3 py-2 text-text-muted">{event.evidenceSufficiency}</td>
       <td className="px-3 py-2">{event.investigationPriority}</td>
       <td className="px-3 py-2 text-text-muted">{event.reviewState}</td>
-      <td className="px-3 py-2 text-right">{event.maxFrp?.toFixed(1) ?? '—'}</td>
+      <td className="px-3 py-2 text-right">{event.maxFrp?.toFixed(1) ?? 'n/a'}</td>
     </tr>
   ))
 }
@@ -61,13 +61,13 @@ export function RegisterSummary({ progression }: { progression: AuditProgression
       <section aria-labelledby="clustering-summary" className="bg-panel px-4 py-3">
         <div className="mb-2 flex items-center gap-2"><h2 id="clustering-summary" className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-faint">Observation derivation</h2><SummaryHelp label="observation derivation">Spatially and temporally related FIRMS observations are deterministically clustered into FireEvents. An observation is a satellite detection, not an individual fire.</SummaryHelp></div>
         <div className="flex items-end gap-3"><div><div className="font-semibold text-accent">{progression.qualifiedObservations.toLocaleString()}</div><div className="text-[10px] text-text-faint">QUALIFIED FIRMS OBSERVATIONS</div></div><div className="pb-3 text-text-faint">→</div><div><div className="font-semibold text-accent">{eventDenominator}</div><div className="text-[10px] text-text-faint">CLUSTERED FIREEVENTS</div></div></div>
-        <p className="mt-2 text-[10px] text-text-muted">{progression.observationsToEventsCompression?.toFixed(1) ?? '—'} observations per FireEvent on average. This is clustering, not a review queue.</p>
+        <p className="mt-2 text-[10px] text-text-muted">{progression.observationsToEventsCompression?.toFixed(1) ?? 'n/a'} observations per FireEvent on average. This is clustering, not a review queue.</p>
       </section>
       <section aria-labelledby="scope-summary" className="bg-panel px-4 py-3">
         <div className="mb-2 flex items-center gap-2"><h2 id="scope-summary" className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-faint">Current audit scope</h2></div>
-        <div className="font-semibold text-accent">{progression.inScopeAndBuffer?.toLocaleString() ?? '—'}</div>
+        <div className="font-semibold text-accent">{progression.inScopeAndBuffer?.toLocaleString() ?? 'n/a'}</div>
         <div className="text-[10px] text-text-faint">IN SCOPE</div>
-        <p className="mt-2 text-[10px] text-text-muted">{progression.scopeBoundaryAvailable ? `Count includes the configured context buffer: ${progression.inScopeAndBuffer?.toLocaleString() ?? '—'} of ${eventDenominator} FireEvents.` : 'No private audit boundary supplied; scope count is unavailable.'}</p>
+        <p className="mt-2 text-[10px] text-text-muted">{progression.scopeBoundaryAvailable ? `Count includes the configured context buffer: ${progression.inScopeAndBuffer?.toLocaleString() ?? 'n/a'} of ${eventDenominator} FireEvents.` : 'No private audit boundary supplied; scope count is unavailable.'}</p>
       </section>
       <section aria-labelledby="routing-summary" className="bg-panel px-4 py-3">
         <div className="mb-2 flex items-center gap-2"><h2 id="routing-summary" className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-faint">Scoped routing diagnostic</h2><SummaryHelp label="routing dimensions"><p>FIRMS observations are clustered into FireEvents. Stage 1 classification indicates fire support and is separate from evidence sufficiency.</p><p className="mt-2">Priority is a review-routing aid, separate from workflow status. Routing is not proof of causality or responsibility.</p><p className="mt-2">Because you control filtering, the register can include low-confidence or likely-non-fire events for inspection.</p></SummaryHelp></div>

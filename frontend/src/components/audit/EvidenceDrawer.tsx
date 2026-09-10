@@ -122,7 +122,7 @@ function WeatherSummary({ items }: { items: EvidenceObject[] }) {
     <thead><tr className="text-left text-text-faint"><th className="pb-1 font-normal">Variable</th>{windowOrder.map((w) => <th key={w} className="pb-1 pl-2 text-right font-normal">{w}</th>)}</tr></thead>
     <tbody>{typeOrder.map((type) => <tr key={type} className="border-t border-border/60">
       <td className="py-1 pr-2 capitalize">{type.replace(/_/g, ' ')}</td>
-      {windowOrder.map((w) => { const item = byType.get(type)?.get(w); return <td key={w} className="py-1 pl-2 text-right">{item ? formatWeatherValue(item) : '—'}</td> })}
+      {windowOrder.map((w) => { const item = byType.get(type)?.get(w); return <td key={w} className="py-1 pl-2 text-right">{item ? formatWeatherValue(item) : 'n/a'}</td> })}
     </tr>)}</tbody>
   </table>
 }
@@ -281,13 +281,13 @@ function AnalysisAssessmentSummary({ assessment }: { assessment: StructuredAnaly
     {assessment.findings.map((finding) => <article key={finding.hypothesis_id} className="border-t border-border/60 pt-2 first:border-0 first:pt-0">
       <div className="flex justify-between gap-2"><span className="font-mono">{finding.hypothesis_id}</span><span>{finding.support_score}/100 · {finding.evidence_sufficiency}</span></div>
       <p className="mt-1 text-text-muted">{finding.summary}</p>
-      <p className="mt-1 text-[10px] text-text-faint">Supports: {finding.supporting_evidence_ids.join(', ') || '—'} · Contradicts: {finding.contradicting_evidence_ids.join(', ') || '—'}</p>
+      <p className="mt-1 text-[10px] text-text-faint">Supports: {finding.supporting_evidence_ids.join(', ') || 'n/a'} · Contradicts: {finding.contradicting_evidence_ids.join(', ') || 'n/a'}</p>
     </article>)}
   </div>
 }
 
 function StructuredAnalysisSection({ analysis, loading, error, onGenerate }: { analysis?: StructuredAnalysis; loading: boolean; error?: string; onGenerate: () => void }) {
-  return <Section title="AI interpretation — Investigator / Skeptic">
+  return <Section title="AI interpretation: Investigator / Skeptic">
     {!analysis && <><p className="text-[11px] leading-4 text-text-muted">No structured analysis has been run for this FireEvent. Generation uses only the EvidenceObjects and relationship summaries shown in this audit.</p><Button variant="primary" className="mt-3 w-full text-[10px]" disabled={loading} onClick={onGenerate}>{loading ? 'GENERATING INVESTIGATION ANALYSIS…' : 'GENERATE INVESTIGATION ANALYSIS'}</Button></>}
     {error && <div role="alert" className="mt-3 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-[11px] text-red-200">{error}</div>}
     {analysis && <><p className="mb-2 text-[11px] leading-4 text-text-muted">Final structured assessments are evidence-linked interpretations, separate from deterministic evidence and human review. They do not establish cause or responsibility.</p><div className="grid gap-2 lg:grid-cols-2"><AnalysisAssessmentSummary assessment={analysis.final_assessment.investigator} /><AnalysisAssessmentSummary assessment={analysis.final_assessment.skeptic} /></div><div className="mt-3 rounded border border-border bg-bg/60 p-2 text-[11px]"><div className="font-semibold">Unresolved disagreement / verification</div>{analysis.unresolved_questions.length ? <ul className="mt-1 space-y-1 text-text-muted">{analysis.unresolved_questions.map((question, index) => <li key={`${question.question}-${index}`}>• {question.question} <span className="font-mono text-text-faint">({question.evidence_ids.join(', ')})</span></li>)}</ul> : <p className="mt-1 text-text-faint">No final disagreement was retained.</p>}</div><p className="mt-2 text-[10px] text-text-faint">Model/pipeline: {analysis.algorithm_version}. Evidence IDs are shown above; no private reasoning transcript is stored or displayed.</p></>}
@@ -367,7 +367,7 @@ export function EvidenceDrawer({
     {error && <div role="alert" className="m-4 rounded border border-status-urgent/40 bg-status-urgent/10 p-3 text-xs text-red-200"><div>{error}</div><Button className="mt-2" onClick={onRetry}>RETRY EVIDENCE</Button></div>}
     {data && <>
       <Section title="Summary">
-        <div className="grid grid-cols-2 gap-2 text-xs"><div><span className="text-text-muted">Scope relation</span><div>{data.scopeRelation}</div></div><div><span className="text-text-muted">Sufficiency</span><div>{data.evidenceSufficiency.value}</div></div><div><span className="text-text-muted">Investigation priority</span><div>{data.investigationPriority}</div></div><div><span className="text-text-muted">Human workflow</span><div>{data.reviewState}</div></div><div><span className="text-text-muted">Chronology</span><div>{data.event.firstDetection.slice(0, 16)} → {data.event.lastDetection.slice(0, 16)}</div></div><div><span className="text-text-muted">Observations</span><div>{data.event.observationCount} · max FRP {data.event.maxFrp?.toFixed(2) ?? '—'} MW</div></div></div>
+        <div className="grid grid-cols-2 gap-2 text-xs"><div><span className="text-text-muted">Scope relation</span><div>{data.scopeRelation}</div></div><div><span className="text-text-muted">Sufficiency</span><div>{data.evidenceSufficiency.value}</div></div><div><span className="text-text-muted">Investigation priority</span><div>{data.investigationPriority}</div></div><div><span className="text-text-muted">Human workflow</span><div>{data.reviewState}</div></div><div><span className="text-text-muted">Chronology</span><div>{data.event.firstDetection.slice(0, 16)} → {data.event.lastDetection.slice(0, 16)}</div></div><div><span className="text-text-muted">Observations</span><div>{data.event.observationCount} · max FRP {data.event.maxFrp?.toFixed(2) ?? 'n/a'} MW</div></div></div>
         <DetectionWindow firstDetection={data.event.firstDetection} lastDetection={data.event.lastDetection} reviewStart={reviewStart} reviewEnd={reviewEnd} />
         <p className="mt-2 text-[10px] text-text-muted">{data.evidenceSufficiency.reason}</p>
         <p className="mt-1 text-[10px] text-text-muted">Priority and workflow are deterministic routing aids; neither establishes cause, responsibility, or exoneration.</p>
@@ -395,11 +395,11 @@ export function EvidenceDrawer({
           Kept off-screen so the interactive drawer stays succinct. */}
       <div className="hidden print:block">
         <Section title="Observed evidence (full)"><EvidenceList items={data.observedEvidence} /></Section>
-        <Section title="Fire Complexity — every candidate feature"><EvidenceList items={grouped.complexity} /></Section>
-        <Section title="Investigation Priority — every component"><EvidenceList items={grouped.priority} /></Section>
-        <Section title="Weather — every variable/window as full EvidenceObjects"><EvidenceList items={grouped.weather} /></Section>
-        <Section title="Imagery — full scene metadata"><EvidenceList items={grouped.imagery} /></Section>
-        {graph && graph.edges.length > 0 && <Section title="Related FireEvents — full relationship evidence">
+        <Section title="Fire Complexity: every candidate feature"><EvidenceList items={grouped.complexity} /></Section>
+        <Section title="Investigation Priority: every component"><EvidenceList items={grouped.priority} /></Section>
+        <Section title="Weather: every variable/window as full EvidenceObjects"><EvidenceList items={grouped.weather} /></Section>
+        <Section title="Imagery: full scene metadata"><EvidenceList items={grouped.imagery} /></Section>
+        {graph && graph.edges.length > 0 && <Section title="Related FireEvents: full relationship evidence">
           <div className="space-y-2">{graph.edges.map((edge) => <article key={`${edge.sourceEventId}-${edge.targetEventId}`} className="rounded border border-black/20 p-2 text-[11px]">
             <div className="flex justify-between gap-2"><span className="font-mono">{edge.sourceEventId} → {edge.targetEventId}</span><span>{edge.distanceKm} km</span></div>
             <div className="mt-1">{edge.state} · {edge.supportingEvidenceIds?.join(', ') || 'no supporting IDs'} · {edge.modelVersion}</div>

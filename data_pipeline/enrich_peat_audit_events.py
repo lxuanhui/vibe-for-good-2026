@@ -50,7 +50,7 @@ def export_overlay(path: Path) -> None:
                 start = None
     payload = {"type": "FeatureCollection", "features": [{
         "type": "Feature",
-        "properties": {"source": "Greifswald Mire Centre — Global Peatland Map 2.0 (GPM 2022)", "display_resolution_km": 4.5},
+        "properties": {"source": "Greifswald Mire Centre: Global Peatland Map 2.0 (GPM 2022)", "display_resolution_km": 4.5},
         "geometry": {"type": "MultiPolygon", "coordinates": polygons},
     }]}
     path.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")

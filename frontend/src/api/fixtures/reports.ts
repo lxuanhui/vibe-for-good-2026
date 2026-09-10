@@ -252,7 +252,7 @@ const REPORT_C: InvestigationReport = {
         { clusterId: 'IND-02671-2026-09-07', elapsedHours: 216, eastKm: 1.9, northKm: -0.2, distanceKm: 1.91, insideExpectedEnvelope: true },
       ],
       observationsOutsideExpectedEnvelope: [],
-      note: 'The later cluster falls inside the first-order surface-fire envelope at the modeled elapsed time (E9) — geometric compatibility only, not a tracked path.',
+      note: 'The later cluster falls inside the first-order surface-fire envelope at the modeled elapsed time (E9). This is geometric compatibility only, not a tracked path.',
     },
   },
   limitations: [

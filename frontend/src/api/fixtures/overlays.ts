@@ -95,7 +95,7 @@ const SAR_PASS_INDEX: Record<string, number> = { '2026-08-29': 0, '2026-09-04': 
 function sarBackscatterForDate(date: string): FeatureCollection<PointGeometry, SarBackscatterProperties> {
   if (!SAR_AVAILABLE_DATES.has(date)) return featureCollection([])
   const passIndex = SAR_PASS_INDEX[date] ?? 0
-  // Case C shows a persistent VH-backscatter drop across both passes — the
+  // Case C shows a persistent VH-backscatter drop across both passes: the
   // deterministic signal FireComplex linking keys off. Case B shows a single
   // pass with no persistence trend.
   const features: Feature<PointGeometry, SarBackscatterProperties>[] = [

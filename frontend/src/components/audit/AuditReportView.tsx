@@ -14,7 +14,7 @@ function ReviewRow({ eventId, event, review, onSave, onRemove }: { eventId: stri
 }
 
 function AssessmentSummary({ assessment }: { assessment: StructuredAnalysisAssessment }) {
-  return <div className="space-y-2"><div className="font-semibold text-accent">{assessment.role}</div>{assessment.findings.map((finding) => <div key={finding.hypothesis_id} className="break-inside-avoid border-t border-border/60 pt-2 text-[11px]"><div className="flex justify-between gap-2"><span className="font-mono">{finding.hypothesis_id}</span><span>{finding.support_score}/100 · {finding.evidence_sufficiency}</span></div><p className="mt-1 text-text-muted">{finding.summary}</p><p className="mt-1 font-mono text-[10px] text-text-faint">+ {finding.supporting_evidence_ids.join(', ') || '—'} · − {finding.contradicting_evidence_ids.join(', ') || '—'}</p></div>)}</div>
+  return <div className="space-y-2"><div className="font-semibold text-accent">{assessment.role}</div>{assessment.findings.map((finding) => <div key={finding.hypothesis_id} className="break-inside-avoid border-t border-border/60 pt-2 text-[11px]"><div className="flex justify-between gap-2"><span className="font-mono">{finding.hypothesis_id}</span><span>{finding.support_score}/100 · {finding.evidence_sufficiency}</span></div><p className="mt-1 text-text-muted">{finding.summary}</p><p className="mt-1 font-mono text-[10px] text-text-faint">+ {finding.supporting_evidence_ids.join(', ') || 'n/a'} · − {finding.contradicting_evidence_ids.join(', ') || 'n/a'}</p></div>)}</div>
 }
 
 function EvidenceReferences({ label, ids, evidenceById }: { label: string; ids: string[]; evidenceById: Map<string, EvidenceObject> }) {
