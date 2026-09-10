@@ -54,12 +54,25 @@ Only three things, in order of likelihood:
    evidence pack (19,075 input + ~3,500 output tokens per call) at published
    `ap-southeast-1` Bedrock on-demand rates on 2026-09-10:
 
-   | Model | $/1M in | $/1M out | Per assessment |
-   |---|---|---|---|
-   | **Claude Haiku 4.5** (deployed) | $1 | $5 | **$0.15** |
-   | Claude Sonnet 5 | $2 | $10 | $0.29 |
-   | Claude Opus 5 | $5 | $25 | $0.73 |
-   | Amazon Nova Lite | $0.081 | $0.324 | $0.011 |
+   | Model | $/1M in | $/1M out | Per assessment | Entitled? |
+   |---|---|---|---|---|
+   | **Claude Haiku 4.5** (deployed) | $1 | $5 | **$0.15** | yes |
+   | Claude Sonnet 5 | $2 | $10 | $0.29 | **no** |
+   | Claude Opus 5 | $5 | $25 | $0.73 | **no** |
+   | Amazon Nova Lite | $0.081 | $0.324 | $0.011 | not probed |
+
+   The entitlement column is not a footnote — it is the difference between a
+   model you can choose and one you cannot. Verified by real Converse calls on
+   account 424609180893 in `ap-southeast-1` on 2026-09-10: the Claude 5 family
+   returns `AccessDeniedException: "... is not available for this account"`, so
+   the two cheapest-looking upgrades in this table cannot be switched to by
+   changing `var.bedrock_model_id`. **Claude Sonnet 4.5 is entitled** and is
+   the only alternative that can actually be selected today; its rate is not
+   listed here because it was not verified against published pricing at the
+   same time as the rest of the table, and an unverified number in a cost
+   document is worse than an absent one. Background, and how to tell a wrong
+   model ID from a missing entitlement, is in the decision log (2026-09-10,
+   Bedrock).
 
    So ~$15 per 100 assessments. Cheaper models are not a saving here: the
    ones tried below Haiku 4.5 were both slower and failed schema validation,

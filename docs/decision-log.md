@@ -426,13 +426,80 @@ past the API Gateway cap in the Lambda's own 900s budget, persist to the
 That changes the API contract and the frontend, so it is tracked separately
 rather than folded in here.
 
+**Re-probed 2026-09-10, because "surely Claude 5 is available now" is a
+question this project keeps asking.** It is not, and the reason it looks like
+it should be is a naming trap worth writing down.
+
+The Claude 5 models carry **no date stamp and no version suffix**. Bedrock
+lists them as bare `anthropic.claude-sonnet-5` and `anthropic.claude-opus-5`,
+next to the dated `anthropic.claude-haiku-4-5-20251001-v1:0` form. An ID that
+short looks truncated, so the natural conclusion on an `AccessDeniedException`
+is "I typed the ID wrong" -- and that conclusion is wrong.
+
+**Tell a wrong ID from a missing entitlement by the exception type.** They are
+different failures and Bedrock distinguishes them precisely:
+
+| Model ID sent | Result |
+|---|---|
+| `apac.anthropic.claude-sonnet-5` | `ValidationException: The provided model identifier is invalid` |
+| `global.anthropic.claude-sonnet-5` | `AccessDeniedException: ... is not available for this account` |
+| `anthropic.claude-sonnet-5` | `AccessDeniedException: ... is not available for this account` |
+| `global.anthropic.claude-opus-5` | `AccessDeniedException: ... is not available for this account` |
+| `global.anthropic.claude-sonnet-4-5-20250929-v1:0` | Invoked, replied |
+| `global.anthropic.claude-haiku-4-5-20251001-v1:0` | Invoked, replied |
+
+`ValidationException` means Bedrock could not resolve the identifier -- that is
+a typo. `AccessDeniedException` means it resolved it fine and the account may
+not call it. Every Claude 5 attempt above is the second kind. Same account
+(424609180893), same region (`ap-southeast-1`), same credentials, same call
+shape as the two that succeeded, so nothing but entitlement separates them.
+
+**`GetFoundationModelAvailability` answers this without spending a token, but
+only one of its four fields is load-bearing.** `agreementAvailability.status`
+is the gate. `authorizationStatus`, `entitlementAvailability` and
+`regionAvailability` read AUTHORIZED/AVAILABLE for *every* Claude model
+including the ones that cannot be invoked, so reading them is worse than
+reading nothing -- they positively suggest access that does not exist.
+Measured in `ap-southeast-1`: `agreementAvailability` is AVAILABLE for Haiku
+4.5 and Sonnet 4.5, NOT_AVAILABLE for Sonnet 5, Opus 5, Sonnet 4.6 and Opus
+4.8. `ListInferenceProfiles` showing ACTIVE remains meaningless, as above.
+
+**What would change it:** the model-use-case form in the Bedrock console,
+which is an account-level agreement. It is free, but it is the account owner's
+to submit and it does not return instantly. **A Bedrock API key would not
+help** -- an API key changes *authentication*, and this is an *authorization*
+failure against the account, so the same key on this account still cannot call
+Sonnet 5. It would also replace the Lambda's IAM role with a static long-lived
+credential stored in Terraform state, against the no-static-AWS-credentials
+rule in `CLAUDE.md`. Using the Anthropic API directly instead of Bedrock would
+genuinely reach Sonnet 5, but it is a new provider integration plus a real
+credential in GitHub secrets and Lambda env.
+
+**One argument above has weakened and should not be quoted as-is.** Haiku 4.5
+was chosen on two grounds -- entitled, and roughly twice as fast as Sonnet 4.5
+-- and speed mattered because delivery was synchronous under a hard 30s API
+Gateway cap. That cap is gone: analysis is an async job with the Lambda's 900s
+budget. Sonnet 4.5's 44.3s is no longer disqualifying, so **the live objection
+to Sonnet 4.5 is now only that it failed the evidence-ID guard**, on a single
+run. That is thin evidence to settle a model choice on permanently. Re-running
+the comparison against the real pack is worth doing after the demo; changing
+the model the day before it is not.
+
 ---
 
 ## 2026-09-09 - Investigator/Skeptic analysis is explicit, evidence-bound, and durable
 
 **Status:** done Â· issue #64
 
-**Decision.** The real audit path uses `POST /api/audits/{audit_id}/events/{event_id}/analyse` to invoke Claude Sonnet 5 only after the auditor presses **GENERATE INVESTIGATION ANALYSIS**. The provider receives structured, provenance-bearing EvidenceObjects and deterministic FireEventGraph relationship summaries, not raw point dumps. The existing pipeline validates every returned hypothesis and evidence reference before the result is stored with the audit session in DynamoDB (or local memory in development).
+**Annotated 2026-09-10:** this entry originally named Claude Sonnet 5 as the
+model invoked. It never ran on Sonnet 5 -- that account is not entitled to the
+Claude 5 family (see the 2026-09-10 Bedrock entry, which has the probe and the
+exception-type test). The deployed model is
+`global.anthropic.claude-haiku-4-5-20251001-v1:0`, set by `var.bedrock_model_id`.
+Everything else in this entry -- the evidence-bound contract, the interpretation
+boundary, the report behaviour -- is model-independent and still holds.
+
+**Decision.** The real audit path uses `POST /api/audits/{audit_id}/events/{event_id}/analyse` to invoke a Bedrock-hosted Claude model only after the auditor presses **GENERATE INVESTIGATION ANALYSIS**. The provider receives structured, provenance-bearing EvidenceObjects and deterministic FireEventGraph relationship summaries, not raw point dumps. The existing pipeline validates every returned hypothesis and evidence reference before the result is stored with the audit session in DynamoDB (or local memory in development).
 
 **Interpretation boundary.** The fixed H1-H6 mechanism set covers local ignition, surface propagation, peat-mediated persistence/propagation, related land-management ignitions, shared-condition regional events, and other mechanisms. Evidence sufficiency is separate from support. The provider prompt and the pipeline prohibit company identity, intent, blame, legal, and responsibility inference; output is compact findings, evidence IDs, limitations, disagreement, and targeted human verification questions, never a transcript or chain-of-thought.
 
