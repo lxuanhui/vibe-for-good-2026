@@ -389,8 +389,6 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
       <aside className="scoped-map-print-hide flex w-80 shrink-0 flex-col overflow-y-auto border-l border-border-strong bg-panel">
         <div className="border-b border-border-strong p-4">
           <div className="text-sm uppercase tracking-[0.16em] text-accent">Audit scope map</div>
-          <h1 className="mt-1 text-base font-semibold">FireEvents in scope + context</h1>
-          <p className="mt-2 text-sm leading-5 text-text-muted">Review scoped FireEvents and optional peat context.</p>
           <div className="mt-3 rounded border border-border bg-bg p-2.5 text-sm"><div className="text-text-faint">EVENTS SHOWN</div><div className="mt-1 text-xl font-semibold text-accent">{loading ? '…' : visibleEvents.length.toLocaleString()}</div></div>
           <div className="mt-3 rounded border border-border bg-bg p-3" aria-label="Temporal observation scrubber">
             <div className="flex items-center justify-between text-xs uppercase tracking-[0.12em] text-text-faint"><span>OBSERVATION DAY</span><span className="text-accent">{activeDay ?? 'ALL DAYS'}</span></div>
