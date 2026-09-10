@@ -91,6 +91,7 @@ it('selects candidates from the full keyboard-accessible row surface', async () 
   render(<ScopedMapLanding scope={scope} onOpenScope={() => undefined} onOpenRegister={() => undefined} onViewReport={() => undefined} />)
 
   await screen.findByRole('list', { name: 'Available observation dates' })
+  expect(screen.queryByText(/Night shade shows/)).toBeNull()
   const candidate = screen.getByRole('button', { name: 'Select FE-1 for audit report' })
   const list = candidate.closest('ul') as HTMLElement
   const user = userEvent.setup()

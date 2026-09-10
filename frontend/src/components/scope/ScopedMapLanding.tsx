@@ -17,10 +17,9 @@ const CLOCK_REFRESH_MS = 60 * 1000
 const TIMELINE_STEP_MS = 750
 
 function southeastAsiaLight(date: Date) {
-  // UTC+8 is a useful regional midpoint. This is visual orientation only.
   const localHour = (date.getUTCHours() + date.getUTCMinutes() / 60 + 8) % 24
   const daylight = Math.max(0, Math.sin(((localHour - 6) / 12) * Math.PI))
-  return { daylight, label: daylight > 0.15 ? 'DAYLIGHT' : 'NIGHT' }
+  return { daylight }
 }
 
 // The correlation graph is one rolled-together view now, not two flows that
