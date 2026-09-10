@@ -21,10 +21,67 @@ when changing that subsystem.
 | Service selection | DynamoDB and S3 are authorised without a fresh argument each time; every service switched on gets a cost row in `docs/infra.md` in the same PR. | 2026-09-09, DynamoDB and S3 are authorised |
 | Frontend tests | Vitest + jsdom + Testing Library, run in CI. They guard behaviours the product boundary depends on — explicit trigger, honest not-run state, no chain-of-thought — not the map, which jsdom cannot draw. | 2026-09-10, frontend test runner |
 | Review period | The scope form's date pickers are bounded to the coverage the committed artifact declares in `source.window`, read at runtime. The window is still a label rather than a filter (#161). | 2026-09-10, review period bounds |
+| Line endings | `.gitattributes` normalises all text to LF in the repository and on checkout; binary artifacts are declared explicitly rather than left to git's heuristic. | 2026-09-10, line endings |
 
 **Use this log:** entries retain the original diagnosis, rejected alternatives,
 and historical context. A later entry can supersede an earlier one; do not
 apply an older decision without checking the entries above it.
+
+---
+
+## 2026-09-10 - Line endings are normalised by `.gitattributes`, so a Windows commit cannot manufacture a merge conflict
+
+**Status:** done · PR #184 · Closes #132
+
+**Decision.** A root `.gitattributes` sets `* text=auto eol=lf`: text is stored
+LF in the repository and checked out LF on every platform, whatever a
+contributor's `core.autocrlf` says. Binary artifacts — `*.gz`, `*.npy`, `*.pdf`
+and the pre-emptive image and font extensions — are declared `binary`
+explicitly.
+
+**Why.** A Windows checkout committed four files as CRLF through PR #129. When
+one side of a merge is CRLF and the other LF, *every line* of the file differs,
+so git finds no hunks and reports the whole file as a single conflict. Merging
+#131 hit 15 conflicted files; 4 were pure line-ending noise and 2 of those had
+no real content difference at all once `\r` was stripped. They had to be
+resolved by hand-running three-way merges on `tr -d '\r'`-normalised blobs.
+That is a whole class of merge pain, and it lands on whoever merges next rather
+than on whoever caused it.
+
+The four CRLF files were already normalised back to LF by the #131 merge, so
+`git add --renormalize .` in this PR changed nothing — the commit is purely
+preventative. That is the intended outcome, not a sign the fix did nothing:
+without the file, the *next* Windows commit reintroduces the problem.
+
+**Rejected: `git -c merge.renormalize=true` at merge time.** The obvious escape
+hatch, and it does not work. `merge.renormalize` reads its normalisation rules
+from `.gitattributes`; with no such file there is nothing for it to act on, so
+it silently does nothing. It becomes useful *because* of this change, not
+instead of it.
+
+**Rejected: relying on git's binary auto-detection for the artifacts.**
+`text=auto` classifies by NUL-byte sniffing and would very likely get these
+right on its own. But `backend/app/data/audit_events.json.gz` and
+`audit_triage_detail.json.gz` genuinely contain CR bytes (916 and 4,805
+respectively), and the three `data_pipeline/golden/**/raster_crop.npy` files are
+the regression baselines. A misclassification would corrupt the dataset the API
+serves, or the baseline the tests compare against, *silently* — the failure mode
+is a wrong number on the console, not a crash. Too cheap to leave to a
+heuristic.
+
+**Verified.** All six binary blob hashes are identical before and after
+`git add --renormalize .`. `eol=lf` is still reported as inherited on the binary
+paths by `git check-attr`, which looks alarming and is not: `binary` unsets
+`text`, and end-of-line conversion requires `text`. Confirmed empirically rather
+than from the docs, whose wording on this differs between git versions — a
+scratch repo using the same rule ordering, cloned with `core.autocrlf=true` to
+simulate a Windows checkout, returned a CR-bearing binary byte-identical while
+still checking a CRLF source file out as LF.
+
+**Open.** `.npy` was added beyond what #132 asked for. The same
+Windows-checkout root cause is still live in #128, where `source_provenance()`
+leaks a backslash path separator into the artifact; `.gitattributes` does not
+fix that one.
 
 ---
 
