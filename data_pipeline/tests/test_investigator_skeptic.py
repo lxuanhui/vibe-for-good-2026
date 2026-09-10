@@ -261,3 +261,43 @@ def test_normalisation_reaches_every_prose_field_of_a_stored_assessment():
     text.extend(question["question"] for question in result["unresolved_questions"])
     assert text and not any("\u2014" in item for item in text)
     assert result["rounds"][0]["investigator"]["findings"][0]["summary"] == "Dry 72 hours, consistent with local ignition"
+
+
+def test_the_provider_input_serializes_shared_content_before_per_call_content():
+    """All four calls in an assessment share a byte-identical serialized prefix.
+
+    A provider marks that prefix for prompt caching (#147), which only works
+    if nothing that varies per role or per round appears before it. This pins
+    the key order so a reordering cannot silently turn every call back into a
+    cache miss.
+    """
+    import json
+
+    from data_pipeline.analysis.investigator_skeptic import AgentInput
+
+    seen: list[AgentInput] = []
+
+    def provider(agent_input):
+        seen.append(agent_input)
+        return _assessment(agent_input.role, agent_input.round_number)
+
+    run_structured_analysis("FE-1", EVIDENCE, HYPOTHESES, provider, provider, max_rounds=2)
+    assert len(seen) == 4
+
+    def split(agent_input: AgentInput) -> tuple[str, str]:
+        text = json.dumps(agent_input.to_dict(), separators=(",", ":"))
+        boundary = text.index(',"role":')
+        return text[:boundary], text[boundary:]
+
+    prefixes = {split(item)[0] for item in seen}
+    assert len(prefixes) == 1
+    prefix, tail = split(seen[0])
+    shared = json.loads(prefix + "}")
+    assert tuple(shared) == AgentInput.SHARED_FIELDS
+    # Everything that differs per call sits after the boundary.
+    for item in seen:
+        _, tail = split(item)
+        assert f'"role":"{item.role.value}"' in tail
+        assert f'"round":{item.round_number}' in tail
+    assert all(split(item)[1].count('"opponent_assessment":null') == 1 for item in seen[:2])
+    assert all('"opponent_assessment":{' in split(item)[1] for item in seen[2:])
