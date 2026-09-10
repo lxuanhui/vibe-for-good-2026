@@ -5,6 +5,7 @@ import type { AuditEventSummary, AuditProgression, AuditScope } from '../../api/
 import { fetchAuditRegister } from '../../api/client'
 import { useAppStore } from '../../store/useAppStore'
 import { Button } from '../ui/Button'
+import { RegisterSummary as CompactRegisterSummary } from './RegisterSummary'
 import { EarthMark } from '../brand/EarthMark'
 
 type RegisterFilters = {
@@ -51,7 +52,7 @@ function compareEvents(a: AuditEventSummary, b: AuditEventSummary, key: SortKey)
   return String(aValue).localeCompare(String(bValue), undefined, { numeric: true, sensitivity: 'base' })
 }
 
-function SummaryHelp({ label, children }: { label: string; children: ReactNode }) {
+export function SummaryHelp({ label, children }: { label: string; children: ReactNode }) {
   const [open, setOpen] = useState(false)
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -118,14 +119,15 @@ function SummaryHelp({ label, children }: { label: string; children: ReactNode }
   </>
 }
 
-export function RegisterSummary({ progression }: { progression: AuditProgression }) {
+export function LegacyRegisterSummary({ progression }: { progression: AuditProgression }) {
   const eventDenominator = progression.fireEvents.toLocaleString()
+  const index = 0
   return <section aria-label="Historical register population summary" className="shrink-0 border-b border-border bg-panel">
-    <div aria-label="Register processing flow" className="flex flex-col gap-3 px-4 py-3 md:grid md:grid-cols-[minmax(0,1.5fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] md:items-center md:gap-0">
-      <section aria-labelledby="clustering-summary" data-flow-stage="observation-derivation" className="min-w-0">
-        <div className="mb-2 flex items-center gap-2"><h2 id="clustering-summary" className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-faint">Observation derivation</h2><SummaryHelp label="observation derivation">Spatially and temporally related FIRMS observations are deterministically clustered into FireEvents. An observation is a satellite detection, not an individual fire.</SummaryHelp></div>
+    <div aria-label="Register processing flow" className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
+      <div>
+        {index > 0 && <span aria-hidden="true" data-flow-arrow className="text-text-faint">→</span>}
         <div className="flex items-end gap-3"><div><div className="font-semibold text-accent">{progression.qualifiedObservations.toLocaleString()}</div><div className="text-[10px] text-text-faint">QUALIFIED FIRMS OBSERVATIONS</div></div><div className="pb-3 text-text-faint">→</div><div><div className="font-semibold text-accent">{eventDenominator}</div><div className="text-[10px] text-text-faint">CLUSTERED FIREEVENTS</div></div></div>
-      </section>
+      </div>
       <div aria-hidden="true" data-flow-arrow className="block rotate-90 px-4 text-center text-text-faint md:block md:rotate-0">→</div>
       <section aria-labelledby="scope-summary" data-flow-stage="current-audit-scope" className="min-w-0 md:px-4">
         <div className="mb-2 flex items-center gap-2"><h2 id="scope-summary" className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-faint">Current audit scope</h2></div>
@@ -143,6 +145,8 @@ export function RegisterSummary({ progression }: { progression: AuditProgression
     </div>
   </section>
 }
+
+export { CompactRegisterSummary as RegisterSummary }
 
 // The selected-events + graph investigation used to render on its own page
 // here (blank-style map, its own EvidenceDrawer mount). It now lives on
@@ -211,8 +215,8 @@ export function HistoricalInvestigation({ scope, onOpenScope, onOpenScopedMap }:
   })
 
   return <div className="flex h-full flex-col bg-bg text-text">
-    <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border-strong bg-panel px-5 py-3"><div className="flex items-center gap-2.5"><EarthMark className="h-7 w-7 shrink-0 text-accent" /><div><div className="text-sm font-semibold">Historical Fire Register</div><div className="text-xs text-text-muted">{progression ? `${progression.fireEvents.toLocaleString()} FireEvents` : 'FireEvents'} · {scope.review_start} → {scope.review_end} · {scope.context_buffer_km} km context buffer</div></div></div><div className="flex flex-wrap items-center gap-2">{onOpenScope && <Button onClick={onOpenScope}>EDIT SCOPE</Button>}{onOpenScopedMap && <Button onClick={onOpenScopedMap}>VIEW SCOPED MAP</Button>}<Button variant="primary" disabled={!selection.length || !onOpenScopedMap} onClick={onOpenScopedMap}>{`INVESTIGATE ON MAP (${selection.length})`}</Button></div></div>
-    {progression && <RegisterSummary progression={progression} />}
+    <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border-strong bg-panel px-5 py-3"><div className="flex items-center gap-2.5"><EarthMark className="h-7 w-7 shrink-0 text-accent" /><div><div className="text-sm font-semibold">Historical Fire Register</div><div className="text-xs text-text-muted">{scope.review_start} → {scope.review_end}</div></div></div><div className="flex flex-wrap items-center gap-2">{onOpenScope && <Button onClick={onOpenScope}>EDIT SCOPE</Button>}{onOpenScopedMap && <Button onClick={onOpenScopedMap}>VIEW SCOPED MAP</Button>}<Button variant="primary" disabled={!selection.length || !onOpenScopedMap} onClick={onOpenScopedMap}>{`INVESTIGATE ON MAP (${selection.length})`}</Button></div></div>
+    {progression && <CompactRegisterSummary progression={progression} />}
     <section aria-label="Register filters" className="shrink-0 border-b border-border bg-panel px-5 py-3">
       <div className="flex flex-wrap items-end gap-2">
         <label className="grid gap-1 text-[10px] uppercase tracking-[0.08em] text-text-faint">Stage-1 state<select className="min-w-36 rounded border border-border-strong bg-bg px-2 py-1.5 text-xs normal-case tracking-normal text-text" value={filters.triage} onChange={(event) => updateFilter('triage', event.target.value as RegisterFilters['triage'])}><option value="ALL">All states</option>{selectOptions(['LIKELY_FIRE', 'LIKELY_NON_FIRE', 'AMBIGUOUS'])}</select></label>

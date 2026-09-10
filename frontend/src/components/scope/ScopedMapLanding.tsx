@@ -3,14 +3,13 @@ import { Layer, Map, Source, type MapLayerMouseEvent } from 'react-map-gl/maplib
 import type { Feature, FeatureCollection, Geometry, LineString, Point } from 'geojson'
 import type { AnalysisJob, AuditEventSummary, AuditScope, EventEvidenceResponse, InvestigationMap, InvestigationMapNode, StructuredAnalysis } from '../../api/types'
 import { addToAuditPack, fetchAuditRegister, fetchInvestigationBundle, fetchInvestigationMap, generateInvestigationAnalysis } from '../../api/client'
-import { AUDIT_SCOPE_BOUNDARY_COLOR, AUDIT_SCOPE_BUFFER_COLOR, FIRE_EVENT_COLORS, FIRMS_HOTSPOT_COLORS, HYDROLOGY_RAMP_COLORS, LAYER_COLORS, SOLAR_NIGHT_COLOR, SURFACE_FIRE_ENVELOPE_COLOR } from '../../lib/layerColors'
+import { AUDIT_SCOPE_BOUNDARY_COLOR, AUDIT_SCOPE_BUFFER_COLOR, FIRE_EVENT_COLORS, FIRMS_HOTSPOT_COLORS, SOLAR_NIGHT_COLOR, SURFACE_FIRE_ENVELOPE_COLOR } from '../../lib/layerColors'
 import { REGIONAL_MAP_BOUNDS } from '../../lib/regionalBounds'
 import { Brand } from '../brand/Brand'
 import { useAppStore } from '../../store/useAppStore'
 import { useScopedOverlay } from '../../api/hooks'
 import { Button } from '../ui/Button'
 import { EvidenceDrawer } from '../audit/EvidenceDrawer'
-import { LayerControlPanel } from '../map/LayerControlPanel'
 import { envelopePolygons } from './propagationEnvelopes'
 import { eventOverlapsDay, observationDays, observationsForDay, type ScopedMapDay } from './temporalScrubber'
 import { illuminationReference, nightCoverage } from '../../lib/illumination'
@@ -167,12 +166,7 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
   const activeDay = selectedDay && days.includes(selectedDay) ? selectedDay : null
   const firmsVisible = useAppStore((state) => state.layerVisibility.firms)
   const firmsOverlay = useScopedOverlay(scope.audit_id, 'firms', activeDay, scope.buffer_bbox, firmsVisible)
-  const groundwaterVisible = useAppStore((state) => state.layerVisibility.groundwater)
-  const groundwaterOverlay = useScopedOverlay(scope.audit_id, 'groundwater', activeDay, scope.buffer_bbox, groundwaterVisible)
-  const peatclsmVisible = useAppStore((state) => state.layerVisibility.peatclsm)
-  const peatclsmOverlay = useScopedOverlay(scope.audit_id, 'peatclsm', activeDay, scope.buffer_bbox, peatclsmVisible)
-  const soilMoistureVisible = useAppStore((state) => state.layerVisibility['soil-moisture'])
-  const soilMoistureOverlay = useScopedOverlay(scope.audit_id, 'soil-moisture', activeDay, scope.buffer_bbox, soilMoistureVisible)
+  const toggleLayer = useAppStore((state) => state.toggleLayer)
   const [isPlaying, setIsPlaying] = useState(false)
   const [showPeatland, setShowPeatland] = useState(false)
   const [evidenceReloadToken, setEvidenceReloadToken] = useState(0)
@@ -312,7 +306,6 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
   const edges = useMemo(() => graphEdges(visibleGraphNodes, taggedEdges), [visibleGraphNodes, taggedEdges])
   const envelopes = useMemo(() => envelopePolygons(taggedEdges, registerSelection, focusedEventId), [taggedEdges, registerSelection, focusedEventId])
   const [showSpreadEnvelopes, setShowSpreadEnvelopes] = useState(true)
-  const [showNightShade, setShowNightShade] = useState(true)
   const center = useMemo<[number, number]>(() => scope.centroid ?? [116.25, -3.8], [scope.centroid])
   const illuminationDate = useMemo(() => illuminationReference(activeDay, clock), [activeDay, clock])
   const night = useMemo(() => nightCoverage(illuminationDate), [illuminationDate])
@@ -451,13 +444,10 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
             event.target.jumpTo({ center, zoom: initialViewState.zoom })
           }}
         >
-          {showNightShade && <Source id="solar-night-coverage" type="geojson" data={night}><Layer id="solar-night-coverage-fill" type="fill" paint={{ 'fill-color': SOLAR_NIGHT_COLOR, 'fill-opacity': 0.3 }} /></Source>}
+          <Source id="solar-night-coverage" type="geojson" data={night}><Layer id="solar-night-coverage-fill" type="fill" paint={{ 'fill-color': SOLAR_NIGHT_COLOR, 'fill-opacity': 0.3 }} /></Source>
           {buffer && <Source id="audit-context-buffer" type="geojson" data={buffer}><Layer id="audit-context-buffer-line" type="line" paint={{ 'line-color': AUDIT_SCOPE_BUFFER_COLOR, 'line-width': 1.5, 'line-dasharray': [2, 2], 'line-opacity': 0.9 }} /></Source>}
           {boundary && <Source id="audit-scope-boundary" type="geojson" data={boundary}><Layer id="audit-scope-fill" type="fill" paint={{ 'fill-color': AUDIT_SCOPE_BOUNDARY_COLOR, 'fill-opacity': 0.08 }} /><Layer id="audit-scope-line" type="line" paint={{ 'line-color': AUDIT_SCOPE_BOUNDARY_COLOR, 'line-width': 2 }} /></Source>}
           {showPeatland && <Source id="peatland-context" type="geojson" data="/peatland-indonesia.geojson"><Layer id="peatland-context-fill" type="fill" paint={{ 'fill-color': '#a855f7', 'fill-opacity': 0.22 }} /><Layer id="peatland-context-line" type="line" paint={{ 'line-color': '#c084fc', 'line-width': 0.7, 'line-opacity': 0.7 }} /></Source>}
-          {groundwaterVisible && groundwaterOverlay && <Source id="scoped-groundwater" type="geojson" data={groundwaterOverlay}><Layer id="scoped-groundwater-points" type="circle" paint={{ 'circle-radius': 13, 'circle-blur': 0.8, 'circle-color': ['interpolate', ['linear'], ['get', 'value'], -5, HYDROLOGY_RAMP_COLORS.groundwaterLow, -1, HYDROLOGY_RAMP_COLORS.groundwaterMid, 0.15, HYDROLOGY_RAMP_COLORS.groundwaterHigh], 'circle-opacity': 0.5 }} /></Source>}
-          {peatclsmVisible && peatclsmOverlay && <Source id="scoped-peatclsm" type="geojson" data={peatclsmOverlay}><Layer id="scoped-peatclsm-points" type="circle" paint={{ 'circle-radius': 13, 'circle-blur': 0.8, 'circle-color': LAYER_COLORS.peatclsm, 'circle-opacity': 0.45 }} /></Source>}
-          {soilMoistureVisible && soilMoistureOverlay && <Source id="scoped-soil-moisture" type="geojson" data={soilMoistureOverlay}><Layer id="scoped-soil-moisture-points" type="circle" paint={{ 'circle-radius': 13, 'circle-blur': 0.8, 'circle-color': ['interpolate', ['linear'], ['get', 'value'], 0, HYDROLOGY_RAMP_COLORS.soilMoistureLow, 0.2, HYDROLOGY_RAMP_COLORS.soilMoistureMid, 0.45, HYDROLOGY_RAMP_COLORS.soilMoistureHigh], 'circle-opacity': 0.5 }} /></Source>}
           {edges.features.length > 0 && <Source id="fireevent-graph" type="geojson" data={edges}><Layer id="fireevent-graph-line" type="line" paint={{
             'line-color': GRAPH_LINE_COLOR,
             // Use the deterministic relationship state already supplied by
@@ -493,7 +483,6 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
             />
           </Source>
         </Map>
-        <div className="pointer-events-none absolute left-4 top-4 z-[2]"><LayerControlPanel scoped /></div>
         {selectedObservation && <div role="status" aria-label="FIRMS observation details" className="pointer-events-auto absolute bottom-4 left-4 w-56 rounded-lg border border-amber-300/50 bg-panel/95 p-3 text-xs shadow-lg backdrop-blur">
           <div className="flex items-center justify-between gap-2"><div className="font-semibold text-amber-300">FIRMS observation</div><button type="button" className="text-[10px] text-text-muted hover:text-text" onClick={() => setSelectedObservation(undefined)} aria-label="Close observation details">CLOSE</button></div>
           <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-text-muted">
@@ -511,16 +500,13 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
           {scope.scope_label && <p className="mt-2 text-[11px] leading-4 text-text-faint">Boundary: {scope.scope_label}</p>}
           <p className="mt-3 text-xs text-text-muted">Events shown <span className="font-semibold text-accent">{loading ? '…' : visibleEvents.length.toLocaleString()}</span></p>
           <p className="mt-2 text-[11px] leading-4 text-text-faint">Large circles are FireEvents. Smaller amber points are selected-event FIRMS observations.</p>
-          {taggedEdges.length > 0 && <p className="mt-2 text-xs leading-5 text-text-faint">Lines are limited to {SCOPED_MAP_RELATIONSHIP_DISTANCE_KM} km. <span className="text-accent">Bright</span> lines are stronger candidates for the open FireEvent; weaker or unresolved links recede. <span className="opacity-60">Faint</span> lines belong to other FireEvents selected in the Fire Register.</p>}
-          {envelopes.features.length > 0 && <p className="mt-2 text-xs leading-5 text-text-faint">Dashed outline: first-order wind-oriented surface-spread compatibility estimate. This is not a validated forecast or claim about what happened.</p>}
           {error && <div role="alert" className="mt-3 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-sm text-red-200">{error}</div>}
           {selectionGraphError && <div role="alert" className="mt-3 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-sm text-red-200">{selectionGraphError}</div>}
           {loading && <div role="status" className="mt-3 text-sm text-text-muted">Loading real audit FireEvents…</div>}
           {!loading && !error && events.length === 0 && <div className="mt-3 text-sm text-text-muted">No events intersect this audit scope and buffer.</div>}
-          <Button className="mt-2 w-full" onClick={() => setShowPeatland((shown) => !shown)}>{showPeatland ? 'HIDE PEATLAND' : 'SHOW PEATLAND'}</Button>
-          <Button className="mt-2 w-full" onClick={() => setShowNightShade((shown) => !shown)}>{showNightShade ? 'HIDE NIGHT SHADE' : 'SHOW NIGHT SHADE'}</Button>
-          {(groundwaterVisible && groundwaterOverlay?.metadata?.status === 'unavailable' || peatclsmVisible && peatclsmOverlay?.metadata?.status === 'unavailable' || soilMoistureVisible && soilMoistureOverlay?.metadata?.status === 'unavailable') && <div role="status" className="mt-2 rounded border border-border bg-bg p-2 text-[11px] leading-4 text-text-faint">Hydrology coverage is unavailable for the selected cache. No values are being substituted.</div>}
-          {envelopes.features.length > 0 && <Button className="mt-2 w-full" onClick={() => setShowSpreadEnvelopes((shown) => !shown)}>{showSpreadEnvelopes ? 'HIDE SPREAD ENVELOPES' : 'SHOW SPREAD ENVELOPES'}</Button>}
+          <Button aria-pressed={firmsVisible} className={`mt-2 w-full ${firmsVisible ? 'border-accent bg-accent/15 text-accent' : ''}`} onClick={() => toggleLayer('firms')}>SHOW FIRMS</Button>
+          <Button aria-pressed={showPeatland} className={`mt-2 w-full ${showPeatland ? 'border-accent bg-accent/15 text-accent' : ''}`} onClick={() => setShowPeatland((shown) => !shown)}>SHOW PEATLAND</Button>
+          <Button aria-pressed={showSpreadEnvelopes} className={`mt-2 w-full ${showSpreadEnvelopes ? 'border-accent bg-accent/15 text-accent' : ''}`} onClick={() => setShowSpreadEnvelopes((shown) => !shown)}>SHOW SPREAD ENVELOPES</Button>
         </div>
         <div className="p-4">
           <div className="flex items-center justify-between">
