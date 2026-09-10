@@ -74,11 +74,13 @@ The second is always-on, so it needs the standing justification, and it does
 not stop two warm containers duplicating the fetch anyway.
 
 **Consequence for CI.** The CI role had no S3 grant beyond the state bucket.
-`bootstrap/oidc.tf` now grants `s3:*` on buckets named
-`<project>-*-cache-*`, and that stack is applied by hand, so a main-stack PR
-that adds such a bucket cannot merge until bootstrap has been applied. The
-pattern deliberately excludes the state bucket, which keeps its object-only
-grant.
+`bootstrap/oidc.tf` now grants the bucket-lifecycle actions Terraform needs
+on buckets named `<project>-*-cache-*`, enumerated rather than `s3:*`
+because trivy flags the wildcard at HIGH (AWS-0345) and the S3 namespace
+holds object actions the CI role should not have. That stack is applied by
+hand, so a main-stack PR that adds such a bucket cannot merge until
+bootstrap has been applied. The pattern deliberately excludes the state
+bucket, which keeps its object-only grant.
 
 **Open.** The post-deploy cold-start time-to-first-byte has not been measured
 yet; #186 stays open until it is quoted.

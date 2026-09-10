@@ -167,17 +167,32 @@ data "aws_iam_policy_document" "github_actions" {
 
   # api.tf's aws_s3_bucket.cache, the shared live-layer cache (#186). The
   # pattern requires `-cache-` in the name so the state bucket above, which
-  # also matches `${var.project}-*`, keeps its narrower object-only grant
-  # rather than gaining DeleteBucket by accident. `s3:*` on the pattern is
-  # the same service-scoped looseness as the Lambda and Amplify statements,
-  # for the same reason: the provider reads a dozen bucket sub-resources on
-  # every refresh and enumerating them is a list that goes stale.
+  # also matches `${var.project}-*`, keeps its object-only grant rather than
+  # gaining DeleteBucket by accident. Enumerated rather than `s3:*` because
+  # trivy flags a wildcard S3 action at HIGH (AWS-0345), and because unlike
+  # the Lambda and Amplify statements the S3 namespace holds object actions
+  # this role has no business with. The Get* list is what the provider reads
+  # on every refresh of an `aws_s3_bucket`, whether or not api.tf configures
+  # the feature -- the same trap the DynamoDB TTL note above records. If a
+  # provider upgrade adds a read, the plan fails with AccessDenied on a
+  # bucket that already exists, and the action gets added here.
   #
   # A change here is applied by hand (this stack keeps local state), so a
   # main-stack PR that adds a bucket cannot merge until this has been.
   statement {
-    sid       = "LiveCacheBucket"
-    actions   = ["s3:*"]
+    sid = "LiveCacheBucket"
+    actions = [
+      "s3:CreateBucket", "s3:DeleteBucket", "s3:ListBucket", "s3:GetBucketLocation",
+      "s3:GetBucketAcl", "s3:GetBucketCORS", "s3:GetBucketWebsite", "s3:GetBucketVersioning",
+      "s3:GetAccelerateConfiguration", "s3:GetBucketRequestPayment", "s3:GetBucketLogging",
+      "s3:GetReplicationConfiguration", "s3:GetBucketObjectLockConfiguration",
+      "s3:GetBucketPolicy", "s3:GetBucketOwnershipControls",
+      "s3:GetEncryptionConfiguration", "s3:PutEncryptionConfiguration",
+      "s3:GetBucketPublicAccessBlock", "s3:PutBucketPublicAccessBlock",
+      "s3:GetLifecycleConfiguration", "s3:PutLifecycleConfiguration",
+      # The provider's default_tags land on buckets too.
+      "s3:GetBucketTagging", "s3:PutBucketTagging",
+    ]
     resources = ["arn:${data.aws_partition.current.partition}:s3:::${var.project}-*-cache-*"]
   }
 
