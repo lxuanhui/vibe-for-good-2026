@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
+import type { FeatureCollection as MapFeatureCollection, GeoJsonProperties, Geometry } from 'geojson'
 import type { FeatureCollection } from './geojson'
-import type { FireEvent, InvestigationReport, OverlayLayerId } from './types'
+import type { BBox, FireEvent, InvestigationReport, OverlayLayerId } from './types'
 import * as client from './client'
 import { fetchPipelineFirms } from './fixtures/pipelineFirms'
 
@@ -37,6 +38,35 @@ export function useOverlay(
       active = false
     }
   }, [layer, date, enabled])
+  return data
+}
+
+export function useScopedOverlay(
+  auditId: string,
+  layer: OverlayLayerId,
+  date: string | null,
+  bbox: BBox | null | undefined,
+  enabled: boolean,
+): MapFeatureCollection<Geometry, GeoJsonProperties> | null {
+  const [data, setData] = useState<MapFeatureCollection<Geometry, GeoJsonProperties> | null>(null)
+  const minLon = bbox?.minLon
+  const minLat = bbox?.minLat
+  const maxLon = bbox?.maxLon
+  const maxLat = bbox?.maxLat
+  useEffect(() => {
+    if (!enabled) {
+      setData(null)
+      return
+    }
+    let active = true
+    const overlayBbox = minLon == null || minLat == null || maxLon == null || maxLat == null
+      ? undefined
+      : { minLon, minLat, maxLon, maxLat }
+    client.fetchAuditOverlay(auditId, layer, { bbox: overlayBbox, date: date ?? undefined }).then((result) => {
+      if (active) setData(result as MapFeatureCollection<Geometry, GeoJsonProperties>)
+    })
+    return () => { active = false }
+  }, [auditId, layer, date, minLon, minLat, maxLon, maxLat, enabled])
   return data
 }
 

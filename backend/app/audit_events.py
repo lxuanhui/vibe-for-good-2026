@@ -695,6 +695,45 @@ def find_event(audit_id: str, event_id: str) -> dict[str, Any] | None:
     return {**summary, "triageDetail": detail}
 
 
+def firms_overlay(
+    audit_id: str,
+    bbox: tuple[float, float, float, float] | None = None,
+    date: str | None = None,
+) -> dict[str, Any] | None:
+    """Return raw FIRMS observations for the audit's current register population."""
+    audit = get_audit(audit_id)
+    if audit is None:
+        return None
+    review_start = str(audit["scope"].get("reviewStart", ""))[:10]
+    review_end = str(audit["scope"].get("reviewEnd", ""))[:10]
+    events = filter_events(audit["events"], bbox=bbox)
+    details = _triage_for_audit(audit_id)
+    features: list[dict[str, Any]] = []
+    for event in events:
+        for observation in details.get(event["eventId"], {}).get("observations", []):
+            acquired_date = observation.get("acqDate")
+            if not isinstance(acquired_date, str):
+                continue
+            if review_start and acquired_date < review_start:
+                continue
+            if review_end and acquired_date > review_end:
+                continue
+            if date is not None and acquired_date != date:
+                continue
+            features.append({
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [observation["lon"], observation["lat"]]},
+                "properties": {
+                    "eventId": event["eventId"],
+                    "frp": observation.get("frp"),
+                    "confidence": observation.get("confidence"),
+                    "acqDate": acquired_date,
+                    "acqTime": observation.get("acqTime"),
+                },
+            })
+    return {"type": "FeatureCollection", "features": features}
+
+
 def _evidence_object(
     evidence_id: str,
     category: str,

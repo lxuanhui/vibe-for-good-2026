@@ -190,9 +190,9 @@ The spike's negative results are still the valuable part of `sources/` (FIRMS
 NASA FIRMS needs `truststore` for TLS).
 
 The real derived 2019 FIRMS artifact now reaches the map through
-`GET /api/audits/{id}/events`, framed to the demo audit scope and context
-buffer. The static FIRMS export remains behind its own clearly-labelled toggle.
-The demo must never blur which data is real and which is a fixture.
+`GET /api/audits/{id}/events` and the audit-scoped FIRMS Hotspots overlay,
+framed to the demo audit scope, context buffer and observation date. The demo
+must never blur which data is real and which is a fixture.
 
 ## Skills
 

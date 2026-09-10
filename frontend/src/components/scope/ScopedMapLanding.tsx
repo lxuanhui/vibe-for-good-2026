@@ -5,8 +5,10 @@ import type { AnalysisJob, AuditEventSummary, AuditScope, EventEvidenceResponse,
 import { addToAuditPack, fetchAuditRegister, fetchInvestigationBundle, fetchInvestigationMap, generateInvestigationAnalysis } from '../../api/client'
 import { AUDIT_SCOPE_BOUNDARY_COLOR, AUDIT_SCOPE_BUFFER_COLOR, FIRE_EVENT_COLORS, FIRMS_HOTSPOT_COLORS, SURFACE_FIRE_ENVELOPE_COLOR } from '../../lib/layerColors'
 import { useAppStore } from '../../store/useAppStore'
+import { useScopedOverlay } from '../../api/hooks'
 import { Button } from '../ui/Button'
 import { EvidenceDrawer } from '../audit/EvidenceDrawer'
+import { LayerControlPanel } from '../map/LayerControlPanel'
 import { envelopePolygons } from './propagationEnvelopes'
 import { eventOverlapsDay, observationDays, observationsForDay, type ScopedMapDay } from './temporalScrubber'
 import 'maplibre-gl/dist/maplibre-gl.css'
@@ -149,6 +151,8 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
   const [selectedDay, setSelectedDay] = useState<ScopedMapDay>(null)
   const days = useMemo(() => observationDays(events, scope.review_start, scope.review_end), [events, scope.review_start, scope.review_end])
   const activeDay = selectedDay && days.includes(selectedDay) ? selectedDay : null
+  const firmsVisible = useAppStore((state) => state.layerVisibility.firms)
+  const firmsOverlay = useScopedOverlay(scope.audit_id, 'firms', activeDay, scope.buffer_bbox, firmsVisible)
   const [isPlaying, setIsPlaying] = useState(false)
   const [showPeatland, setShowPeatland] = useState(false)
   const [evidenceReloadToken, setEvidenceReloadToken] = useState(0)
@@ -424,7 +428,8 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
               not a solid wash; the dashed outline (not subject to the same
               compounding) carries the actual boundary. */}
           {showSpreadEnvelopes && envelopes.features.length > 0 && <Source id="fireevent-spread-envelope" type="geojson" data={envelopes}><Layer id="fireevent-spread-envelope-fill" type="fill" paint={{ 'fill-color': SURFACE_FIRE_ENVELOPE_COLOR, 'fill-opacity': 0.05 }} /><Layer id="fireevent-spread-envelope-line" type="line" paint={{ 'line-color': SURFACE_FIRE_ENVELOPE_COLOR, 'line-width': 1.5, 'line-dasharray': [3, 3] }} /></Source>}
-          {showObservations && observations.features.length > 0 && <Source id="fireevent-observations" type="geojson" data={observations}><Layer id="fireevent-observations-points" type="circle" paint={{ 'circle-radius': 3, 'circle-color': FIRMS_HOTSPOT_COLORS.point, 'circle-opacity': 0.85, 'circle-stroke-color': FIRMS_HOTSPOT_COLORS.stroke, 'circle-stroke-width': 1 }} /></Source>}
+          {firmsVisible && firmsOverlay && <Source id="scoped-firms-hotspots" type="geojson" data={firmsOverlay}><Layer id="scoped-firms-hotspot-points" type="circle" paint={{ 'circle-radius': 3.5, 'circle-color': FIRMS_HOTSPOT_COLORS.point, 'circle-opacity': 0.82, 'circle-stroke-color': FIRMS_HOTSPOT_COLORS.stroke, 'circle-stroke-width': 1 }} /></Source>}
+          {showObservations && observations.features.length > 0 && <Source id="fireevent-observations" type="geojson" data={observations}><Layer id="fireevent-observations-points" type="circle" paint={{ 'circle-radius': 5, 'circle-color': FIRMS_HOTSPOT_COLORS.core, 'circle-opacity': 0.95, 'circle-stroke-color': FIRMS_HOTSPOT_COLORS.stroke, 'circle-stroke-width': 1.5 }} /></Source>}
           <Source id="audit-events" type="geojson" data={points}>
             <Layer
               id="audit-event-points"
@@ -439,6 +444,7 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
             />
           </Source>
         </Map>
+        <div className="pointer-events-none absolute left-4 top-4 z-[2]"><LayerControlPanel scoped /></div>
         <div
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 z-[1] mix-blend-screen transition-opacity duration-[60000ms]"

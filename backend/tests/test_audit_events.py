@@ -176,6 +176,30 @@ def test_bbox_filters_on_centroid(client):
         assert -4 <= event["centroid"]["lat"] <= -3
 
 
+def test_firms_overlay_returns_scoped_observations_without_a_focused_event(client):
+    response = client.get(f"/api/audits/{AUDIT}/overlays/firms?date=2019-09-01")
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["type"] == "FeatureCollection"
+    assert body["features"]
+    assert all(feature["properties"]["acqDate"] == "2019-09-01" for feature in body["features"])
+    assert all(feature["properties"]["eventId"].startswith("FE-") for feature in body["features"])
+    assert all(feature["geometry"]["type"] == "Point" for feature in body["features"])
+
+
+def test_firms_overlay_honours_the_current_review_period_and_bbox(client):
+    created = ready_audit(client, "2019-09-02", "2019-09-03")
+    response = client.get(f"/api/audits/{created}/overlays/firms?bbox=116,-4,117,-3")
+
+    assert response.status_code == 200
+    for feature in response.get_json()["features"]:
+        assert "2019-09-02" <= feature["properties"]["acqDate"] <= "2019-09-03"
+        lon, lat = feature["geometry"]["coordinates"]
+        assert 116 <= lon <= 117
+        assert -4 <= lat <= -3
+
+
 def test_progression_uses_the_current_scoped_register(client):
     full = client.get(f"{BASE}?limit=2000").get_json()
     body = client.get(f"{BASE}?bbox=116,-4,117,-3&limit=2000").get_json()

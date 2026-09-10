@@ -30,9 +30,9 @@ function DualDot({ colorA, colorB }: { colorA: string; colorB: string }) {
 const GEOJSON_LAYERS: { id: OverlayLayerId; label: string; swatch: ReactNode; caption?: string }[] = [
   {
     id: 'firms',
-    label: 'FIRMS archive (static export)',
+    label: 'FIRMS Hotspots',
     swatch: <Dot color={LAYER_COLORS.firms} />,
-    caption: `Mock cases + real NASA FIRMS pull (21,519 pts across ${PIPELINE_FIRMS_DATE_RANGE[0]} → ${PIPELINE_FIRMS_DATE_RANGE[1]}). Scrub the timeline to move between the two`,
+    caption: `Scoped raw observations from NASA FIRMS. Date filtering follows the observation timeline (${PIPELINE_FIRMS_DATE_RANGE[0]} → ${PIPELINE_FIRMS_DATE_RANGE[1]}).`,
   },
   { id: 'sar-backscatter', label: 'SAR backscatter (VH drop)', swatch: <Dot color={LAYER_COLORS['sar-backscatter']} /> },
   {

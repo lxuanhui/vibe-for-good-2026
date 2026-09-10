@@ -303,3 +303,24 @@ def get_live_firms_detections():
     # reloading browser skip the request entirely.
     response.headers["Cache-Control"] = f"public, max-age={firms_live.CACHE_SECONDS}"
     return response
+
+
+@api.get("/audits/<audit_id>/overlays/<layer>")
+def get_audit_overlay(audit_id: str, layer: str):
+    """Serve an audit-scoped overlay from the same population as the register."""
+    if layer != "firms":
+        return jsonify(error=f"Unknown audit overlay {layer}"), 404
+    if audit_events.history_status(audit_id) != "AVAILABLE":
+        return jsonify(error=f"No reconstructed history for audit {audit_id}"), 404
+    try:
+        bbox = audit_events.parse_bbox(request.args.get("bbox"))
+        raw_date = request.args.get("date")
+        date = None
+        if raw_date is not None:
+            parsed = audit_events.parse_timestamp(raw_date, "date")
+            if parsed is None or "T" in raw_date or "t" in raw_date:
+                raise audit_events.FilterError("date must be an ISO 8601 date")
+            date = raw_date
+    except audit_events.FilterError as exc:
+        return jsonify(error=str(exc)), 400
+    return jsonify(audit_events.firms_overlay(audit_id, bbox=bbox, date=date))

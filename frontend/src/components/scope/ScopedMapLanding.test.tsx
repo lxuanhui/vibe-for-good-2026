@@ -1,33 +1,37 @@
 import { forwardRef, type PropsWithChildren, type ReactNode } from 'react'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it } from 'vitest'
 import { vi } from 'vitest'
 import type { EventEvidenceResponse } from '../../api/types'
 import type { AuditEventSummary, AuditProgression, AuditScope } from '../../api/types'
-import { fetchAuditRegister } from '../../api/client'
+import { fetchAuditOverlay, fetchAuditRegister } from '../../api/client'
+import { useAppStore } from '../../store/useAppStore'
 import { envelopePolygons } from './propagationEnvelopes'
 import { ScopedMapLanding } from './ScopedMapLanding'
 import { eventOverlapsDay, investigationDays, observationDays, observationsForDay } from './temporalScrubber'
 
 vi.mock('react-map-gl/maplibre', () => ({
   Map: forwardRef<HTMLDivElement, PropsWithChildren<{ children?: ReactNode }>>(({ children }, _ref) => <div data-testid="map">{children}</div>),
-  Source: ({ children }: PropsWithChildren<{ id: string }>) => <div>{children}</div>,
+  Source: ({ children, id }: PropsWithChildren<{ id: string }>) => <div data-source-id={id}>{children}</div>,
   Layer: () => <div />,
 }))
 
 vi.mock('../../api/client', () => ({
   addToAuditPack: vi.fn(),
   fetchAuditRegister: vi.fn(),
+  fetchAuditOverlay: vi.fn(),
   fetchInvestigationBundle: vi.fn(),
   fetchInvestigationMap: vi.fn(),
   generateInvestigationAnalysis: vi.fn(),
 }))
 
 const fetchAuditRegisterMock = vi.mocked(fetchAuditRegister)
+const fetchAuditOverlayMock = vi.mocked(fetchAuditOverlay)
 
 afterEach(() => {
   cleanup()
+  useAppStore.setState({ layerVisibility: { ...useAppStore.getState().layerVisibility, firms: false } })
   vi.useRealTimers()
 })
 
@@ -133,6 +137,23 @@ it('keeps scope editing and register navigation in the same map header', async (
   fireEvent.click(header?.querySelectorAll('button')[1] as HTMLButtonElement)
   expect(onOpenScope).toHaveBeenCalledOnce()
   expect(onOpenRegister).toHaveBeenCalledOnce()
+})
+
+it('enables the scoped FIRMS overlay without a focused FireEvent', async () => {
+  fetchAuditRegisterMock.mockResolvedValue({ events: [], progression: { selectedEventIds: [] } as unknown as AuditProgression })
+  fetchAuditOverlayMock.mockResolvedValue({
+    type: 'FeatureCollection',
+    features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: [116, -3] }, properties: { eventId: 'FE-1', acqDate: '2019-09-01' } }],
+  })
+
+  render(<ScopedMapLanding scope={scope} onOpenScope={() => undefined} onOpenRegister={() => undefined} onViewReport={() => undefined} />)
+  await screen.findByRole('list', { name: 'Available observation dates' })
+  expect(screen.queryByTestId('map')).toBeTruthy()
+  fireEvent.click(screen.getByRole('switch'))
+
+  await waitFor(() => expect(document.querySelector('[data-source-id="scoped-firms-hotspots"]')).toBeTruthy())
+  expect(fetchAuditOverlayMock).toHaveBeenCalledWith('audit-1', 'firms', { bbox: scope.buffer_bbox, date: undefined })
+  expect(screen.getByText('FIRMS Hotspots')).toBeTruthy()
 })
 
 it('shows only the active review date range in the map header subtitle', async () => {

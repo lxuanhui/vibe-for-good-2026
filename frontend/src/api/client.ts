@@ -132,6 +132,18 @@ export async function fetchInvestigationMap(auditId: string, eventIds: string[])
   return apiGet<InvestigationMap>(`/audits/${encodeURIComponent(auditId)}/graph?event_ids=${query}`)
 }
 
+export async function fetchAuditOverlay(
+  auditId: string,
+  layer: OverlayLayerId,
+  filters: { bbox?: BBox; date?: string } = {},
+): Promise<FeatureCollection<unknown, unknown>> {
+  const query = new URLSearchParams()
+  if (filters.bbox) query.set('bbox', `${filters.bbox.minLon},${filters.bbox.minLat},${filters.bbox.maxLon},${filters.bbox.maxLat}`)
+  if (filters.date) query.set('date', filters.date)
+  const suffix = query.toString() ? `?${query}` : ''
+  return apiGet<FeatureCollection<unknown, unknown>>(`/audits/${encodeURIComponent(auditId)}/overlays/${layer}${suffix}`)
+}
+
 export async function fetchAuditEventEvidence(auditId: string, eventId: string): Promise<EventEvidenceResponse> {
   return apiGet<EventEvidenceResponse>(`/audits/${encodeURIComponent(auditId)}/events/${encodeURIComponent(eventId)}/evidence`)
 }
