@@ -43,6 +43,14 @@ function summary(window: string) {
 
 afterEach(cleanup)
 
+test('renders the audit scope step label without a slash', () => {
+  fetchDemoDatasetSummaryMock.mockRejectedValue(new Error('the API did not answer'))
+  render(<AuditStart onReady={vi.fn()} />)
+
+  expect(screen.getByText('01 Audit scope')).toBeTruthy()
+  expect(screen.queryByText('01 / Audit scope')).toBeNull()
+})
+
 test('the pickers are bounded to the window the artifact says it covers', async () => {
   fetchDemoDatasetSummaryMock.mockResolvedValue(summary(`${COVERAGE_START}..${COVERAGE_END}`))
   render(<AuditStart onReady={vi.fn()} />)

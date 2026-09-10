@@ -136,7 +136,7 @@ export function AuditStart({ onReady, overlay = false, fullScreen = false, onClo
 
       <main className="mx-auto grid w-full max-w-6xl flex-1 gap-6 overflow-auto p-6 lg:grid-cols-[minmax(320px,0.8fr)_minmax(420px,1.2fr)]">
         <section className="rounded-xl border border-border-strong bg-panel p-6 shadow-2xl">
-          <p className="mb-2 text-xs uppercase tracking-[0.2em] text-accent">01 / Audit scope</p>
+          <p className="mb-2 text-xs uppercase tracking-[0.2em] text-accent">01 Audit scope</p>
           <h1 className="text-2xl font-semibold tracking-tight">Start with the management unit.</h1>
           <p className="mt-3 text-sm leading-6 text-text-muted">
             Set the review period and upload the private boundary authorised for this engagement. No company identity or public concession lookup is required.
