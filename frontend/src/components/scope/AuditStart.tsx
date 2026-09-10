@@ -173,13 +173,6 @@ export function AuditStart({ onReady, overlay = false, fullScreen = false, onClo
                   />
                 </label>
               </div>
-              {coverage && (
-                <span className="block text-[11px] text-text-faint">
-                  Selectable range is {coverage.start} to {coverage.end} — the window this build holds real
-                  observations for. A period outside it would label the register with dates the evidence
-                  does not come from.
-                </span>
-              )}
             </div>
 
             <label className="block space-y-2 text-xs text-text-muted">
