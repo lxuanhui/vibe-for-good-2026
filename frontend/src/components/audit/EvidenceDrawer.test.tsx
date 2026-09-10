@@ -50,7 +50,7 @@ describe('EvidenceDrawer sidebar hierarchy', () => {
     expect(status.querySelector('.animate-spin')).toBeTruthy()
   })
 
-  it('puts availability near the summary and omits sidebar provenance and surface sections', () => {
+  it('shows compact availability statuses near the summary', () => {
     render(
       <EvidenceDrawer
         eventId="FE-1"
@@ -71,9 +71,24 @@ describe('EvidenceDrawer sidebar hierarchy', () => {
     expect(drawer.className).toContain('evidence-drawer')
     const headings = within(drawer).getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent)
 
-    expect(headings.slice(0, 2)).toEqual(['Summary', 'Availability / limitations'])
+    expect(headings.slice(0, 2)).toEqual(['Summary', 'Availability'])
+    expect(screen.getByText('Limited · no suitable pass')).toBeTruthy()
+    expect(screen.queryByText('No suitable pass.', { selector: 'p' })).toBeNull()
     expect(headings).not.toContain('Surface compatibility')
     expect(headings).not.toContain('Provenance')
+  })
+
+  it('keeps available and unavailable states explicit', () => {
+    render(<EvidenceDrawer {...{ eventId: 'FE-1', loading: false, data: {
+      ...evidence,
+      availability: [
+        { kind: 'peat', status: 'available', reason: 'Peat evidence is present.' },
+        { kind: 'weather', status: 'unavailable', reason: 'Weather evidence is not present.' },
+      ],
+    }, showObservations: false, onToggleObservations: () => undefined, onClose: () => undefined, onRetry: () => undefined, analysisLoading: false, onGenerateAnalysis: () => undefined }} />)
+
+    expect(screen.getByText('Available')).toBeTruthy()
+    expect(screen.getByText('Unavailable')).toBeTruthy()
   })
 
   it('joins a manifest asset by source evidence ID and renders it at drawer width', async () => {

@@ -43,6 +43,29 @@ function MetricSection({ title, note, items }: { title: string; note: string; it
   return <Section title={title}><p className="mb-2 text-[11px] leading-4 text-text-muted">{note}</p><EvidenceList items={items} /></Section>
 }
 
+function AvailabilityStatus({ status }: { status: EventEvidenceResponse['availability'][number]['status'] }) {
+  if (status === 'available') return { symbol: '✓', label: 'Available', className: 'text-status-good' }
+  if (status === 'no_suitable_pass') return { symbol: '!', label: 'Limited · no suitable pass', className: 'text-status-moderate' }
+  return { symbol: '×', label: 'Unavailable', className: 'text-status-urgent' }
+}
+
+function AvailabilitySummary({ items }: { items: EventEvidenceResponse['availability'] }) {
+  return <Section title="Availability">
+    <div className="divide-y divide-border/60 rounded border border-border bg-bg/60 text-[11px] print:border-black/20 print:bg-transparent">
+      {items.map((item) => {
+        const status = AvailabilityStatus({ status: item.status })
+        return <div key={item.kind} className="flex items-center justify-between gap-3 px-2 py-1.5" title={item.reason}>
+          <span className="capitalize">{item.kind}</span>
+          <span className={`flex items-center gap-1 text-right ${status.className}`} aria-label={`${item.kind}: ${status.label}. ${item.reason}`}>
+            <span aria-hidden="true">{status.symbol}</span>
+            {status.label}
+          </span>
+        </div>
+      })}
+    </div>
+  </Section>
+}
+
 // A real timeline, not a fabricated one: the artifact has each event's first
 // and last FIRMS detection, not a per-observation timestamp list, so this
 // places the event's own detection window against the audit's review period
@@ -387,7 +410,7 @@ export function EvidenceDrawer({
           />
         </div>
       </Section>
-      <Section title="Availability / limitations"><div className="space-y-2">{data.availability.map((item) => <div key={item.kind} className="rounded border border-border bg-bg/60 p-2 text-[11px] print:border-black/20 print:bg-transparent"><div className="flex justify-between"><span className="capitalize">{item.kind}</span><span className="text-status-moderate">{item.status}</span></div><p className="mt-1 text-text-muted">{item.reason}</p></div>)}</div></Section>
+      <AvailabilitySummary items={data.availability} />
       <RelatedFireEvents graph={graph} error={graphError} eventId={eventId} />
       <DerivedSummary complexity={grouped.complexity} priority={grouped.priority} />
       <StructuredAnalysisSection analysis={analysis} loading={analysisLoading} error={analysisError} startedAt={analysisStartedAt} stage={analysisStage} onGenerate={onGenerateAnalysis} />
