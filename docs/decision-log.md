@@ -16,7 +16,7 @@ when changing that subsystem.
 | AI interpretation | Claude runs only after an explicit auditor request, receives bounded EvidenceObjects plus graph summaries, and returns schema-validated Investigator/Skeptic findings retained with the audit session. | 2026-09-09, structured analysis |
 | Analysis delivery | Analysis is an async job on a second Lambda: POST starts one, GET polls it and never spends tokens. It does not fit API Gateway's 30s response cap. | 2026-09-10, async job |
 | Live regional context | The landing map's live NASA FIRMS layer is proxied by the API. A FIRMS MAP_KEY cannot be domain-restricted, so it can never ship in the bundle. Two days are fetched and filtered to a rolling 24 h here; a non-CSV body is an error, not an absence of fires. | 2026-09-10, FIRMS proxy; rolling window |
-| Map and imagery | Camera fitting is bounds-driven; map context is not an unscoped fire browser. Satellite display processing is deterministic and provenance-preserving. | 2026-09-09, audit session / landing; 2026-09-08, Copernicus scenes |
+| Map and imagery | Camera fitting is bounds-driven; map context is not an unscoped fire browser. Satellite display processing is deterministic and provenance-preserving. Investigation-sized Sentinel-1/2 context images are rendered once by the CDSE Process API, pinned to the scenes the evidence already names, and committed as static files under `frontend/public/imagery/`. | 2026-09-10, processed imagery; 2026-09-09, audit session / landing; 2026-09-08, Copernicus scenes |
 | Infrastructure | Flask runs on Lambda behind API Gateway; Terraform owns the deployed configuration; CORS is Flask-owned. | 2026-09-09, Amplify; 2026-09-07, Lambda / CORS |
 | Service selection | DynamoDB and S3 are authorised without a fresh argument each time; every service switched on gets a cost row in `docs/infra.md` in the same PR. | 2026-09-09, DynamoDB and S3 are authorised |
 | Frontend tests | Vitest + jsdom + Testing Library, run in CI. They guard behaviours the product boundary depends on — explicit trigger, honest not-run state, no chain-of-thought — not the map, which jsdom cannot draw. | 2026-09-10, frontend test runner |
@@ -26,6 +26,77 @@ when changing that subsystem.
 **Use this log:** entries retain the original diagnosis, rejected alternatives,
 and historical context. A later entry can supersede an earlier one; do not
 apply an older decision without checking the entries above it.
+
+---
+
+## 2026-09-10 - Sentinel context images are rendered once by the CDSE Process API and served as static files
+
+**Status:** done · PR #TBD · Closes #191 · Refs #171
+
+**Decision.** The evidence drawer's satellite pictures come from
+`data_pipeline/generate_processed_imagery.py`, run once by hand. For each of
+the 16 demo FireEvents with selected scenes it asks the Copernicus Data Space
+Ecosystem Process API to render a 10 km square around the centroid at
+1024 px: Sentinel-2 L2A as SWIR/NIR/Red false colour, Sentinel-1 GRD as a
+VV/VH decibel composite that CDSE has already orthorectified, terrain-corrected
+to Gamma0 on the Copernicus 30 m DEM and Lee-filtered. The JPEGs, a JSON
+sidecar each, and `manifest.json` are committed under
+`frontend/public/imagery/` and served by Amplify from the console's own
+origin, the same path `public/pipeline/firms-2019-09.json` already takes.
+Each request is pinned to the UTC day (and, for Sentinel-1, the orbit
+direction) of the product the `ENV_IMAGERY_*` EvidenceObject names, and the
+sidecar records that evidence ID, the product, the data filter and the
+SHA-256 of the evalscript and request. Both recipes use fixed stretches. A
+scene that cannot be rendered gets a `.missing.json` with the reason.
+
+**Why.** The catalogue quicklook is a few hundred pixels of a 100 km tile; it
+does not show the event. Sentinel-1 in particular is unreadable without
+calibration, terrain correction and speckle filtering, and the Process API
+does all of that server-side per request, so no SAR toolchain, SNAP install
+or SAFE download enters this repo. Pinning to the already-selected scene
+keeps provenance intact: the drawer's scene metadata and the picture describe
+the same acquisition, so the image is a display attribute of an existing
+EvidenceObject rather than a new, untraceable claim. Fixed stretches are what
+make a before/after pair comparable; a per-scene percentile stretch
+normalises each image to its own contents. Committing the output means the
+demo cannot fail on a live Copernicus call, and a ~20 MB static folder is
+free on Amplify where it would be a real cost on Lambda's bundle limit.
+
+**Rejected: downloading SAFE products and processing locally.** Gigabytes per
+scene, a SNAP/GPT or snappy toolchain to install and version, and hours of
+work the night before the demo, for output no better than the API's.
+
+**Rejected: letting `leastCC` choose the date over the event window.** It
+would often return a clearer picture, of a different acquisition from the one
+the evidence names. The drawer would then describe one scene and show
+another. The Sentinel-2 request keeps `leastCC` only as a tiebreak within the
+single pinned day.
+
+**Rejected: a per-scene percentile stretch, as `sentinel1_visualization.py`
+does.** Right for one image, wrong for a pair; see above.
+
+**Rejected: an S3 bucket for the images.** S3 is authorised, and bulky
+immutable evidence is the role §8 reserves for it, but the images are a few
+tens of megabytes of demo output with no writer. A new bucket, its Terraform,
+a cost row and a CORS/CDN decision the evening before the demo bought nothing
+the `public/` folder does not already give. It remains the eventual home when
+imagery is generated per audit rather than once.
+
+**Rejected: NBR / ΔNBR as a third product.** A burn-severity index looks like
+an analytical result and would be read as one. The evidence layer stops at
+display products for human orientation; anything that could be mistaken for a
+measured burn extent needs the limitations and evidence framing of a derived
+metric, which this PR does not attempt.
+
+**Rejected: fetching the manifest through the API.** It would put the imagery
+contract behind a Lambda route for no reason; the console fetches static
+pipeline output from its own origin already, and #171 consumes the manifest
+the same way.
+
+**Open.** #171 builds the drawer surface that reads `manifest.json`. Folding
+each image into the evidence response as a display attribute of its source
+EvidenceObject (rather than a parallel manifest) is the right eventual shape
+and is not done here.
 
 ---
 
