@@ -13,6 +13,15 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 
 type FirmsProperties = { confidence: string; frp: number; ageHours: number }
 
+// Sumatra to Papua, not the wider regional guard rail: fitting to this (with
+// padding that leans right, away from the scope panel) is what actually
+// centers Indonesia on load. A bare initialViewState latitude/zoom cannot --
+// at a zoom wide enough to read as "regional," the viewport is taller in
+// degrees than REGIONAL_MAP_BOUNDS itself, so MapLibre's own bounds clamp
+// pulls any requested center back toward the bounds' vertical midpoint
+// regardless of what latitude was asked for (#243).
+const INDONESIA_FOCUS_BOUNDS: [number, number, number, number] = [95, -11, 141, 6]
+
 const FIRMS_REFRESH_MS = 15 * 60 * 1000
 const CLOCK_REFRESH_MS = 60 * 1000
 
@@ -130,7 +139,10 @@ export function AuditLanding({ onStartAudit, onOpenContext }: { onStartAudit: ()
         <Map
           mapStyle="/scoped-map-style.json"
           transformRequest={transformRequest}
-          initialViewState={{ longitude: 117.5, latitude: -12, zoom: 3 }}
+          initialViewState={{
+            bounds: INDONESIA_FOCUS_BOUNDS,
+            fitBoundsOptions: { padding: { top: 60, bottom: 60, left: 60, right: 460 } },
+          }}
           maxBounds={REGIONAL_MAP_BOUNDS}
           minZoom={3}
           maxZoom={10}
