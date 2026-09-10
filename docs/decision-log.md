@@ -81,6 +81,13 @@ treating a lobe as an event. The count is all it needs.
 
 **Status:** done · PR #246 · Refs #186
 
+> **Corrected 2026-09-10 by PR #261 (#251).** The 2.5 s handler floor
+> below was almost certainly the upstream FIRMS fetch on a shared entry
+> that had aged past 15 minutes, which runs with no warning by design, not
+> anything inside the Lambda; the paragraph after this one has the
+> measurement that shows it. Read the figures below as the stale-entry
+> case.
+
 > **Measured 2026-09-10 by PR #250: the cache works, the cold start did
 > not move.** After the apply, a cold container serves the route from the
 > shared object with no warning logged, in 2,455 to 2,686 ms of handler time
@@ -93,8 +100,39 @@ treating a lobe as an event. The count is all it needs.
 > cold wait, and the remaining cost sits inside the Lambda, not the
 > network. Attribution and candidate fixes are in #251.
 
+> **Measured on the deployed function 2026-09-10 after PR #256, and the
+> attribution below is corrected (#251, #186).** Three bursts against the
+> API with the new stage lines in CloudWatch:
+>
+> | Burst | Shared entry | Cold handler | Init | Cold TTFB |
+> |---|---|---|---|---|
+> | 12 wide, entry 15 min old | stale | 3,082 to 3,184 ms, 10 of 10 | 1,188 to 1,550 ms | 3.7 to 5.8 s |
+> | 12 wide, entry 2 s old | fresh | 237 to 340 ms, 7 cold | 1,164 to 1,592 ms | 2.9 to 4.0 s, client contended |
+> | 4 wide, entry 10 s old | fresh | 261 to 298 ms, 2 cold | 1,254 to 1,596 ms | 2.08 and 2.50 s |
+>
+> Warm requests answered in 0.47 to 0.69 s throughout. In the stale burst
+> every stage line shows the S3 read at 107 to 218 ms and then a 2.9 s gap
+> before the encode line: that gap is the FIRMS fetch, and all ten
+> containers made it and rewrote the object. So the ~2.5 s floor #250
+> measured, and the local first-connection figures quoted below, were
+> the wrong cause: on Lambda the client builds in 127 to 162 ms, the
+> warm-up HEAD takes 50 to 58 ms, the GET 36 to 156 ms, the decode 31 to
+> 79 ms and the encode 62 to 101 ms, together 0.3 to 0.5 s. With a fresh
+> entry a cold request is 2.1 to 2.5 s to first byte, against 3.2 to 3.9 s
+> in #250, so #186's criterion is met for the case it describes and both
+> issues close. What #256 itself bought is small: about 0.2 s of handler
+> moved into init, and init grew from 0.56 to 0.74 s to 1.16 to 1.6 s
+> because `boto3` is now imported and the connection opened there; the
+> stage lines are the durable part of that PR. The remaining cold cost is
+> init, and the remaining slow path is whoever arrives first after the
+> entry expires, which #259 carries (refresh ahead of expiry). Two of
+> twelve burst requests were throttled to 503 by the account's Lambda
+> concurrency limit of 10; #260.
+
 > **Attributed 2026-09-10 by PR #256 (#251): the cost is the first S3
-> connection, not the decode or the encode.** Staged on a laptop through
+> connection, not the decode or the encode.** *(Superseded by the
+> paragraph above: the laptop figures here are real, but the first
+> connection is not what the deployed handler was spending its time on.)* Staged on a laptop through
 > the same code against the real bucket, profile `kino`: `import boto3`
 > 129 ms, client construction 84 to 86 ms, the first `get_object` of the
 > 75 KB object 5,308 ms against 996 ms for the second, gunzip 1 ms,
@@ -167,10 +205,12 @@ bucket, which keeps its object-only grant. The trade is stated in that
 file: a PR merged to `main` can widen CI's own permissions, in the open,
 with a plan comment. Bootstrap now holds only what CI cannot give itself.
 
-**Open.** The cold-start time-to-first-byte is quoted above and is not
+**Open.** ~~The cold-start time-to-first-byte is quoted above and is not
 materially below the pre-change figure. #186 stays open, and #251
 carries the next step: where the ~2.5 s goes inside a cold handler that no
-longer waits on FIRMS.
+longer waits on FIRMS.~~ Resolved 2026-09-10, see the measured paragraph
+above: 2.1 to 2.5 s cold with a fresh entry. Still open: the first request
+after the entry expires pays the FIRMS fetch, #259.
 ---
 
 ## 2026-09-10 - The shared evidence prefix is sent behind a Bedrock cache point; round 1 stays parallel, so the saving is two reads, not three
