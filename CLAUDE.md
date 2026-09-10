@@ -119,7 +119,11 @@ and `golden/` regression cases — across ~58 modules with unit tests.
 
 The first of it reaches the API: `GET /api/audits/{id}/events` serves 3,610
 FireEvents clustered from 20,471 FIRMS detections in the 2019 haze window and
-run through Stage-1 triage. Clustering happens offline in
+run through Stage-1 triage. A session-created audit gets the subset of those
+its own review period covers, and every count in the served scope is
+recomputed from that subset — a narrowed register never carries the artifact's
+unfiltered totals beside it, and `rawObservations` is `null` rather than a
+figure a sub-window cannot know (decision log, 2026-09-10). Clustering happens offline in
 `data_pipeline/export_audit_events.py` and the API serves the committed
 artifact, because scipy/pandas would take the Lambda bundle to the edge of its
 250 MB limit and the derivation is identical for every caller. The FIRMS

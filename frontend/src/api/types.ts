@@ -359,7 +359,11 @@ export interface DemoDatasetSummary {
 }
 
 export interface AuditProgression {
-  rawObservations: number
+  // Null when a narrowed review period makes the pre-clustering raw count
+  // unknowable (#161): the artifact records how many detections were dropped
+  // at the confidence gate across the whole dataset, not per day, so a
+  // sub-window cannot state its own figure without inventing one.
+  rawObservations: number | null
   qualifiedObservations: number
   fireEvents: number
   requiringHumanReview: number
