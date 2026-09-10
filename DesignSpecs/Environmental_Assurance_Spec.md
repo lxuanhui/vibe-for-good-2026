@@ -407,6 +407,8 @@ Design consequence: exculpatory evidence must be first-class. If an earlier neig
 ```text
 POST /api/audits
 POST /api/audits/{audit_id}/scope/upload
+POST /api/audits/{audit_id}/scope/point     # {latitude, longitude, radius_km}; 6.1 quick analysis
+POST /api/audits/{audit_id}/scope/demo      # predefined, labelled demo study area
 POST /api/audits/{audit_id}/history/build
 GET  /api/audits/{audit_id}/events
 GET  /api/audits/{audit_id}/events/{event_id}
