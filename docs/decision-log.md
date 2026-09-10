@@ -19,12 +19,59 @@ when changing that subsystem.
 | Map and imagery | Camera fitting is bounds-driven; map context is not an unscoped fire browser. Satellite display processing is deterministic and provenance-preserving. | 2026-09-09, audit session / landing; 2026-09-08, Copernicus scenes |
 | Infrastructure | Flask runs on Lambda behind API Gateway; Terraform owns the deployed configuration; CORS is Flask-owned. | 2026-09-09, Amplify; 2026-09-07, Lambda / CORS |
 | Service selection | DynamoDB and S3 are authorised without a fresh argument each time; every service switched on gets a cost row in `docs/infra.md` in the same PR. | 2026-09-09, DynamoDB and S3 are authorised |
+| Frontend tests | Vitest + jsdom + Testing Library, run in CI. They guard behaviours the product boundary depends on — explicit trigger, honest not-run state, no chain-of-thought — not the map, which jsdom cannot draw. | 2026-09-10, frontend test runner |
 
 **Use this log:** entries retain the original diagnosis, rejected alternatives,
 and historical context. A later entry can supersede an earlier one; do not
 apply an older decision without checking the entries above it.
 
 ---
+
+## 2026-09-10 - The frontend gets a test runner, for the behaviours the product boundary rests on
+
+**Status:** done · PR #158 · Closes #61
+
+`frontend/package.json` had `dev`, `build`, `lint` and `preview` and no test
+runner at all, so every frontend check was static: `tsc -b` proves the console
+compiles and `oxlint` proves it is tidy. Neither can observe that opening the
+engagement report does *not* start an AI analysis.
+
+That distinction is not a nicety. #61's rules — analysis runs only on an
+explicit `GENERATE INVESTIGATION ANALYSIS` press, an unanalysed event says so
+rather than showing a fabricated assessment, and only the bounded final
+assessment reaches the page while the intermediate rounds stay off it — are
+all *absences*. A regression in any of them adds nothing to the screen that a
+reviewer would notice; it removes a restraint. The backend has had schema and
+route tests for this since #142/#148. The console had nothing.
+
+**Vitest**, not Jest. Vite 8 is already the build tool, so Vitest reuses its
+resolver, its TS handling and the same `import.meta.env` semantics; Jest would
+need a second transform pipeline (babel or ts-jest) and its own module
+mapping, and would then be resolving imports differently from the thing that
+actually ships. `@testing-library/react` over shallow rendering or enzyme-style
+introspection: these tests assert on what an auditor sees and presses, which is
+the level the rules are written at.
+
+**A separate `vitest.config.ts` rather than a `test` block in
+`vite.config.ts`.** The app config carries the Tailwind plugin and both
+maplibre worker workarounds; a jsdom component test needs none of them, and
+loading Tailwind on every run costs seconds for nothing. JSX comes from
+`tsconfig.app.json`'s `"jsx": "react-jsx"`, so the React plugin is not needed
+either.
+
+**The API seam is mocked, not `fetch`.** `client.ts` decides how an analysis
+job is polled (2026-09-10, async job); a component test that stubbed `fetch`
+would fail whenever that polling changed, while proving nothing extra about
+the component. Mocking the seam keeps the two independently changeable — which
+is the same reason the seam exists.
+
+**What this deliberately does not do.** jsdom draws no canvas and loads no
+tiles, so nothing here covers the map, and the standing rule survives intact:
+for any change touching rendering, the map or a frontend dependency, open the
+app and look at it before merging. A green Vitest run is not that check.
+
+Adding a devDependency is normally Renovate's job. This one is a deliverable of
+the issue rather than a bump: there was no runner to update.
 
 ## 2026-09-10 - The live FIRMS window is fetched wide and narrowed here, and a non-CSV answer is an error
 
