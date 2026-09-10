@@ -413,7 +413,10 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
           initialViewState={initialViewState}
           minZoom={5}
           maxZoom={15}
-          maxBounds={scope.buffer_bbox ? [scope.buffer_bbox.minLon, scope.buffer_bbox.minLat, scope.buffer_bbox.maxLon, scope.buffer_bbox.maxLat] : undefined}
+          // The context buffer frames the audit evidence but is not a viewport
+          // boundary. Auditors need to pan to nearby geography when choosing
+          // the area of focus; MapLibre's default drag-pan remains enabled.
+          dragPan
           interactiveLayerIds={['audit-event-points', 'fireevent-observations-points']}
           onClick={handleMapClick}
           cursor="default"

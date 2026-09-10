@@ -12,7 +12,7 @@ import { ScopedMapLanding } from './ScopedMapLanding'
 import { eventOverlapsDay, investigationDays, observationDays, observationsForDay } from './temporalScrubber'
 
 vi.mock('react-map-gl/maplibre', () => ({
-  Map: forwardRef<HTMLDivElement, PropsWithChildren<{ children?: ReactNode }>>(({ children }, _ref) => <div data-testid="map">{children}</div>),
+  Map: forwardRef<HTMLDivElement, PropsWithChildren<{ children?: ReactNode; maxBounds?: unknown; dragPan?: boolean }>>(({ children, maxBounds, dragPan }, _ref) => <div data-testid="map" data-max-bounds={maxBounds ? 'set' : 'unset'} data-drag-pan={String(dragPan)}>{children}</div>),
   Source: ({ children, id }: PropsWithChildren<{ id: string }>) => <div data-source-id={id}>{children}</div>,
   Layer: () => <div />,
 }))
@@ -137,6 +137,17 @@ it('keeps scope editing and register navigation in the same map header', async (
   fireEvent.click(header?.querySelectorAll('button')[1] as HTMLButtonElement)
   expect(onOpenScope).toHaveBeenCalledOnce()
   expect(onOpenRegister).toHaveBeenCalledOnce()
+})
+
+it('keeps the context buffer visible without trapping the map viewport', async () => {
+  fetchAuditRegisterMock.mockResolvedValue({ events: [], progression: { selectedEventIds: [] } as unknown as AuditProgression })
+
+  render(<ScopedMapLanding scope={scope} onOpenScope={() => undefined} onOpenRegister={() => undefined} onViewReport={() => undefined} />)
+
+  await screen.findByRole('list', { name: 'Available observation dates' })
+  const map = screen.getByTestId('map')
+  expect(map.getAttribute('data-max-bounds')).toBe('unset')
+  expect(map.getAttribute('data-drag-pan')).toBe('true')
 })
 
 it('enables the scoped FIRMS overlay without a focused FireEvent', async () => {
