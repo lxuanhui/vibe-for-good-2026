@@ -121,3 +121,12 @@ test('keeps upload guidance concise and validates unsupported geometry clearly',
 
   expect((await screen.findByRole('alert')).textContent).toContain('Polygon or MultiPolygon')
 })
+
+test('does not render the redundant scope-first control', () => {
+  fetchDemoDatasetSummaryMock.mockRejectedValue(new Error('the API did not answer'))
+  const onClose = vi.fn()
+  render(<AuditStart onReady={vi.fn()} onClose={onClose} />)
+
+  expect(screen.queryByText('Scope first')).toBeNull()
+  expect(screen.getByRole('button', { name: 'CLOSE' })).toBeTruthy()
+})

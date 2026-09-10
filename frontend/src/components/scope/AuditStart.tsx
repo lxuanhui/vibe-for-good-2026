@@ -130,7 +130,7 @@ export function AuditStart({ onReady, overlay = false, fullScreen = false, onClo
           <div className="text-sm font-semibold tracking-wide">Environmental Assurance Console</div>
           <div className="text-[10px] uppercase tracking-[0.2em] text-text-faint">Create audit review</div>
         </div>
-        <div className="flex items-center gap-3"><span className="rounded border border-accent-muted px-2 py-1 text-[10px] uppercase tracking-widest text-accent">Scope first</span>{onClose && <Button onClick={onClose}>CLOSE</Button>}</div>
+        {onClose && <Button onClick={onClose}>CLOSE</Button>}
       </header>
 
       <main className="mx-auto grid w-full max-w-6xl flex-1 gap-6 overflow-auto p-6 lg:grid-cols-[minmax(320px,0.8fr)_minmax(420px,1.2fr)]">
