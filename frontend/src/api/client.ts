@@ -187,6 +187,19 @@ export function fetchProcessedImageryManifest(): Promise<ProcessedImageryManifes
 // analysis or one error -- rather than pushing job state into every caller.
 const ANALYSIS_POLL_DEADLINE_MS = 5 * 60 * 1000
 
+// The two halves of the job endpoint on their own, for a caller that wants
+// to start work now and read it later rather than block on it: the guided
+// demo primes the focus event's analysis on page load and checks back.
+// POST is idempotent while a job is RUNNING and returns the stored outcome
+// once it is COMPLETE; GET only reads and never spends tokens.
+export async function startInvestigationAnalysis(auditId: string, eventId: string): Promise<AnalysisJob> {
+  return apiPost<AnalysisJob>(`/audits/${encodeURIComponent(auditId)}/events/${encodeURIComponent(eventId)}/analyse`, '')
+}
+
+export async function readInvestigationAnalysis(auditId: string, eventId: string): Promise<AnalysisJob> {
+  return apiGet<AnalysisJob>(`/audits/${encodeURIComponent(auditId)}/events/${encodeURIComponent(eventId)}/analyse`)
+}
+
 export async function generateInvestigationAnalysis(auditId: string, eventId: string, onProgress?: (job: AnalysisJob) => void): Promise<StructuredAnalysis> {
   const path = `/audits/${encodeURIComponent(auditId)}/events/${encodeURIComponent(eventId)}/analyse`
   let job = await apiPost<AnalysisJob>(path, '')

@@ -53,3 +53,24 @@ converts linear VV/VH to dB and applies a 2–98% percentile stretch for
 display; it does not use generative enhancement or super-resolution.
 Catalogue quicklooks remain explicitly labelled fallback previews until a
 processed product is available.
+
+## Guided presenter path: `/demo`
+
+`https://main.dz8w2n4hd2d22.amplifyapp.com/demo` (or `/demo` on the dev
+server) renders the same screens as the console in a fixed seven-step order
+with a presenter bar: step number, a one-line cue, Back and Next. The arrow
+keys move between steps. Nothing on it is a fixture: it creates a real audit
+review with the demo study area and the 2019 review period, builds history,
+and every number comes from the API (#274).
+
+**Open it a few minutes before presenting.** On first load it creates the
+demo audit, stores it in the browser, and starts the Investigator/Skeptic
+analysis for the focus event in the background. That analysis takes about
+50 seconds. A reload reuses the same audit, so by the analysis step the
+drawer shows the completed assessment and the bar states when it was
+generated. Say that on stage rather than implying it ran live.
+
+The three selected events and the focus event are named in
+`frontend/src/demo/demoScript.ts`; they were picked from the artifact for
+having real relationship edges 3 to 4 km apart and rendered Sentinel-1 and
+Sentinel-2 context scenes.

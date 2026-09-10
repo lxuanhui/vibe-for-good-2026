@@ -166,7 +166,10 @@ map, evidence drawer and pack view. The console opens on
 Indonesia orientation map with a START AUDIT button. No FireEvent is drawn
 until a scope exists — that is the point of the screen, not a loading state.
 `AuditStart.tsx` is the scope-entry and history-build panel, shown over the
-landing. `ConsoleContextPanel.tsx` exports both the panel and
+landing. `/demo` (`src/demo/`, chosen in `main.tsx`) is the guided presenter
+path over those same screens: a fixed seven-step order and a bar with the
+cue for each, driving one real demo audit it creates and reuses per
+browser. It contains no data of its own (#274, `docs/demo.md`). `ConsoleContextPanel.tsx` exports both the panel and
 `ConsoleContextModal`, the first-load dialog stating what the console does,
 what it refuses to conclude, and which parts of this build are real —
 dismissed per browser, reopened from the landing. Events are typed

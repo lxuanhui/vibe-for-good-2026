@@ -91,7 +91,7 @@ function scopeFeature(geometry: unknown): Feature<Geometry> | null {
   return geometry ? { type: 'Feature', geometry: geometry as Geometry, properties: {} } : null
 }
 
-export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewReport }: { scope: AuditScope; onOpenScope: () => void; onOpenRegister: () => void; onViewReport: () => void }) {
+export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewReport, focusEventId }: { scope: AuditScope; onOpenScope: () => void; onOpenRegister: () => void; onViewReport: () => void; focusEventId?: string }) {
   const [events, setEvents] = useState<AuditEventSummary[]>([])
   const [packed, setPacked] = useState<string[]>([])
   // Package selection belongs to this sidebar. It is deliberately separate
@@ -138,6 +138,13 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
     seededFocusForAudit.current = scope.audit_id
     if (registerSelection.length === 1) setFocusedEventId(registerSelection[0])
   }, [scope.audit_id, registerSelection])
+  // A caller may name the event to open, which the guided demo path (#274)
+  // does so a step lands on one drawer without a map click. Only a named
+  // event acts; the prop going back to undefined leaves whatever the user
+  // has open alone, since closing the drawer is theirs to do.
+  useEffect(() => {
+    if (focusEventId) setFocusedEventId(focusEventId)
+  }, [focusEventId])
 
   // A single bundled request supplies the drawer, its own one-event graph,
   // and the raw observations layer. This avoids a click producing two
