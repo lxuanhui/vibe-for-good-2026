@@ -9,7 +9,9 @@ transcript or private chain-of-thought.
 
 from __future__ import annotations
 
+import logging
 import math
+import re
 from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -18,6 +20,20 @@ from typing import Any
 
 ALGORITHM_VERSION = "investigator-skeptic-v1"
 MAX_ROUNDS = 3
+
+logger = logging.getLogger(__name__)
+
+# Word caps the provider prompt states and this module measures. Over-length
+# text is logged, never rejected: a rejected round is a FAILED job the auditor
+# pays for again, which is worse than a long sentence on screen (#199).
+SUMMARY_WORD_CAP = 25
+QUESTION_WORD_CAP = 20
+REASON_WORD_CAP = 15
+
+# A dash with space on both sides, in any of the three forms models produce.
+_SPACED_DASH = re.compile(r"\s+(?:\u2014|\u2013|--)\s+")
+# A bare em-dash between digits is a range the copy rules allow as an en-dash.
+_NUMERIC_EMDASH = re.compile(r"(?<=\d)\u2014(?=\d)")
 _FORBIDDEN_HYPOTHESIS_TERMS = (
     "blame",
     "guilt",
@@ -295,6 +311,35 @@ def _normalise_hypotheses(
     return tuple(values)
 
 
+def plain_text(text: Any, *, field: str, word_cap: int | None = None) -> str:
+    """Normalise model prose to the console's copy rules.
+
+    The prompt asks for no em-dashes; this is the guard for a model that
+    ignores it, because a rule the prompt states and nothing enforces is a
+    rule the screen breaks. A spaced dash becomes a full stop when a new
+    sentence follows (capital letter) and a comma otherwise; a bare em-dash
+    between digits is a range and becomes an en-dash; any other bare em-dash
+    becomes a colon. Word caps are measured and logged, not enforced, for the
+    reason at the constants above.
+    """
+
+    text = " ".join(str(text).split())
+
+    def _clause_break(match: re.Match[str]) -> str:
+        following = match.string[match.end() : match.end() + 1]
+        return ". " if following.isupper() else ", "
+
+    text = _SPACED_DASH.sub(_clause_break, text)
+    text = _NUMERIC_EMDASH.sub("\u2013", text)
+    text = text.replace("\u2014", ": ")
+    text = " ".join(text.split()).rstrip(" :,")
+    if word_cap is not None:
+        words = len(text.split())
+        if words > word_cap:
+            logger.warning("%s runs to %d words against a cap of %d", field, words, word_cap)
+    return text
+
+
 def _ids(raw: Any, *, field_name: str) -> tuple[str, ...]:
     if raw is None:
         return ()
@@ -311,13 +356,15 @@ def _question(
     valid_evidence_ids: set[str],
 ) -> UnresolvedQuestion:
     if isinstance(raw, Mapping):
-        question = str(raw.get("question", raw.get("text", "")))
+        question = raw.get("question", raw.get("text", ""))
         evidence_ids = _ids(raw.get("evidence_ids", raw.get("evidence", ())), field_name="question evidence_ids")
-        reason = str(raw.get("reason", ""))
+        reason = raw.get("reason", "")
     else:
-        question = str(raw)
+        question = raw
         evidence_ids = ()
         reason = ""
+    question = plain_text(question, field="question", word_cap=QUESTION_WORD_CAP)
+    reason = plain_text(reason, field="question reason", word_cap=REASON_WORD_CAP)
     _validate_ids(evidence_ids, valid_evidence_ids, "question")
     return UnresolvedQuestion(question=question, evidence_ids=evidence_ids, reason=reason)
 
@@ -395,7 +442,11 @@ def _assessment(
             raise ValueError(f"finding {hypothesis_id!r} cites evidence as both supporting and contradicting")
         raw_questions = raw_finding.get("verification_questions", ())
         questions = tuple(_question(item, valid_evidence_ids) for item in raw_questions)
-        summary = str(raw_finding.get("summary", raw_finding.get("reasoning_summary", "")))
+        summary = plain_text(
+            raw_finding.get("summary", raw_finding.get("reasoning_summary", "")),
+            field=f"finding {hypothesis_id} summary",
+            word_cap=SUMMARY_WORD_CAP,
+        )
         if isinstance(support, bool):
             raise TypeError(f"finding {hypothesis_id!r} support_score must be an integer")
         try:
@@ -489,6 +540,7 @@ def run_structured_analysis(
     skeptic: AgentRunner,
     *,
     max_rounds: int = MAX_ROUNDS,
+    on_round: Callable[[int, int, AnalysisPhase], None] | None = None,
 ) -> StructuredAnalysisResult:
     """Run independent, rebuttal, and final rounds with strict output checks.
 
@@ -496,6 +548,10 @@ def run_structured_analysis(
     opponent's round-one structured assessment; round three receives the
     opponent's round-two assessment.  No callback output is copied through as
     conversation: only the validated schema is persisted and returned.
+
+    ``on_round`` is told ``(round_number, max_rounds, phase)`` before each
+    round's provider calls start. It exists so a job runner can report which
+    round is in flight to whoever is waiting; it sees no assessment content.
     """
 
     if not str(event_id).strip():
@@ -515,6 +571,8 @@ def run_structured_analysis(
             if round_number == 2
             else AnalysisPhase.FINAL_ASSESSMENT
         )
+        if on_round is not None:
+            on_round(round_number, max_rounds, phase)
         previous = rounds[-1] if rounds else None
         investigator_input = AgentInput(
             event_id=str(event_id),

@@ -6,6 +6,7 @@ from data_pipeline.analysis.investigator_skeptic import (
     AnalysisPhase,
     EvidenceSufficiency,
     Finding,
+    plain_text,
     run_structured_analysis,
 )
 
@@ -164,3 +165,83 @@ def test_hypothesis_labels_cannot_cross_the_product_safety_boundary():
             lambda _: {},
             max_rounds=1,
         )
+
+
+def test_on_round_is_told_each_round_before_its_provider_calls_start():
+    """A job runner reports the round in flight; it never sees assessment content."""
+    seen: list[tuple] = []
+    provider_rounds: list[int] = []
+
+    def provider(agent_input):
+        provider_rounds.append(agent_input.round_number)
+        return _assessment(agent_input.role, agent_input.round_number)
+
+    run_structured_analysis(
+        "FE-1",
+        EVIDENCE,
+        HYPOTHESES,
+        provider,
+        provider,
+        max_rounds=2,
+        on_round=lambda round_number, total, phase: seen.append((round_number, total, phase, len(provider_rounds))),
+    )
+
+    assert seen == [
+        (1, 2, AnalysisPhase.INDEPENDENT_ASSESSMENT, 0),
+        (2, 2, AnalysisPhase.REBUTTAL, 2),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        # A spaced dash joining two clauses becomes a comma.
+        ("VH backscatter fell after 03 Sep \u2014 consistent with sustained combustion", "VH backscatter fell after 03 Sep, consistent with sustained combustion"),
+        # A spaced dash before a new sentence becomes a full stop.
+        ("No rain for 72 hours \u2014 The nearest peat is 3 km away.", "No rain for 72 hours. The nearest peat is 3 km away."),
+        # Double hyphen and spaced en-dash are the same habit.
+        ("No rain for 72 hours -- consistent with dry fuel", "No rain for 72 hours, consistent with dry fuel"),
+        ("No rain for 72 hours \u2013 consistent with dry fuel", "No rain for 72 hours, consistent with dry fuel"),
+        # A bare em-dash between digits is a range, and the copy rules allow an en-dash there.
+        ("Wind alignment 0.81\u20140.99 over 12\u201472 hours", "Wind alignment 0.81\u20130.99 over 12\u201372 hours"),
+        # Any other bare em-dash is a label break.
+        ("Peat\u2014none mapped within 3 km", "Peat: none mapped within 3 km"),
+        # A dangling dash leaves no punctuation behind.
+        ("Peat contact unlikely \u2014", "Peat contact unlikely"),
+        # Text that already follows the rules is untouched, en-dash ranges included.
+        ("Estimated burn extent 240 ha; cloud gaps on 04\u201305 Sep limit confidence.", "Estimated burn extent 240 ha; cloud gaps on 04\u201305 Sep limit confidence."),
+    ],
+)
+def test_model_prose_is_normalised_to_the_console_copy_rules(raw, expected):
+    assert plain_text(raw, field="summary") == expected
+
+
+def test_over_length_prose_is_logged_and_kept_rather_than_rejected(caplog):
+    """A rejected round is a FAILED job the auditor pays for again."""
+    long = " ".join(["word"] * 30)
+    with caplog.at_level("WARNING", logger="data_pipeline.analysis.investigator_skeptic"):
+        assert plain_text(long, field="finding H1 summary", word_cap=25) == long
+    assert "finding H1 summary runs to 30 words against a cap of 25" in caplog.text
+
+
+def test_normalisation_reaches_every_prose_field_of_a_stored_assessment():
+    def provider(agent_input):
+        raw = _assessment(agent_input.role, agent_input.round_number, unresolved=True)
+        for finding in raw["findings"].values():
+            finding["summary"] = "Dry 72 hours \u2014 consistent with local ignition"
+            finding["verification_questions"] = [
+                {"question": "Rain gauge \u2014 any record?", "evidence_ids": ["ENV_001"], "reason": "Gauge \u2014 decisive"}
+            ]
+        raw["unresolved_questions"][0]["question"] = "Which first \u2014 H1 or H2?"
+        return raw
+
+    result = run_structured_analysis("FE-1", EVIDENCE, HYPOTHESES, provider, provider, max_rounds=1).to_dict()
+    text = []
+    for role in ("investigator", "skeptic"):
+        for finding in result["rounds"][0][role]["findings"]:
+            text.append(finding["summary"])
+            for question in finding["verification_questions"]:
+                text.extend([question["question"], question["reason"]])
+    text.extend(question["question"] for question in result["unresolved_questions"])
+    assert text and not any("\u2014" in item for item in text)
+    assert result["rounds"][0]["investigator"]["findings"][0]["summary"] == "Dry 72 hours, consistent with local ignition"

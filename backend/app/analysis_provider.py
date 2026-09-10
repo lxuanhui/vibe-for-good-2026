@@ -14,7 +14,12 @@ import threading
 from collections.abc import Mapping
 from typing import Any
 
-from data_pipeline.analysis.investigator_skeptic import AgentInput
+from data_pipeline.analysis.investigator_skeptic import (
+    QUESTION_WORD_CAP,
+    REASON_WORD_CAP,
+    SUMMARY_WORD_CAP,
+    AgentInput,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -54,8 +59,15 @@ def _bedrock_client():
         return _client
 
 
-def _prompt(agent_input: AgentInput) -> str:
-    return """You are one role in a bounded environmental FireEvent assessment.
+# The writing rules exist because the schema alone produced findings an
+# auditor would not sign: measured on the real demo pack before them,
+# summaries averaged 30 words (18 of 24 over the cap) and stacked three or
+# four figures per sentence. A second model to rewrite the prose was rejected
+# (#199, decision log 2026-09-10): it adds latency to a job already near a
+# minute, and its output would bypass the evidence-ID validation the first
+# model's went through. The caps are the pipeline's, so the number the model
+# is told is the number the validator measures.
+_PROMPT = f"""You are one role in a bounded environmental FireEvent assessment.
 Return JSON only. Do not include analysis, a transcript, markdown, or facts
 outside the supplied evidence. Do not infer company identity, intent, blame,
 guilt, legality, responsibility, or causation.
@@ -64,17 +76,45 @@ For every supplied hypothesis, return exactly one finding with:
 - hypothesis_id
 - support_score: integer 0..100 (relative support, not probability)
 - evidence_sufficiency: SUFFICIENT, PARTIAL, or INSUFFICIENT
-- supporting_evidence_ids and contradicting_evidence_ids (only supplied IDs)
-- summary: one concise evidence-grounded sentence
-- verification_questions: zero or more objects with question, evidence_ids, reason
+- supporting_evidence_ids and contradicting_evidence_ids, using only supplied
+  IDs. Every finding cites at least one ID in one of the two lists. A
+  hypothesis nothing supports still cites, as contradicting, the evidence that
+  fails to support it. A finding with both lists empty is rejected.
+- summary: at most {SUMMARY_WORD_CAP} words, in one or two sentences
+- verification_questions: at most two objects with question (at most
+  {QUESTION_WORD_CAP} words), evidence_ids, and reason (at most
+  {REASON_WORD_CAP} words). Include one only where the answer would change
+  the support_score.
 
-Return one to three targeted unresolved_questions across the assessment. Keep
-disagreement unresolved when the evidence does not decide between explanations.
+Return one to three targeted unresolved_questions across the assessment, each
+an object with question, evidence_ids and reason. Every verification_question
+and every unresolved_question names at least one supplied ID in evidence_ids:
+the evidence the question is about. A question with empty evidence_ids is
+rejected and fails the whole assessment. Keep disagreement unresolved when the
+evidence does not decide between explanations.
 Evidence sufficiency is separate from hypothesis support. Peat, weather, and
 surface-propagation context can inform persistence or compatibility but never
 establish cause.
 
-Input follows.\n""" + json.dumps(agent_input.to_dict(), separators=(",", ":"), default=str)
+Writing rules. The reader is an environmental auditor who signs what they act
+on, so write as they would:
+- Say what was measured, then what it is consistent with, in that order.
+- Plain words, short clauses, at most one figure per clause. Write "no mapped
+  peat within 3 km", not "0.0% peat overlap with nearest peat at 3.28 km".
+- Keep evidence IDs out of the summary sentence itself; the ID lists and
+  evidence_ids fields carry them, and those are required.
+- No em-dashes. Use a full stop, comma or colon.
+- Do not use: notably, crucially, it is important to note, underscores,
+  highlights, robust, nuanced, leverage, delve.
+- "Consistent with", "estimated" and "inferred" are the right words. Never
+  "confirmed", "proves", "caused" or "responsible".
+
+Input follows.
+"""
+
+
+def _prompt(agent_input: AgentInput) -> str:
+    return _PROMPT + json.dumps(agent_input.to_dict(), separators=(",", ":"), default=str)
 
 
 def _unfenced(text: str) -> str:
