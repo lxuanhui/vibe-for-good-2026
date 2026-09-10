@@ -31,7 +31,7 @@ apply an older decision without checking the entries above it.
 
 ## 2026-09-10 - A scope can be a point and radius or the server-owned demo area, and the session records which
 
-**Status:** done · PR #TBD · Refs #87 (backend half; the console half is open)
+**Status:** done · PR #216 · Refs #87 (backend half; the console half is open)
 
 **Decision.** Two more ways to set an audit scope, both server-side:
 `POST /api/audits/{id}/scope/point` takes latitude, longitude and a radius
