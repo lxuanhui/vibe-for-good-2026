@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
 import type { AuditEventSummary, AuditProgression, AuditScope } from '../../api/types'
 import { fetchAuditRegister } from '../../api/client'
 import { useAppStore } from '../../store/useAppStore'
@@ -18,6 +19,35 @@ function eventRows(events: AuditEventSummary[], selected: string[], toggle: (id:
       <td className="px-3 py-2 text-right">{event.maxFrp?.toFixed(1) ?? '—'}</td>
     </tr>
   ))
+}
+
+function SummaryHelp({ label, children }: { label: string; children: ReactNode }) {
+  return <details className="relative inline-block align-middle"><summary aria-label={`About ${label}`} className="flex h-4 w-4 cursor-pointer list-none items-center justify-center rounded-full border border-border-strong text-[10px] text-text-muted hover:text-text"><span aria-hidden="true">?</span></summary><div role="note" className="absolute right-0 z-10 mt-2 w-64 rounded border border-border-strong bg-panel-raised p-3 text-left text-[11px] leading-4 text-text shadow-lg">{children}</div></details>
+}
+
+export function RegisterSummary({ progression }: { progression: AuditProgression }) {
+  const eventDenominator = progression.fireEvents.toLocaleString()
+  return <section aria-label="Historical register population summary" className="shrink-0 border-b border-border bg-border">
+    <div className="grid gap-px bg-border md:grid-cols-3">
+      <section aria-labelledby="clustering-summary" className="bg-panel px-4 py-3">
+        <div className="mb-2 flex items-center gap-2"><h2 id="clustering-summary" className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-faint">Observation derivation</h2><SummaryHelp label="observation derivation">Spatially and temporally related FIRMS observations are deterministically clustered into FireEvents. An observation is a satellite detection, not an individual fire.</SummaryHelp></div>
+        <div className="flex items-end gap-3"><div><div className="font-semibold text-accent">{progression.qualifiedObservations.toLocaleString()}</div><div className="text-[10px] text-text-faint">QUALIFIED FIRMS OBSERVATIONS</div></div><div className="pb-3 text-text-faint">→</div><div><div className="font-semibold text-accent">{eventDenominator}</div><div className="text-[10px] text-text-faint">CLUSTERED FIREEVENTS</div></div></div>
+        <p className="mt-2 text-[10px] text-text-muted">{progression.observationsToEventsCompression?.toFixed(1) ?? '—'} observations per FireEvent on average. This is clustering, not a review queue.</p>
+      </section>
+      <section aria-labelledby="scope-summary" className="bg-panel px-4 py-3">
+        <div className="mb-2 flex items-center gap-2"><h2 id="scope-summary" className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-faint">Current audit scope</h2></div>
+        <div className="font-semibold text-accent">{progression.inScopeAndBuffer?.toLocaleString() ?? '—'}</div>
+        <div className="text-[10px] text-text-faint">IN SCOPE</div>
+        <p className="mt-2 text-[10px] text-text-muted">{progression.scopeBoundaryAvailable ? `Count includes the configured context buffer: ${progression.inScopeAndBuffer?.toLocaleString() ?? '—'} of ${eventDenominator} FireEvents.` : 'No private audit boundary supplied; scope count is unavailable.'}</p>
+      </section>
+      <section aria-labelledby="routing-summary" className="bg-panel px-4 py-3">
+        <div className="mb-2 flex items-center gap-2"><h2 id="routing-summary" className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-faint">Global routing diagnostics</h2><SummaryHelp label="routing dimensions">Priority, evidence sufficiency, and workflow are separate dimensions. They are diagnostics over the event population, not sequential funnel stages.</SummaryHelp></div>
+        <div className="font-semibold text-accent">{progression.requiringHumanReview.toLocaleString()}</div>
+        <div className="text-[10px] text-text-faint">ROUTED TO HUMAN REVIEW</div>
+        <p className="mt-2 text-[10px] text-text-muted">{(progression.routingDiagnostics.humanReviewPercentage * 100).toFixed(1)}% of {eventDenominator} FireEvents; this is not a subset count of the In Scope figure.</p>
+      </section>
+    </div>
+  </section>
 }
 
 // The selected-events + graph investigation used to render on its own page
@@ -54,8 +84,8 @@ export function HistoricalInvestigation({ scope, onOpenScopedMap }: { scope: Aud
 
   return <div className="flex h-full flex-col bg-bg text-text">
     <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border-strong bg-panel px-5 py-3"><div><div className="text-sm font-semibold">Historical Fire Register</div><div className="text-xs text-text-muted">{progression ? `${progression.fireEvents.toLocaleString()} FireEvents` : 'FireEvents'} · {scope.review_start} → {scope.review_end} · {scope.context_buffer_km} km context buffer</div></div><div className="flex items-center gap-2">{onOpenScopedMap && <Button onClick={onOpenScopedMap}>VIEW SCOPED MAP</Button>}<Button variant="primary" disabled={!selection.length || !onOpenScopedMap} onClick={onOpenScopedMap}>{`INVESTIGATE ON MAP (${selection.length})`}</Button></div></div>
-    {progression && <section aria-label="Observation compression progression" className="shrink-0 border-b border-border bg-border"><div className="bg-panel px-3 py-1 text-center text-[10px] uppercase tracking-[0.12em] text-text-faint">observations → FireEvents → in scope + buffer → human review</div><div className="grid grid-cols-2 gap-px border-t border-border bg-border text-center text-[11px] sm:grid-cols-4"><div className="bg-panel px-3 py-2"><div className="font-semibold text-accent">{progression.qualifiedObservations.toLocaleString()}</div><div className="text-text-faint">FIRMS OBSERVATIONS</div><div className="text-[10px] text-text-faint">→ FireEvents {progression.observationsToEventsCompression?.toFixed(1) ?? '—'}×</div></div><div className="bg-panel px-3 py-2"><div className="font-semibold text-accent">{progression.fireEvents.toLocaleString()}</div><div className="text-text-faint">CLUSTERED FIREEVENTS</div></div><div className="bg-panel px-3 py-2"><div className="font-semibold text-accent">{progression.inScopeAndBuffer?.toLocaleString() ?? '—'}</div><div className="text-text-faint">IN SCOPE + BUFFER</div><div className="text-[10px] text-text-faint">{progression.scopeBoundaryAvailable ? `${progression.scopeCompression?.toFixed(1) ?? '—'}× scope` : 'No boundary supplied'}</div></div><div className="bg-panel px-3 py-2"><div className="font-semibold text-accent">{progression.requiringHumanReview.toLocaleString()}</div><div className="text-text-faint">HUMAN REVIEW</div><div className="text-[10px] text-text-faint">{(progression.routingDiagnostics.humanReviewPercentage * 100).toFixed(1)}% · inspect reasons</div></div></div></section>}
-    {progression && <p className="border-b border-border bg-panel px-5 py-2 text-[11px] text-text-muted">Priority, evidence sufficiency, and human workflow are separate. Ambiguous events remain review-recommended; only calibrated HIGH/URGENT routes enter human review. {progression.scopeBoundaryAvailable ? 'Scope compression is measured from the supplied private boundary and context buffer.' : 'Supply a private audit boundary to measure in-scope plus buffer compression.'}</p>}
+    {progression && <RegisterSummary progression={progression} />}
+    {progression && <p className="border-b border-border bg-panel px-5 py-2 text-[11px] text-text-muted">Ambiguous events remain review-recommended; only calibrated HIGH/URGENT routes enter human review. The routing diagnostics below describe the full event population.</p>}
     {progression && <div className="flex flex-wrap gap-x-5 gap-y-1 border-b border-border bg-panel px-5 py-2 text-[10px] text-text-muted" aria-label="Review routing diagnostics"><span className="font-semibold uppercase tracking-[0.1em] text-text-faint">Routing diagnostics</span>{Object.entries(progression.routingDiagnostics.priorityDistribution).map(([priority, distribution]) => <span key={priority}>Priority {priority}: {distribution.count.toLocaleString()} ({(distribution.percentage * 100).toFixed(1)}%)</span>)}{Object.entries(progression.routingDiagnostics.reviewStateDistribution).map(([state, distribution]) => <span key={state}>Workflow {state}: {distribution.count.toLocaleString()} ({(distribution.percentage * 100).toFixed(1)}%)</span>)}{Object.entries(progression.routingDiagnostics.evidenceSufficiencyDistribution).map(([sufficiency, distribution]) => <span key={sufficiency}>Sufficiency {sufficiency}: {distribution.count.toLocaleString()} ({(distribution.percentage * 100).toFixed(1)}%)</span>)}{Object.entries(progression.routingDiagnostics.escalationReasonCodes).map(([reason, distribution]) => <span key={reason}>Escalation {reason}: {distribution.count.toLocaleString()}</span>)}{Object.entries(progression.routingDiagnostics.componentContributionDistribution).map(([factor, distribution]) => <span key={factor}>Component {factor}: {distribution.totalContribution.toFixed(1)} ({(distribution.percentageOfContribution * 100).toFixed(1)}%)</span>)}</div>}
     {scope.historyBuild && <div className="border-b border-border bg-panel px-5 py-2 text-[11px] text-text-muted">Cached real historical dataset · build handoff {scope.historyBuild.duration_ms.toFixed(2)} ms · counts below are from the current audit artifact.</div>}
     {error && <div role="alert" className="flex items-center justify-between gap-3 border-b border-status-urgent/40 bg-status-urgent/10 px-5 py-2 text-xs text-red-200"><span>{error}</span><Button onClick={() => void loadRegister()}>RETRY</Button></div>}
