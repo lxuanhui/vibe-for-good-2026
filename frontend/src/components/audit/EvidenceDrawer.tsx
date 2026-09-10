@@ -334,7 +334,7 @@ export function EvidenceDrawer({
   }, [data])
   const { width, onPointerDown } = useDrawerWidth()
 
-  return <aside aria-label="FireEvent evidence drawer" className="absolute top-0 right-0 z-20 h-full overflow-y-auto border-l border-border-strong bg-panel/98 text-text shadow-2xl print:static print:h-auto print:w-full print:overflow-visible print:border-0 print:bg-white print:text-black print:shadow-none" style={{ width: `min(${width}px, 92vw)` }}>
+  return <aside aria-label="FireEvent evidence drawer" data-print-layout="evidence-document" className="evidence-drawer absolute top-0 right-0 z-20 h-full overflow-y-auto border-l border-border-strong bg-panel/98 text-text shadow-2xl print:static print:h-auto print:w-full print:overflow-visible print:border-0 print:bg-white print:text-black print:shadow-none" style={{ width: `min(${width}px, 92vw)` }}>
     {/* Drag left/right to resize -- anchored to the left edge since the
         drawer itself is pinned to the right side of the screen. */}
     <div

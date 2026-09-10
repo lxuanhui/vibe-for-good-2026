@@ -286,13 +286,13 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
     setFocusedEventId(id)
   }
 
-  return <div className="relative flex h-full w-full flex-col bg-bg text-text">
-    <header className="flex h-14 shrink-0 items-center justify-between border-b border-border-strong bg-panel px-5">
+  return <div className="scoped-map-print-root relative flex h-full w-full flex-col bg-bg text-text">
+    <header className="scoped-map-print-hide flex h-14 shrink-0 items-center justify-between border-b border-border-strong bg-panel px-5">
       <div><div className="text-sm font-semibold tracking-wide">Environmental Assurance Console</div><div className="text-[10px] uppercase tracking-[0.2em] text-text-faint">Scoped FireEvent review · {scope.review_start} → {scope.review_end}</div></div>
       <div className="flex items-center gap-2"><Button onClick={onOpenScope}>EDIT SCOPE</Button></div>
     </header>
-    <div className="relative flex min-h-0 flex-1">
-      <div className="relative min-w-0 flex-1">
+    <div className="scoped-map-print-shell relative flex min-h-0 flex-1">
+      <div className="scoped-map-print-hide relative min-w-0 flex-1">
         <Map
           // Carto's vector dark-matter style with land/water recoloured to this
           // app's palette (land INDONESIA_FILL_COLOR #364527, water --color-bg
@@ -356,7 +356,7 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
           </Source>
         </Map>
       </div>
-      <aside className="flex w-80 shrink-0 flex-col overflow-y-auto border-l border-border-strong bg-panel">
+      <aside className="scoped-map-print-hide flex w-80 shrink-0 flex-col overflow-y-auto border-l border-border-strong bg-panel">
         <div className="border-b border-border-strong p-4">
           <div className="text-xs uppercase tracking-[0.16em] text-accent">Audit scope map</div>
           <h1 className="mt-1 text-sm font-semibold">FireEvents in scope + context</h1>

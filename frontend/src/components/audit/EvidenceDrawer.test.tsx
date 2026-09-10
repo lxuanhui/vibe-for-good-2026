@@ -52,6 +52,8 @@ describe('EvidenceDrawer sidebar hierarchy', () => {
     )
 
     const drawer = screen.getByRole('complementary', { name: 'FireEvent evidence drawer' })
+    expect(drawer.getAttribute('data-print-layout')).toBe('evidence-document')
+    expect(drawer.className).toContain('evidence-drawer')
     const headings = within(drawer).getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent)
 
     expect(headings.slice(0, 2)).toEqual(['Summary', 'Availability / limitations'])
