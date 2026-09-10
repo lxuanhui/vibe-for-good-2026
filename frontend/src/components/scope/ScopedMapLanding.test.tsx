@@ -1,7 +1,94 @@
+import { forwardRef, type PropsWithChildren, type ReactNode } from 'react'
+import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
+import { vi } from 'vitest'
 import type { EventEvidenceResponse } from '../../api/types'
+import type { AuditEventSummary, AuditProgression, AuditScope } from '../../api/types'
+import { fetchAuditRegister } from '../../api/client'
 import { envelopePolygons } from './propagationEnvelopes'
+import { ScopedMapLanding } from './ScopedMapLanding'
 import { eventOverlapsDay, investigationDays, observationsForDay } from './temporalScrubber'
+
+vi.mock('react-map-gl/maplibre', () => ({
+  Map: forwardRef<HTMLDivElement, PropsWithChildren<{ children?: ReactNode }>>(({ children }, _ref) => <div data-testid="map">{children}</div>),
+  Source: ({ children }: PropsWithChildren<{ id: string }>) => <div>{children}</div>,
+  Layer: () => <div />,
+}))
+
+vi.mock('../../api/client', () => ({
+  addToAuditPack: vi.fn(),
+  fetchAuditRegister: vi.fn(),
+  fetchInvestigationBundle: vi.fn(),
+  fetchInvestigationMap: vi.fn(),
+  generateInvestigationAnalysis: vi.fn(),
+}))
+
+const fetchAuditRegisterMock = vi.mocked(fetchAuditRegister)
+
+const scope: AuditScope = {
+  audit_id: 'audit-1',
+  scope_id: 'scope-1',
+  review_start: '2019-09-01',
+  review_end: '2019-09-01',
+  context_buffer_km: 25,
+  status: 'HISTORY_BUILD_READY',
+  bbox: null,
+  centroid: [116, -3],
+  buffer_bbox: { minLon: 115, minLat: -4, maxLon: 117, maxLat: -2 },
+  buffer_geometry: null,
+}
+
+const event: AuditEventSummary = {
+  eventId: 'FE-1',
+  auditId: 'audit-1',
+  firstDetection: '2019-09-01T03:00:00Z',
+  lastDetection: '2019-09-01T04:00:00Z',
+  durationHours: 1,
+  observationCount: 1,
+  centroid: { lat: -3, lon: 116 },
+  bbox: [116, -3, 116, -3],
+  spatialExtentKm: 1,
+  maxFrp: 1,
+  meanFrp: 1,
+  triage: { state: 'LIKELY_FIRE', deeperInvestigationEligible: true },
+  evidenceSufficiency: 'PARTIAL',
+  investigationPriority: 'MEDIUM',
+  reviewState: 'REVIEW_RECOMMENDED',
+  reviewRouting: { priorityScore: 1, escalationReasonCodes: [], components: [] },
+}
+
+it('keeps candidate list content in the sidebar scroll flow', async () => {
+  const progression: AuditProgression = {
+    rawObservations: 1,
+    qualifiedObservations: 1,
+    fireEvents: 1,
+    requiringHumanReview: 1,
+    selected: 0,
+    selectedEventIds: [],
+    compression: null,
+    observationsToEventsCompression: null,
+    inScopeAndBuffer: 1,
+    scopeBoundaryAvailable: false,
+    scopeCompression: null,
+    routingDiagnostics: {
+      humanReviewCount: 1,
+      humanReviewPercentage: 100,
+      priorityDistribution: {},
+      reviewStateDistribution: {},
+      evidenceSufficiencyDistribution: {},
+      escalationReasonCodes: {},
+      componentContributionDistribution: {},
+    },
+  }
+  fetchAuditRegisterMock.mockResolvedValue({ events: [event], progression })
+
+  render(<ScopedMapLanding scope={scope} onOpenScope={() => undefined} onOpenRegister={() => undefined} onViewReport={() => undefined} />)
+
+  const list = await screen.findByRole('list')
+  expect(list.className).not.toContain('overflow-y-auto')
+  expect(list.className).not.toContain('max-h-64')
+  expect(list.closest('aside')?.className).toContain('overflow-y-auto')
+})
 
 const edge = (sourceEventId: string, ownerEventId: string) => ({
   sourceEventId,
