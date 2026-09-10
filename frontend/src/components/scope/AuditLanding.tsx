@@ -103,12 +103,10 @@ export function AuditLanding({ onStartAudit, onOpenContext }: { onStartAudit: ()
         : `${hotspots.features.length.toLocaleString()} thermal detections in the past 24 hours.`
   const hasDetections = firmsStatus === 'ready' && hotspots.features.length > 0
   const statusTone = firmsStatus === 'loading'
-    ? 'border-status-info/50 bg-status-info/10 text-status-info'
+    ? 'text-status-info'
     : firmsStatus === 'unavailable'
-      ? 'border-status-quiet/70 bg-status-quiet/20 text-text-muted'
-      : hasDetections
-        ? 'border-status-urgent/50 bg-status-urgent/10 text-status-urgent'
-        : 'border-status-good/50 bg-status-good/10 text-status-good'
+      ? 'text-text-muted'
+      : 'text-status-urgent'
   const statusDot = firmsStatus === 'loading'
     ? 'bg-status-info text-status-info animate-pulse shadow-[0_0_10px_currentColor]'
     : firmsStatus === 'unavailable'
@@ -165,7 +163,7 @@ export function AuditLanding({ onStartAudit, onOpenContext }: { onStartAudit: ()
         <p className="text-xs uppercase tracking-[0.18em] text-accent">Southeast Asia · live satellite watch</p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">Start with an audit scope.</h1>
         <p className="mt-3 text-sm leading-6 text-text-muted">Live FIRMS thermal detections provide regional context only. FireEvents appear after you define an authorised management-unit boundary and review period.</p>
-        <div className={`mt-4 rounded-lg border p-3 ${statusTone}`} role="status" aria-live="polite">
+        <div className={`mt-4 ${statusTone}`} role="status" aria-live="polite">
           <div className="flex items-center gap-2">
             <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${statusDot}`} />
             <span className="text-sm font-semibold tracking-[0.12em]">{statusLabel}</span>
