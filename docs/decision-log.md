@@ -31,6 +31,37 @@ apply an older decision without checking the entries above it.
 
 ---
 
+## 2026-09-11 - A structured-output retry must tell the model why the first reply was rejected
+
+**Status:** done · PR #279 · Closes #278
+
+**Decision.** When `validated_call` retries an agent after the validator
+rejects its reply, the retry input carries the validator's message as
+`AgentInput.rejection`. It serialises as a trailing `previous_reply_rejected`
+key, present only on a retry, and the prompt states that a reply to this
+exact input was rejected for that reason and must be corrected in full.
+
+**Why.** The bounded retry resent a byte-identical input. The provider calls
+Bedrock at temperature 0, so the same bytes return the same reply: in
+production on 2026-09-11 a Skeptic round-1 reply omitted one of six
+hypotheses twice running and the assessment failed. The key goes last and
+is absent on a first attempt so the shared prefix the cache point covers
+(#147) is untouched; a retry differs only in its per-call tail and reuses
+the cached prefix instead of paying to rewrite it.
+
+**Rejected: raising `MAX_OUTPUT_REPAIR_RETRIES`.** More identical calls
+produce more identical replies. The count stays at one.
+
+**Rejected: a nonzero temperature on the retry.** It trades a deterministic
+defect for a random one, and it makes the assessment non-reproducible for
+every event rather than only for the one that failed.
+
+**Open.** Whether the model needs the offending reply quoted back as well as
+the reason. The reason alone names the missing hypothesis IDs, which is
+what the production case needed; revisit if a retry still fails.
+
+---
+
 ## 2026-09-10 - The demo runs on a guided path over the real console, with the analysis generated before the presenter walks on
 
 **Status:** done · PR #276 · Refs #274

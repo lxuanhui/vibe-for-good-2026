@@ -14,7 +14,7 @@ import math
 import re
 from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Any, ClassVar
 
@@ -168,6 +168,13 @@ class AgentInput:
     hypotheses: tuple[dict[str, str], ...]
     prior_assessment: AgentAssessment | None = None
     opponent_assessment: AgentAssessment | None = None
+    # Why the previous reply to this same input was rejected, set only on the
+    # bounded retry. Without it the retry resends a byte-identical input, and
+    # at temperature 0 the model gives back the same defective reply: in
+    # production a Skeptic that dropped one of six hypotheses did so twice in
+    # a row and the assessment failed (2026-09-11). The text is the
+    # validator's own message, so the model is told exactly what to correct.
+    rejection: str | None = None
 
     @property
     def evidence_ids(self) -> tuple[str, ...]:
@@ -206,6 +213,10 @@ class AgentInput:
             "opponent_assessment": self.opponent_assessment.to_dict()
             if self.opponent_assessment
             else None,
+            # Last, and absent unless set: a first attempt serialises exactly
+            # as before, and a retry differs only in its per-call tail, so the
+            # cached prefix (#147) is reused rather than rewritten.
+            **({"previous_reply_rejected": self.rejection} if self.rejection else {}),
         }
 
 
@@ -646,6 +657,8 @@ def run_structured_analysis(
             last_error: Exception | None = None
             for attempt in range(MAX_OUTPUT_REPAIR_RETRIES + 1):
                 try:
+                    if last_error is not None:
+                        agent_input = replace(agent_input, rejection=str(last_error))
                     output = agent(agent_input)
                     return _assessment(
                         output,

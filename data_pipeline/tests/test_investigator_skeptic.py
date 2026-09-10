@@ -1,6 +1,7 @@
 import pytest
 
 from data_pipeline.analysis.investigator_skeptic import (
+    AgentInput,
     AgentAssessment,
     AgentRole,
     AnalysisPhase,
@@ -145,6 +146,34 @@ def test_structured_output_gets_one_bounded_retry():
     result = run_structured_analysis("FIRE_001", EVIDENCE, HYPOTHESES, agent, agent, max_rounds=1)
     assert result.status == "UNRESOLVED"
     assert calls == {AgentRole.INVESTIGATOR: 2, AgentRole.SKEPTIC: 2}
+
+
+def test_the_retry_tells_the_model_why_the_first_reply_was_rejected():
+    """A retry that resends the identical input is not a retry.
+
+    At temperature 0 the model returns the same defective reply to the same
+    bytes; production saw a Skeptic drop a hypothesis twice running. The
+    second input must differ, and the difference is the validator's reason.
+    """
+    seen: dict[AgentRole, list[AgentInput]] = {}
+
+    def agent(agent_input):
+        seen.setdefault(agent_input.role, []).append(agent_input)
+        if len(seen[agent_input.role]) == 1:
+            return {"findings": []}
+        return _assessment(agent_input.role, agent_input.round_number)
+
+    run_structured_analysis("FIRE_001", EVIDENCE, HYPOTHESES, agent, agent, max_rounds=1)
+
+    first, second = seen[AgentRole.SKEPTIC]
+    assert first.rejection is None
+    assert "previous_reply_rejected" not in first.to_dict()
+    assert "exactly one finding for each hypothesis" in (second.rejection or "")
+    payload = second.to_dict()
+    assert list(payload)[-1] == "previous_reply_rejected"
+    assert payload["previous_reply_rejected"] == second.rejection
+    # Only the reason changed; the pack, hypotheses and role are the same.
+    assert {k: v for k, v in payload.items() if k != "previous_reply_rejected"} == first.to_dict()
 
 
 def test_factual_finding_without_evidence_reference_is_rejected():
