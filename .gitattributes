@@ -1,1 +1,30 @@
-*.pdf binary
+# Text is normalised to LF in the repository and checked out as LF everywhere,
+# rather than left to each machine's core.autocrlf.
+#
+# Why this file exists: a Windows checkout committed four files as CRLF via PR
+# #129. When one side of a merge is CRLF and the other is LF, every line of the
+# file differs, so git finds no hunks and reports the whole file as a single
+# conflict. Merging #131 hit 15 conflicted files; 4 were pure line-ending noise
+# and 2 of those had no real content difference at all once \r was stripped.
+# `git -c merge.renormalize=true` is not the escape hatch it looks like — it
+# reads its normalisation rules from this file, so with no .gitattributes there
+# was nothing for it to act on. See docs/decision-log.md, 2026-09-10.
+* text=auto eol=lf
+
+# Binary artefacts must never be line-ending converted. git's auto-detection
+# would very likely classify these correctly on its own via their NUL bytes,
+# but the two committed gzip artefacts really do contain CR bytes (916 and
+# 4,805 of them), and the .npy files are the golden regression fixtures — a
+# normalisation pass that rewrote one of those would corrupt the dataset the
+# API serves or the baseline the tests compare against, silently, rather than
+# failing loudly. Too cheap to leave to a heuristic. The image and font
+# extensions are pre-emptive; none are tracked yet.
+*.gz    binary
+*.npy   binary
+*.pdf   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.ico   binary
+*.woff  binary
+*.woff2 binary

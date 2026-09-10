@@ -319,6 +319,39 @@ def _triage_for_audit(audit_id: str) -> dict[str, Any]:
     return details.get(audit_id) or details.get("demo-2019-haze", {})
 
 
+def _review_window(session: dict[str, Any]) -> tuple[datetime | None, datetime | None]:
+    """The session's review period as an inclusive range of UTC instants.
+
+    The scope form collects whole dates, so the closing date has to become the
+    *end* of that day. Comparing against its midnight would drop an event first
+    detected at 10:00 on the last day of a period that explicitly names it.
+    """
+
+    def at(raw: Any, hour: int, minute: int, second: int, micro: int) -> datetime | None:
+        if not isinstance(raw, str) or not raw:
+            return None
+        try:
+            parsed = datetime.fromisoformat(raw)
+        except ValueError:
+            # A malformed stored date must not narrow the register silently.
+            # Serving the full window is the honest failure: the label is then
+            # wrong in a way the scope form already prevents, rather than the
+            # count being wrong in a way nothing surfaces.
+            return None
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=UTC)
+        # Only a bare date gets snapped to a day boundary; a stored timestamp
+        # already says which instant it means.
+        if len(raw) <= 10:
+            parsed = parsed.replace(hour=hour, minute=minute, second=second, microsecond=micro)
+        return parsed
+
+    return (
+        at(session.get("review_start"), 0, 0, 0, 0),
+        at(session.get("review_end"), 23, 59, 59, 999999),
+    )
+
+
 def get_audit(audit_id: str) -> dict[str, Any] | None:
     """The reconstructed history for an audit id, if one has been built."""
     artifact = _load_events()["audits"].get(audit_id)
@@ -342,18 +375,57 @@ def get_audit(audit_id: str) -> dict[str, Any] | None:
     if demo is None:
         return None
     demo_scope = demo["scope"]
-    events = attach_routing(demo["events"])
+    # The review period is printed on the engagement report as the audit's
+    # scope, so it has to describe the set the register actually serves rather
+    # than label the artifact's full five days. Overlap semantics come from
+    # filter_events: a fire burning across the window's edge is exactly what
+    # the auditor needs to see, so it counts as inside.
+    since, until = _review_window(session)
+    events = attach_routing(filter_events(demo["events"], since=since, until=until))
+    review_queue = routing_diagnostics(events)["humanReviewCount"]
+    # Stage-1 routes everything that is not LIKELY_NON_FIRE, a state FIRMS-only
+    # input cannot reach (CLAUDE.md, "State of things"), so this equals the
+    # event count today and the ratio stays 1.0x. Derived rather than assumed,
+    # so it stays honest if richer input ever makes the state reachable.
+    stage1_queue = sum(1 for event in events if event["triage"]["state"] != "LIKELY_NON_FIRE")
+    narrowed = len(events) != len(demo["events"])
     return {
         "scope": {
             "id": audit_id,
             "reviewStart": session["review_start"],
             "reviewEnd": session["review_end"],
             "contextBufferKm": session["context_buffer_km"],
-            "eventCount": demo_scope["eventCount"],
-            "reviewQueueCount": routing_diagnostics(events)["humanReviewCount"],
-            "compression": demo_scope["compression"],
-            "rawObservations": demo_scope["rawObservations"],
-            "qualifiedObservations": demo_scope["qualifiedObservations"],
+            "eventCount": len(events),
+            "reviewQueueCount": review_queue,
+            # Recomputed rather than copied from the artifact: a filtered
+            # register carrying the artifact's unfiltered totals is the same
+            # mislabel one layer down.
+            #
+            # Careful -- this is NOT eventCount/reviewQueueCount, despite the
+            # two sitting side by side. `compression` is Stage-1's
+            # events-to-review-queue figure, whose denominator is "events not
+            # LIKELY_NON_FIRE" (data_pipeline/triage/stage1.py:191), while the
+            # `reviewQueueCount` served above is the later calibrated
+            # HIGH/URGENT routing count. Dividing by the wrong one turns a
+            # documented 1.0x into a ~9x reduction nothing measured. See #187.
+            "compression": round(len(events) / stage1_queue, 4) if stage1_queue else None,
+            # Every observation in the artifact was clustered into exactly one
+            # event, so summing the window's events narrows this honestly --
+            # and reproduces the artifact's own 20,471 at full coverage.
+            #
+            # These are whole-event counts, matching the whole-event selection
+            # above: an event overlapping the window brings all its
+            # observations, including any recorded outside it. That is the
+            # provenance of the events actually on the register, which is the
+            # question this number answers -- it is not a count of detections
+            # falling inside the period, and the two differ for any window
+            # narrower than the artifact.
+            "qualifiedObservations": sum(event["observationCount"] for event in events),
+            # The raw count includes the low-confidence detections dropped
+            # before clustering. Those are not in the artifact, so how many of
+            # them fell inside a narrower window is genuinely unknown. Null
+            # says that; repeating the full-window figure would not.
+            "rawObservations": None if narrowed else demo_scope["rawObservations"],
         },
         "events": events,
     }
@@ -393,14 +465,27 @@ def progression(audit_id: str) -> dict[str, Any] | None:
         scope_context["geometry"] = private_geometry
     boundary_available = private_geometry is not None
     in_scope = sum(_in_scope_or_buffer(event, scope_context) for event in audit["events"]) if boundary_available else None
-    qualified = source.get("qualifiedObservations", source.get("observationsUsed"))
+    # Prefer the scope's own counts. They are recomputed from the review
+    # window in get_audit, and the artifact's dataset-wide totals divided by a
+    # filtered event count would report an observations-to-events compression
+    # nothing measured -- an efficiency figure manufactured by narrowing the
+    # period. The artifact path leaves both keys at the dataset totals, so the
+    # unfiltered demo scope is unchanged.
+    qualified = scope.get("qualifiedObservations")
+    if qualified is None:
+        qualified = source.get("qualifiedObservations", source.get("observationsUsed"))
     fire_events = len(audit["events"])
     observations_to_events = round(qualified / fire_events, 2) if fire_events else None
     scope_compression = round(fire_events / in_scope, 2) if in_scope else None
     pack = audit_store.pack(audit_id) if get_audit_session(audit_id) else AUDIT_PACKS.get(audit_id, {})
     route_summary = routing_diagnostics(audit["events"])
     return {
-        "rawObservations": source.get("rawObservations", source.get("observationsUsed")),
+        # None when a narrowed window makes the pre-clustering raw count
+        # unknowable; see get_audit. Only the artifact's own coverage can
+        # answer it, so do not fall back to the dataset total here.
+        "rawObservations": scope["rawObservations"]
+        if "rawObservations" in scope
+        else source.get("rawObservations", source.get("observationsUsed")),
         "qualifiedObservations": qualified,
         "fireEvents": fire_events,
         "requiringHumanReview": route_summary["humanReviewCount"],
@@ -427,7 +512,14 @@ def cached_reconstruction_ready(audit_id: str) -> bool:
     if audit is None:
         return False
     details = _triage_for_audit(audit_id)
-    return isinstance(details, dict) and len(details) == len(audit["events"])
+    if not isinstance(details, dict):
+        return False
+    # Coverage, not a count match. A review period narrows the register (#161),
+    # so the detail file legitimately holds entries for events outside the
+    # window and the two sizes no longer agree. What the next screens actually
+    # need is that every event being served has its rule-by-rule breakdown --
+    # that is what the evidence drawer opens.
+    return all(event["eventId"] in details for event in audit["events"])
 
 
 def parse_bbox(raw: str | None) -> tuple[float, float, float, float] | None:

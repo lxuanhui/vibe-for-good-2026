@@ -1,12 +1,13 @@
 /** The review period cannot name a window the evidence does not cover (#95).
  *
- * This build serves one committed artifact, and the review window is a label
- * on it rather than a filter (#161) -- so a period outside the artifact's
- * coverage does not come back empty, it comes back as the same 2019 events
- * under someone else's dates, printed on the engagement report as the audit
- * scope. The bound is the only thing keeping that honest, and it is an
- * absence: nothing on screen shows it working, so nothing but a test notices
- * when it stops.
+ * The window is a real filter now (#161), so a period outside the artifact's
+ * coverage comes back empty rather than as the same 2019 events under someone
+ * else's dates. That removes the mislabel but not the reason for this bound:
+ * an auditor who can pick 2024 gets a register that is empty for a reason the
+ * screen cannot explain, and the engagement report still prints the period as
+ * the audit scope. The bound keeps the input inside what the evidence covers,
+ * and it is an absence -- nothing on screen shows it working, so nothing but
+ * a test notices when it stops.
  *
  * The API seam is mocked rather than the network, and the preview map with
  * it -- jsdom draws no canvas and MapLibre needs one.

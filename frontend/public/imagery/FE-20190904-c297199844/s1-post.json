@@ -1,0 +1,78 @@
+{
+  "asset_id": "IMG_FE-20190904-c297199844_s1-vvvh-db-composite-v1_post_event",
+  "event_id": "FE-20190904-c297199844",
+  "source_evidence_id": "ENV_IMAGERY_FE-20190904-c297199844_Sentinel-1_post_event",
+  "sensor": "Sentinel-1",
+  "position": "post_event",
+  "label": "Radar context",
+  "path": "/imagery/FE-20190904-c297199844/s1-post.jpg",
+  "format": "image/jpeg",
+  "width": 1024,
+  "height": 1024,
+  "bytes": 386310,
+  "coverage_fraction": 1.0,
+  "aoi": {
+    "bbox": [
+      116.194441,
+      -3.532146,
+      116.284439,
+      -3.442314
+    ],
+    "crs": "EPSG:4326",
+    "half_size_km": 5.0
+  },
+  "acquisition": {
+    "collection": "sentinel-1-grd",
+    "product_id": "S1A_IW_GRDH_1SDV_20190904T215955_20190904T220020_028877_0345E3_7233_COG",
+    "acquisition_time": "2019-09-04T21:59:55.687449Z",
+    "time_range": {
+      "from": "2019-09-04T00:00:00Z",
+      "to": "2019-09-04T23:59:59Z"
+    },
+    "orbit": {
+      "absolute": 28877,
+      "cycle": 179,
+      "relative": 105,
+      "state": "descending"
+    },
+    "cloud_cover_pct": null,
+    "temporal_distance_hours": 16.348802,
+    "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-1-grd/items/S1A_IW_GRDH_1SDV_20190904T215955_20190904T220020_028877_0345E3_7233_COG"
+  },
+  "processing": {
+    "recipe_id": "s1-vvvh-db-composite-v1",
+    "description": "Sentinel-1 GRD IW dual-polarisation, calibrated by CDSE to Gamma0 with terrain correction (Copernicus DEM 30 m), orthorectified, thermal noise removed, Lee 3x3 speckle filter; rendered as VV dB (-20..0) / VH dB (-25..-5) / VV-VH dB (0..15) with fixed stretches; bilinear resampling to 1024 px over a 10 km square; no-data black.",
+    "evalscript_sha256": "c776fd06c79cc04c8200fee0876f93d6dcf98ab4376f099ecee5e795916a56c5",
+    "data_filter": {
+      "timeRange": {
+        "from": "2019-09-04T00:00:00Z",
+        "to": "2019-09-04T23:59:59Z"
+      },
+      "acquisitionMode": "IW",
+      "polarization": "DV",
+      "resolution": "HIGH",
+      "orbitDirection": "DESCENDING"
+    },
+    "options": {
+      "orthorectify": true,
+      "backCoeff": "GAMMA0_TERRAIN",
+      "demInstance": "COPERNICUS_30",
+      "speckleFilter": {
+        "type": "LEE",
+        "windowSizeX": 3,
+        "windowSizeY": 3
+      },
+      "upsampling": "BILINEAR",
+      "downsampling": "BILINEAR"
+    },
+    "request_sha256": "1c068fabe75c3520052e363d5f78dbf8ada41955f775a19ad2e6f31984824be6"
+  },
+  "limitations": [
+    "Radar backscatter is surface and structural context, cloud-independent; it does not observe sub-surface peat combustion, and a backscatter change is not a burn map.",
+    "A display product for human orientation; it is not analytical imagery and no burned area, cause, or responsibility is derived from it.",
+    "Pre- and post-event images from different orbit directions or relative orbits are not directly comparable pixel for pixel; the orbit is recorded with each image."
+  ],
+  "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
+  "generator_version": "cdse-process-imagery-v1",
+  "generated_at": "2026-09-10T05:56:08+00:00"
+}

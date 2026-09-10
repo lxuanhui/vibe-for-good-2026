@@ -178,9 +178,10 @@ def test_a_worker_that_never_recorded_an_outcome_does_not_block_a_retry(client, 
     monkeypatch.setattr(analysis_jobs, "_invoke_worker", lambda *args: None)
     client.post(f"/api/audits/{AUDIT}/events/{event_id}/analyse")
 
-    stale = audit_store.get(analysis_jobs.job_key(AUDIT, event_id))
-    stale["startedAt"] = "2019-09-01T00:00:00+00:00"
-    audit_store.put(stale)
+    audit_store.update(
+        analysis_jobs.job_key(AUDIT, event_id),
+        lambda record: record.__setitem__("startedAt", "2019-09-01T00:00:00+00:00"),
+    )
 
     retried = client.post(f"/api/audits/{AUDIT}/events/{event_id}/analyse")
     assert retried.status_code == 202

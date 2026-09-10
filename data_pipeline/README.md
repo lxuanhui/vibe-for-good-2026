@@ -232,6 +232,60 @@ selector for callers that already fetched the features. Scene metadata is
 provenance for later evidence processing, not a finding about cause or
 responsibility.
 
+## Processed Sentinel context images (CDSE Process API)
+
+`generate_processed_imagery.py` turns each selected scene into a picture an
+auditor can read. For every demo FireEvent whose evidence names selected
+scenes, it asks the Copernicus Data Space Ecosystem **Process API** to
+render a 10 km square around the event centroid at 1024 px, server-side, and
+commits the result under `frontend/public/imagery/<eventId>/` next to a JSON
+sidecar and a `manifest.json` covering all events. Nothing is downloaded
+beyond the finished image: no SAFE products, no local SAR toolchain.
+
+Two recipes, in `imagery/process_api.py`:
+
+| Recipe | Sensor | UI label | What CDSE does | What the evalscript does |
+|---|---|---|---|---|
+| `s2-swir-false-colour-v1` | Sentinel-2 L2A | Optical context | bilinear resampling | R=B12, G=B08, B=B04 with a fixed 2.5× gain; no-data black |
+| `s1-vvvh-db-composite-v1` | Sentinel-1 GRD IW DV | Radar context | orthorectify, Gamma0 terrain (Copernicus DEM 30 m), Lee 3×3 speckle | R=VV dB (−20..0), G=VH dB (−25..−5), B=VV−VH dB (0..15); no-data black |
+
+Three choices matter more than the recipes:
+
+- **The request is pinned to the selected scene.** The time range is the UTC
+  day of the product the `ENV_IMAGERY_*` EvidenceObject already names, and
+  Sentinel-1 also pins the orbit direction, so the picture is *of* the scene
+  the drawer describes rather than whatever date the API's `leastCC`
+  mosaicking would prefer over a wider window. Each sidecar records
+  `source_evidence_id`, the product ID, the exact data filter, and the SHA-256
+  of both the evalscript and the request.
+- **The stretches are fixed, not per-scene.** `sentinel1_visualization.py`'s
+  2–98 % percentile stretch is right for one image alone and wrong for a
+  pre/post pair, which would each be normalised to their own contents.
+- **No data is recorded, not papered over.** An API error, or an image where
+  under 5 % of pixels carried data (an orbit clipping the corner of the
+  square), writes a `.missing.json` with the reason and no image. The
+  manifest lists it under `missing`; nothing from another date is substituted.
+
+It needs a CDSE **OAuth client** (`CDSE_CLIENT_ID` / `CDSE_CLIENT_SECRET` in
+`.env`), registered under *User settings → OAuth clients* in the CDSE
+dashboard. The `CDSE_USERNAME`/`CDSE_PASSWORD` pair is for product download
+and is not accepted by Sentinel Hub APIs. Without the client it exits 2 and
+says so. Runs are idempotent: an image already on disk is skipped unless
+`--force`, and `--manifest-only` rebuilds the manifest from whatever the
+directory holds without a network call.
+
+```bash
+python -m data_pipeline.generate_processed_imagery              # everything not yet rendered
+python -m data_pipeline.generate_processed_imagery --limit 2    # smoke test
+python -m data_pipeline.generate_processed_imagery --event FE-20190901-1ecb99d2e4 --force
+```
+
+The images are display products for human orientation. The sidecar and
+manifest carry per-recipe limitations, and the Sentinel-1 ones say the
+important thing outright: backscatter is surface and structural context; it
+does not observe sub-surface peat combustion, and a change in it is not a
+burn map.
+
 ## FireEventGraph relationship model
 
 `graph/fire_event_graph.py` builds a deterministic, versioned candidate graph

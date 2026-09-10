@@ -1,9 +1,11 @@
 import io
 import json
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier, Lock
 
 import pytest
 
-from app import create_app
+from app import audit_store, audits, create_app
 
 
 @pytest.fixture
@@ -137,3 +139,57 @@ def test_evidence_reports_processing_before_history_is_built(client):
 
     assert response.status_code == 202
     assert response.get_json()["status"] == "processing"
+
+
+def test_rebuilding_history_does_not_discard_a_concurrent_pack_selection(client, monkeypatch):
+    """Scope setup is a session write like any other (#146).
+
+    `upload_scope` and `build_history` used to write the whole session blob
+    back unconditionally. That was safe only by ordering -- they normally run
+    before an auditor selects anything -- but nothing enforced the ordering,
+    and an auditor who rebuilt history while an assessment was running lost
+    whichever write landed first. This drives the two through the real routes
+    with their reads forced to overlap.
+    """
+    review = create_review(client)
+    audit_id = review["audit_id"]
+    client.post(
+        f"/api/audits/{audit_id}/scope/upload",
+        data={"file": (io.BytesIO(json.dumps(DEMO_SCOPE).encode()), "scope.geojson")},
+        content_type="multipart/form-data",
+    )
+
+    barrier = Barrier(2)
+    remaining = {"count": 2}
+    lock = Lock()
+    original = audit_store._read_item
+
+    def read(key: str):
+        item = original(key)
+        with lock:
+            wait = remaining["count"] > 0
+            if wait:
+                remaining["count"] -= 1
+        if wait:
+            barrier.wait(timeout=5)
+        return item
+
+    monkeypatch.setattr(audit_store, "_read_item", read)
+    entry = {
+        "eventId": "FE-20190901-f0d0bb0675",
+        "note": "",
+        "disposition": "",
+        "addedAt": "2019-09-01T00:00:00Z",
+    }
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [
+            executor.submit(audits.build_history, audit_id),
+            executor.submit(audit_store.add_pack_entry, audit_id, entry),
+        ]
+        for future in futures:
+            future.result()
+
+    session = audit_store.get(audit_id)
+    assert session["status"] == "HISTORY_BUILD_READY"
+    assert "FE-20190901-f0d0bb0675" in session["_pack"]

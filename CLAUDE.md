@@ -119,7 +119,11 @@ and `golden/` regression cases — across ~58 modules with unit tests.
 
 The first of it reaches the API: `GET /api/audits/{id}/events` serves 3,610
 FireEvents clustered from 20,471 FIRMS detections in the 2019 haze window and
-run through Stage-1 triage. Clustering happens offline in
+run through Stage-1 triage. A session-created audit gets the subset of those
+its own review period covers, and every count in the served scope is
+recomputed from that subset — a narrowed register never carries the artifact's
+unfiltered totals beside it, and `rawObservations` is `null` rather than a
+figure a sub-window cannot know (decision log, 2026-09-10). Clustering happens offline in
 `data_pipeline/export_audit_events.py` and the API serves the committed
 artifact, because scipy/pandas would take the Lambda bundle to the edge of its
 250 MB limit and the derivation is identical for every caller. The FIRMS
@@ -142,6 +146,13 @@ by product decision, not physics — the model assumes wind alone moves a
 fire, nothing else, so it is only honest at a short range; anything a
 candidate needs to explain beyond that is AI interpretation's job. See
 decision log, 2026-09-09.
+
+Satellite context images for those same 16 events are static files under
+`frontend/public/imagery/` (JPEG per scene plus `manifest.json`), rendered
+once by `data_pipeline/generate_processed_imagery.py` through the CDSE
+Process API and pinned to the scenes the evidence already names. They are
+served by Amplify from the console's origin, not by the API, and never enter
+the Lambda bundle. The evidence-drawer surface that displays them is #171.
 
 The console consumes them. `components/scope/ScopedMapLanding.tsx` is the
 map-first landing surface for the bounded demo scope, and
@@ -188,6 +199,7 @@ The demo must never blur which data is real and which is a fixture.
 | Skill | Load when |
 |---|---|
 | `evidence-framing` | Writing any text describing a fire event or an agent prompt |
+| `ui-copy` | Writing or editing any text a console user sees, including fixtures and prompts. No em-dashes |
 | `add-map-layer` | Adding or changing a console overlay layer |
 | `add-data-source` | Adding or re-checking a source in `data_pipeline/` |
 | `deploy-api` | Deploying or debugging the Lambda-hosted API |

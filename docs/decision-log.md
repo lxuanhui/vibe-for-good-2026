@@ -10,17 +10,18 @@ when changing that subsystem.
 |---|---|---|
 | Product boundary | Evidence supports human review; it never establishes blame, intent, or legal responsibility. | Standing constraints |
 | Audit flow | Scope-first: create an audit from uploaded GeoJSON before rendering FireEvents. The regional landing may show labelled FIRMS context only. | 2026-09-09, audit session / landing |
-| API state | Audit IDs and scope state persist in DynamoDB in deployed environments; in-memory state is local development only. | 2026-09-09, audit session / landing |
+| API state | Audit IDs and scope state persist in DynamoDB in deployed environments; in-memory state is local development only. Every write is revision-checked — there is no unconditional write path — and both backends implement the same compare-and-set. | 2026-09-09, audit session / landing; 2026-09-10, conditional writes |
 | Derived data | Clustered events, weather, imagery selection, peat context, and prepared graph data are offline artifacts, not request-time Lambda work. | 2026-09-09, graph; weather and imagery; 2026-09-08, clustering |
 | Investigation | Scores, review routing, graph edges, and propagation are separate deterministic evidence outputs; none establishes causation. | 2026-09-09, graph; review routing; 2026-09-08, triage / graph / surface growth |
 | AI interpretation | Claude runs only after an explicit auditor request, receives bounded EvidenceObjects plus graph summaries, and returns schema-validated Investigator/Skeptic findings retained with the audit session. | 2026-09-09, structured analysis |
 | Analysis delivery | Analysis is an async job on a second Lambda: POST starts one, GET polls it and never spends tokens. It does not fit API Gateway's 30s response cap. | 2026-09-10, async job |
 | Live regional context | The landing map's live NASA FIRMS layer is proxied by the API. A FIRMS MAP_KEY cannot be domain-restricted, so it can never ship in the bundle. Two days are fetched and filtered to a rolling 24 h here; a non-CSV body is an error, not an absence of fires. | 2026-09-10, FIRMS proxy; rolling window |
-| Map and imagery | Camera fitting is bounds-driven; map context is not an unscoped fire browser. Satellite display processing is deterministic and provenance-preserving. | 2026-09-09, audit session / landing; 2026-09-08, Copernicus scenes |
+| Map and imagery | Camera fitting is bounds-driven; map context is not an unscoped fire browser. Satellite display processing is deterministic and provenance-preserving. Investigation-sized Sentinel-1/2 context images are rendered once by the CDSE Process API, pinned to the scenes the evidence already names, and committed as static files under `frontend/public/imagery/`. | 2026-09-10, processed imagery; 2026-09-09, audit session / landing; 2026-09-08, Copernicus scenes |
 | Infrastructure | Flask runs on Lambda behind API Gateway; Terraform owns the deployed configuration; CORS is Flask-owned. | 2026-09-09, Amplify; 2026-09-07, Lambda / CORS |
 | Service selection | DynamoDB and S3 are authorised without a fresh argument each time; every service switched on gets a cost row in `docs/infra.md` in the same PR. | 2026-09-09, DynamoDB and S3 are authorised |
 | Frontend tests | Vitest + jsdom + Testing Library, run in CI. They guard behaviours the product boundary depends on — explicit trigger, honest not-run state, no chain-of-thought — not the map, which jsdom cannot draw. | 2026-09-10, frontend test runner |
-| Review period | The scope form's date pickers are bounded to the coverage the committed artifact declares in `source.window`, read at runtime. The window is still a label rather than a filter (#161). | 2026-09-10, review period bounds |
+| Review period | The session's review period filters the register server-side, end-of-day inclusive, and every scope count is recomputed from the filtered set. The scope form's date pickers stay bounded to the coverage the artifact declares in `source.window`. | 2026-09-10, review period is a filter; review period bounds |
+| Line endings | `.gitattributes` normalises all text to LF in the repository and on checkout; binary artifacts are declared explicitly rather than left to git's heuristic. | 2026-09-10, line endings |
 
 **Use this log:** entries retain the original diagnosis, rejected alternatives,
 and historical context. A later entry can supersede an earlier one; do not
@@ -28,9 +29,281 @@ apply an older decision without checking the entries above it.
 
 ---
 
+## 2026-09-10 - Sentinel context images are rendered once by the CDSE Process API and served as static files
+
+**Status:** done · PR #192 · Closes #191 · Refs #171
+
+**Decision.** The evidence drawer's satellite pictures come from
+`data_pipeline/generate_processed_imagery.py`, run once by hand. For each of
+the 16 demo FireEvents with selected scenes it asks the Copernicus Data Space
+Ecosystem Process API to render a 10 km square around the centroid at
+1024 px: Sentinel-2 L2A as SWIR/NIR/Red false colour, Sentinel-1 GRD as a
+VV/VH decibel composite that CDSE has already orthorectified, terrain-corrected
+to Gamma0 on the Copernicus 30 m DEM and Lee-filtered. The JPEGs, a JSON
+sidecar each, and `manifest.json` are committed under
+`frontend/public/imagery/` and served by Amplify from the console's own
+origin, the same path `public/pipeline/firms-2019-09.json` already takes.
+Each request is pinned to the UTC day (and, for Sentinel-1, the orbit
+direction) of the product the `ENV_IMAGERY_*` EvidenceObject names, and the
+sidecar records that evidence ID, the product, the data filter and the
+SHA-256 of the evalscript and request. Both recipes use fixed stretches. A
+scene that cannot be rendered gets a `.missing.json` with the reason.
+
+**Why.** The catalogue quicklook is a few hundred pixels of a 100 km tile; it
+does not show the event. Sentinel-1 in particular is unreadable without
+calibration, terrain correction and speckle filtering, and the Process API
+does all of that server-side per request, so no SAR toolchain, SNAP install
+or SAFE download enters this repo. Pinning to the already-selected scene
+keeps provenance intact: the drawer's scene metadata and the picture describe
+the same acquisition, so the image is a display attribute of an existing
+EvidenceObject rather than a new, untraceable claim. Fixed stretches are what
+make a before/after pair comparable; a per-scene percentile stretch
+normalises each image to its own contents. Committing the output means the
+demo cannot fail on a live Copernicus call, and a ~20 MB static folder is
+free on Amplify where it would be a real cost on Lambda's bundle limit.
+
+**Rejected: downloading SAFE products and processing locally.** Gigabytes per
+scene, a SNAP/GPT or snappy toolchain to install and version, and hours of
+work the night before the demo, for output no better than the API's.
+
+**Rejected: letting `leastCC` choose the date over the event window.** It
+would often return a clearer picture, of a different acquisition from the one
+the evidence names. The drawer would then describe one scene and show
+another. The Sentinel-2 request keeps `leastCC` only as a tiebreak within the
+single pinned day.
+
+**Rejected: a per-scene percentile stretch, as `sentinel1_visualization.py`
+does.** Right for one image, wrong for a pair; see above.
+
+**Rejected: an S3 bucket for the images.** S3 is authorised, and bulky
+immutable evidence is the role §8 reserves for it, but the images are a few
+tens of megabytes of demo output with no writer. A new bucket, its Terraform,
+a cost row and a CORS/CDN decision the evening before the demo bought nothing
+the `public/` folder does not already give. It remains the eventual home when
+imagery is generated per audit rather than once.
+
+**Rejected: NBR / ΔNBR as a third product.** A burn-severity index looks like
+an analytical result and would be read as one. The evidence layer stops at
+display products for human orientation; anything that could be mistaken for a
+measured burn extent needs the limitations and evidence framing of a derived
+metric, which this PR does not attempt.
+
+**Rejected: fetching the manifest through the API.** It would put the imagery
+contract behind a Lambda route for no reason; the console fetches static
+pipeline output from its own origin already, and #171 consumes the manifest
+the same way.
+
+**Measured.** The first run on 2026-09-10 rendered 58 of 64 requested images
+(17.5 MB of JPEG at quality 90, median coverage 100 %, minimum 24 %) and
+recorded 6 as missing, all with 0-4 % data on the pinned day. Those six are
+not an API problem: the scene selector ran once against the scope bbox and
+attached the same four products to every event, so events at the western edge
+of the scope are told their scene is a tile that does not reach them. That is
+#193; the manifest records the gaps honestly rather than filling them from
+another date.
+
+**Open.** #171 builds the drawer surface that reads `manifest.json`. Folding
+each image into the evidence response as a display attribute of its source
+EvidenceObject (rather than a parallel manifest) is the right eventual shape
+and is not done here.
+
+---
+
+## 2026-09-10 - Every write to the audit store is revision-checked, in both backends
+
+**Status:** done · PR #190 · Closes #146
+
+**Decision.** `audit_store` has no unconditional write left. A caller picks an
+intent: `create`, which fails if the item already exists, or `update`, which
+re-reads, re-applies the mutation and compare-and-sets on the revision it
+read, retrying up to 8 times before raising. Items are held in the DynamoDB
+shape (`{audit_id, state, revision}`) in memory too, so both backends run the
+same code and differ only in the read and the compare-and-set. `audits`
+scope-setup writes and `analysis_jobs` job rows both go through it.
+
+**Why.** #183 gave pack and analysis mutations a conditional path but left
+`put()` — an unconditional whole-blob write — as the way scope setup and job
+rows persisted. That is only half a fix, and the asymmetry was the dangerous
+direction: a conditional write losing to a blob put *retries*, but a blob put
+landing between another writer's read and its write *wins silently*, dropping
+a pack entry or a completed assessment with no error and nothing in the log.
+Reaching it needed an auditor to re-upload a boundary or rebuild history while
+an assessment was running — narrow, but it is the whole bug class the issue
+exists to remove, and "safe because of the order the routes happen to run in"
+is not a property anything enforces.
+
+**The in-memory store implements the same compare-and-set, not a lock.**
+Wrapping the local read-modify-write in a `threading.Lock` would also prevent
+a lost write and was rejected: it serialises writers, so the retry path never
+runs locally and the two stores agree only by never being compared. The lock
+that is there covers the compare-and-set alone — exactly the span DynamoDB's
+conditional put makes atomic — so the same test bodies run against both and
+the local store fails the same way the deployed one would.
+
+**Rejected: `update_item` with attribute-level expressions** (the issue's
+option 2). It removes the collision rather than detecting it, but the session
+is one JSON blob by design — that is what keeps the auditor's private GeoJSON
+intact without a second scope representation — and attribute-level updates
+would mean decomposing it into DynamoDB attributes. A storage-model change to
+fix a write-path bug.
+
+**Rejected: splitting the analysis result out of the session** (option 3).
+Removes this collision and leaves the next one, which is the criticism the
+issue already makes of it.
+
+**`create` refuses to overwrite.** Audit ids are 96 bits of `token_urlsafe`,
+so a collision means a bug somewhere else — a retried create, an id reused
+deliberately — and overwriting would discard a live audit's scope. Failing is
+the better answer than silently continuing.
+
+**Verified.** The concurrency tests were each checked against the *old*
+behaviour, not just observed to pass: reverting the memory store to a plain
+read-modify-write fails four of them, and simulating the old `_save` (writing
+the blob it loaded, after another writer's read) drops the pack entry outright
+with a `KeyError`. 88 backend tests pass.
+
+**Open.** `analysis_jobs.dispatch` still guards duplicate work with a
+read-then-act: two requests arriving together for the same event can both read
+`NOT_RUN` and both start a job, billing the same assessment twice. The store
+now has the primitive to claim a job atomically; using it is #189.
+
+---
+
+## 2026-09-10 - The review period filters the register, and every count beside it is recomputed from the filtered set
+
+**Status:** done · PR #188 · Closes #161
+
+**Decision.** `get_audit` filters the committed artifact's events to the
+session's own review period before serving them. The closing date is read as
+the *end* of that day, so a period that names 2019-09-03 includes the
+detections made at 10:00 on it. `eventCount`, `reviewQueueCount`,
+`compression` and `qualifiedObservations` in the served scope are computed
+from the filtered set. `rawObservations` is served as `null` for a narrowed
+window, and the register component no longer re-sends the period as a
+`?since=/?until=` query filter — the backend is the single authority on what
+the period means.
+
+**Why.** A review created for `2019-09-02 → 2019-09-03` returned all 3,610
+FireEvents, every one of them detected across the full 09-01..09-05 window,
+and printed the auditor's dates over them: on the engagement report as "Audit
+scope", and in the evidence drawer as the span each detection bar is drawn
+inside. That is the console blurring which data is real, which `CLAUDE.md`
+says the demo must never do. The bound added for #95 stopped the label naming
+a period the dataset does not hold at all; it did nothing about a sub-range.
+
+**Rejected: filtering the events but leaving the scope counts as the
+artifact's totals.** This is what the code already did with the dates, one
+layer down — a register of 812 events sitting under `eventCount: 3610` is the
+same mislabel, and the number an auditor quotes is the one in the summary,
+not the row count they scrolled past.
+
+**Rejected: computing `rawObservations` for the window.** 21,519 is the
+pre-clustering detection count, and the 1,048 it exceeds `qualifiedObservations`
+by are detections dropped at the confidence gate *before* any event existed to
+attribute them to. There is no per-day breakdown to filter, so any figure for a
+sub-window would be manufactured. It is served as `null`, and
+`AuditProgression.rawObservations` is `number | null` in the frontend to match.
+
+**Rejected: `compression = eventCount / reviewQueueCount`.** Tried first, and
+wrong in a way worth recording because it looked right: it produced 9.1× at
+full coverage against the artifact's own 1.0×. `compression` in the artifact
+is Stage-1's ratio, whose denominator is events not classified
+`LIKELY_NON_FIRE`; the served `reviewQueueCount` (396) is the *later*
+calibrated HIGH/URGENT routing count. The two are different measurements with
+similar names, and dividing by the wrong one would have put a fabricated ~9×
+efficiency figure on the demo screen — exactly the number the decision log's
+Stage-1 entry says not to manufacture. The Stage-1 denominator is now derived
+separately. The naming collision itself is #187.
+
+**Rejected: a blank table for an in-range empty period.** A blank table reads
+as something that failed to load. The register now states "No FireEvents were
+detected in this period", names the period and buffer, and says explicitly
+that it returned nothing rather than failing — a measurement, which an empty
+table is not.
+
+**Verified.** At full coverage the served scope reproduces the artifact's own
+figures on every field, so the demo's default path is unchanged: 3,610 events,
+`compression` 1.0, `rawObservations` 21519. A sub-window narrows all of them
+together; a period inside the coverage with no detections returns 200 with an
+empty register and `history_status` AVAILABLE, not a 404.
+
+`cached_reconstruction_ready` changed with it: it compared the triage detail
+file's entry count to the event count, which a filtered register legitimately
+breaks. It now checks that every *served* event has a detail entry — coverage
+rather than equality — which is what the evidence drawer actually needs.
+
+**Open.** The window is a filter over one committed artifact, not a build
+parameter: the pipeline is not re-run for it. If #89 makes the pipeline the
+real path, the period becomes a genuine input and this becomes the shim.
+
+---
+
+## 2026-09-10 - Line endings are normalised by `.gitattributes`, so a Windows commit cannot manufacture a merge conflict
+
+**Status:** done · PR #184 · Closes #132
+
+**Decision.** A root `.gitattributes` sets `* text=auto eol=lf`: text is stored
+LF in the repository and checked out LF on every platform, whatever a
+contributor's `core.autocrlf` says. Binary artifacts — `*.gz`, `*.npy`, `*.pdf`
+and the pre-emptive image and font extensions — are declared `binary`
+explicitly.
+
+**Why.** A Windows checkout committed four files as CRLF through PR #129. When
+one side of a merge is CRLF and the other LF, *every line* of the file differs,
+so git finds no hunks and reports the whole file as a single conflict. Merging
+#131 hit 15 conflicted files; 4 were pure line-ending noise and 2 of those had
+no real content difference at all once `\r` was stripped. They had to be
+resolved by hand-running three-way merges on `tr -d '\r'`-normalised blobs.
+That is a whole class of merge pain, and it lands on whoever merges next rather
+than on whoever caused it.
+
+The four CRLF files were already normalised back to LF by the #131 merge, so
+`git add --renormalize .` in this PR changed nothing — the commit is purely
+preventative. That is the intended outcome, not a sign the fix did nothing:
+without the file, the *next* Windows commit reintroduces the problem.
+
+**Rejected: `git -c merge.renormalize=true` at merge time.** The obvious escape
+hatch, and it does not work. `merge.renormalize` reads its normalisation rules
+from `.gitattributes`; with no such file there is nothing for it to act on, so
+it silently does nothing. It becomes useful *because* of this change, not
+instead of it.
+
+**Rejected: relying on git's binary auto-detection for the artifacts.**
+`text=auto` classifies by NUL-byte sniffing and would very likely get these
+right on its own. But `backend/app/data/audit_events.json.gz` and
+`audit_triage_detail.json.gz` genuinely contain CR bytes (916 and 4,805
+respectively), and the three `data_pipeline/golden/**/raster_crop.npy` files are
+the regression baselines. A misclassification would corrupt the dataset the API
+serves, or the baseline the tests compare against, *silently* — the failure mode
+is a wrong number on the console, not a crash. Too cheap to leave to a
+heuristic.
+
+**Verified.** All six binary blob hashes are identical before and after
+`git add --renormalize .`. `eol=lf` is still reported as inherited on the binary
+paths by `git check-attr`, which looks alarming and is not: `binary` unsets
+`text`, and end-of-line conversion requires `text`. Confirmed empirically rather
+than from the docs, whose wording on this differs between git versions — a
+scratch repo using the same rule ordering, cloned with `core.autocrlf=true` to
+simulate a Windows checkout, returned a CR-bearing binary byte-identical while
+still checking a CRLF source file out as LF.
+
+**Open.** `.npy` was added beyond what #132 asked for. The same
+Windows-checkout root cause is still live in #128, where `source_provenance()`
+leaks a backslash path separator into the artifact; `.gitattributes` does not
+fix that one.
+
+---
+
 ## 2026-09-10 - The review period is bounded by the dataset, because it is printed as fact
 
 **Status:** done · PR #162 · Closes #95
+
+> **Partly superseded 2026-09-10 by PR #188.** The window is a real filter
+> now; the paragraphs below describing it as a label copied onto the scope
+> describe the behaviour this entry was written against, not current
+> behaviour. The bound itself stands and is still the reason an auditor
+> cannot name a period the evidence does not cover — see the entry of that
+> date for why an in-range empty window still needs it.
 
 #95 asked for a datepicker on the date inputs. Both inputs were already
 `type="date"`, so a native picker and a date-typed value were there; the
@@ -329,6 +602,11 @@ revision-checked retry in `audit_store`, so overlapping Lambda requests merge
 against the latest session rather than silently replacing another selection.
 The job rows remain separate because their lifecycle and polling cadence are
 still independent of the engagement record.
+
+**Annotated 2026-09-10, PR #190 (#146).** The read-modify-write named above is
+no longer the store's weak point: there is no unconditional write left in
+`audit_store` at all, job rows included. The paragraph stands as the reason
+job rows were separated; it no longer describes a live hazard.
 
 **A stale `RUNNING` job does not wedge the endpoint.** A worker killed before
 it records an outcome would otherwise leave a job running forever, which the

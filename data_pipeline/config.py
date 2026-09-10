@@ -22,6 +22,12 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 NASA_FIRMS_MAP_KEY = os.environ.get("NASA_FIRMS_MAP_KEY", "")
 CDSE_USERNAME = os.environ.get("CDSE_USERNAME", "")
 CDSE_PASSWORD = os.environ.get("CDSE_PASSWORD", "")
+# Sentinel Hub APIs on CDSE (the Process API `generate_processed_imagery`
+# uses) accept only client_credentials from an OAuth client registered in
+# the CDSE dashboard -- the username/password pair above is for product
+# download and does not work there.
+CDSE_CLIENT_ID = os.environ.get("CDSE_CLIENT_ID", "")
+CDSE_CLIENT_SECRET = os.environ.get("CDSE_CLIENT_SECRET", "")
 
 # Sources the user is registering for separately -- wired for later use,
 # see sources/future/.

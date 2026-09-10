@@ -127,18 +127,24 @@ export function HistoricalInvestigation({ scope, onOpenScopedMap }: { scope: Aud
     setLoading(true)
     setError('')
     try {
-      // Filtered by both time (review period) and space (scope + context
-      // buffer) -- canonical spec §11's register is a screening view of the
-      // audit's own footprint, not the whole committed artifact.
+      // Space only. The register is still a screening view of the audit's own
+      // footprint rather than the whole artifact (canonical spec §11), but the
+      // time half is now the backend's job (#161): the session's review period
+      // filters the register server-side, so `progression` and the rows agree.
+      // Re-sending it as `?since=/?until=` would also *narrow* it wrongly --
+      // the scope stores whole dates, and `until=2019-09-03` parses as that
+      // day's midnight, dropping every detection on the closing day the
+      // auditor explicitly named.
       const result = await fetchAuditRegister(scope.audit_id, {
-        since: scope.review_start,
-        until: scope.review_end,
         bbox: scope.buffer_bbox ?? undefined,
       })
       setEvents(result.events)
       setProgression(result.progression)
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Register could not be loaded.') } finally { setLoading(false) }
-  }, [scope.audit_id, scope.review_start, scope.review_end, scope.buffer_bbox])
+    // The review period is deliberately not a dependency any more. It is not
+    // sent, and it cannot change without a new audit session -- which changes
+    // `audit_id` and refetches anyway.
+  }, [scope.audit_id, scope.buffer_bbox])
   useEffect(() => { void loadRegister() }, [loadRegister])
   const selectedEvents = useMemo(() => events.filter((event) => selection.includes(event.eventId)), [events, selection])
   const filteredEvents = useMemo(() => {
@@ -184,7 +190,12 @@ export function HistoricalInvestigation({ scope, onOpenScopedMap }: { scope: Aud
     </section>
     {error && <div role="alert" className="flex items-center justify-between gap-3 border-b border-status-urgent/40 bg-status-urgent/10 px-5 py-2 text-xs text-red-200"><span>{error}</span><Button onClick={() => void loadRegister()}>RETRY</Button></div>}
     {loading && <div role="status" className="flex flex-1 items-center justify-center text-sm text-text-muted">Loading current-audit FireEvent register…</div>}
-    {!loading && <div className="flex-1 overflow-auto"><table className="w-full min-w-[1060px] border-collapse text-xs"><colgroup><col className="w-20" /><col className="w-[18%]" /><col className="w-[13%]" /><col className="w-[12%]" /><col className="w-[14%]" /><col className="w-[13%]" /><col className="w-[10%]" /><col className="w-[14%]" /><col className="w-[10%]" /></colgroup><thead className="sticky top-0 bg-panel"><tr className="border-b border-border"><th className="px-3 py-2 text-left">Select</th><th className="px-3 py-2 text-left">FireEvent ID</th><th className="px-3 py-2 text-left">First detected</th><th className="px-3 py-2 text-right">FIRMS clustering</th><th className="px-3 py-2 text-left">Stage-1 state</th><th className="px-3 py-2 text-left">Sufficiency</th><th className="px-3 py-2 text-left">Priority</th><th className="px-3 py-2 text-left">Workflow</th><th className="px-3 py-2 text-right">Max FRP (MW)</th></tr></thead><tbody>{eventRows(filteredEvents, selection, toggleSelection)}</tbody></table>{filteredEvents.length === 0 && <p className="p-8 text-center text-sm text-text-muted">No FireEvents match the current register filters.</p>}</div>}
+    {/* An empty register is a result, not a failure to load one. A blank table
+        reads as something that broke; naming the period states what was
+        measured over it (#161). Filtering to zero is a separate case, handled
+        inside the table below rather than here. */}
+    {!loading && !error && events.length === 0 && <div role="status" className="flex flex-1 flex-col items-center justify-center gap-1 px-5 py-6 text-center"><p className="text-sm text-text">No FireEvents were detected in this period.</p><p className="text-xs text-text-muted">{scope.review_start} → {scope.review_end} · {scope.context_buffer_km} km context buffer. The register was built and returned nothing; it did not fail to load.</p></div>}
+    {!loading && events.length > 0 && <div className="flex-1 overflow-auto"><table className="w-full min-w-[1060px] border-collapse text-xs"><colgroup><col className="w-20" /><col className="w-[18%]" /><col className="w-[13%]" /><col className="w-[12%]" /><col className="w-[14%]" /><col className="w-[13%]" /><col className="w-[10%]" /><col className="w-[14%]" /><col className="w-[10%]" /></colgroup><thead className="sticky top-0 bg-panel"><tr className="border-b border-border"><th className="px-3 py-2 text-left">Select</th><th className="px-3 py-2 text-left">FireEvent ID</th><th className="px-3 py-2 text-left">First detected</th><th className="px-3 py-2 text-right">FIRMS clustering</th><th className="px-3 py-2 text-left">Stage-1 state</th><th className="px-3 py-2 text-left">Sufficiency</th><th className="px-3 py-2 text-left">Priority</th><th className="px-3 py-2 text-left">Workflow</th><th className="px-3 py-2 text-right">Max FRP (MW)</th></tr></thead><tbody>{eventRows(filteredEvents, selection, toggleSelection)}</tbody></table>{filteredEvents.length === 0 && <p className="p-8 text-center text-sm text-text-muted">No FireEvents match the current register filters.</p>}</div>}
     {selectedEvents.length > 0 && <div className="shrink-0 border-t border-border bg-panel px-5 py-2 text-xs text-text-muted">Selected FireEvents remain selected on the scoped map.</div>}
   </div>
 }

@@ -378,3 +378,144 @@ def test_new_audit_report_contains_the_events_selected_for_that_audit(client):
     # cached FireEvent must therefore reach the report-generation input, not
     # merely appear in a transient scoped-map selection.
     assert report["analysisNotRunEventIds"] == event_ids
+
+
+# --- The review period as a filter (#161) ------------------------------------
+#
+# The window an auditor chooses is printed on the exported engagement report as
+# the audit's scope, so the register has to serve the period it names. These
+# cover the filtering itself and the derived counts beside it, which are the
+# half that silently keeps quoting dataset-wide totals if nobody looks.
+
+SCOPE_POLYGON = {
+    "type": "Polygon",
+    "coordinates": [[[116.0, -4.05], [116.5, -4.05], [116.5, -3.55], [116.0, -3.55], [116.0, -4.05]]],
+}
+
+
+def ready_audit(client, review_start: str, review_end: str) -> str:
+    """An audit whose history handoff has completed, for a given review period."""
+    created = client.post(
+        "/api/audits", json={"reviewStart": review_start, "reviewEnd": review_end}
+    ).get_json()
+    audit_id = created["audit_id"]
+    assert client.post(f"/api/audits/{audit_id}/scope/upload", json=SCOPE_POLYGON).status_code == 200
+    assert client.post(f"/api/audits/{audit_id}/history/build").status_code == 202
+    return audit_id
+
+
+def register(client, audit_id: str, query: str = "limit=2000"):
+    return client.get(f"/api/audits/{audit_id}/events?{query}").get_json()
+
+
+def test_full_review_period_reproduces_the_artifact_totals(client):
+    """The recomputation must be a no-op at full coverage.
+
+    If it is not, every number the demo shows moved -- so this pins the
+    unfiltered path rather than only the filtered one.
+    """
+    body = register(client, ready_audit(client, "2019-09-01", "2019-09-05"))
+    scope = body["scope"]
+
+    assert body["total"] == 3610
+    assert scope["eventCount"] == 3610
+    assert scope["qualifiedObservations"] == 20471
+    assert scope["rawObservations"] == 21519
+    assert scope["reviewQueueCount"] == 396
+    assert scope["compression"] == 1.0
+
+
+def test_sub_window_narrows_the_register_and_its_counts(client):
+    body = register(client, ready_audit(client, "2019-09-02", "2019-09-03"))
+    scope = body["scope"]
+
+    assert body["total"] == 1463
+    assert len(body["events"]) == 1463
+    # The count on the scope is what the console displays; it must follow the
+    # events actually served, not the artifact it was sliced from.
+    assert scope["eventCount"] == body["total"]
+    assert scope["reviewQueueCount"] < 396
+    assert scope["qualifiedObservations"] == 15455
+    assert scope["qualifiedObservations"] < 20471
+
+    # Every event served overlaps the chosen period.
+    for event in body["events"]:
+        assert event["firstDetection"] <= "2019-09-03T23:59:59"
+        assert event["lastDetection"] >= "2019-09-02T00:00:00"
+
+
+def test_sub_window_does_not_claim_a_raw_detection_count_it_cannot_know(client):
+    """`rawObservations` counts detections dropped before clustering.
+
+    They are not in the artifact, so how many fell inside a narrower window is
+    unknowable -- and repeating the full-window 21,519 beside a filtered event
+    count is the mislabel this issue exists to remove.
+    """
+    body = register(client, ready_audit(client, "2019-09-02", "2019-09-03"))
+
+    assert body["scope"]["rawObservations"] is None
+    assert body["progression"]["rawObservations"] is None
+
+
+def test_narrowing_the_period_does_not_manufacture_a_compression_figure(client):
+    """Stage-1 does not compress this dataset and must not appear to.
+
+    `compression` divides by the Stage-1 queue (events that are not
+    LIKELY_NON_FIRE), never by the calibrated `reviewQueueCount` sitting beside
+    it -- that would report ~9x where nothing was reduced. See #187.
+    """
+    for start, end in [("2019-09-01", "2019-09-05"), ("2019-09-01", "2019-09-01"), ("2019-09-03", "2019-09-04")]:
+        scope = register(client, ready_audit(client, start, end))["scope"]
+        assert scope["compression"] == 1.0, f"{start}..{end}"
+
+    # And the observations-to-events ratio uses the window's own observation
+    # count, not the artifact's 20,471 over a filtered event count.
+    progression = register(client, ready_audit(client, "2019-09-02", "2019-09-03"))["progression"]
+    assert progression["qualifiedObservations"] == 15455
+    assert progression["fireEvents"] == 1463
+    assert progression["observationsToEventsCompression"] == round(15455 / 1463, 2)
+
+
+def test_closing_date_includes_the_whole_day(client):
+    """The form collects whole dates, so the last day is inclusive.
+
+    Comparing against the closing date's midnight would drop every event first
+    detected during it -- most of them, since VIIRS crosses this region in
+    daylight.
+    """
+    body = register(client, ready_audit(client, "2019-09-05", "2019-09-05"))
+
+    assert body["total"] == 1307
+    started_after_midnight = [
+        event for event in body["events"] if event["firstDetection"] > "2019-09-05T00:00:00+00:00"
+    ]
+    assert started_after_midnight, "events first detected during the closing day were dropped"
+
+
+def test_period_outside_the_dataset_is_an_empty_register_not_a_missing_one(client):
+    """"We looked and found none" is a measurement; a 404 is not.
+
+    The scope form bounds the pickers to the artifact's coverage (#95), so this
+    is not reachable through the console -- but the API must still answer it as
+    an empty result rather than claiming the audit has no history.
+    """
+    audit_id = ready_audit(client, "2020-01-01", "2020-01-31")
+    response = client.get(f"/api/audits/{audit_id}/events")
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["total"] == 0
+    assert body["events"] == []
+    assert body["scope"]["eventCount"] == 0
+    assert body["scope"]["qualifiedObservations"] == 0
+    # No events means no ratio -- not a ratio of zero.
+    assert body["scope"]["compression"] is None
+    assert body["progression"]["observationsToEventsCompression"] is None
+
+
+def test_the_demo_artifact_scope_itself_is_never_filtered(client):
+    """`demo-2019-haze` is addressed directly, without a session or a window."""
+    body = client.get(f"{BASE}?limit=1").get_json()
+
+    assert body["total"] == 3610
+    assert body["scope"]["rawObservations"] == 21519
