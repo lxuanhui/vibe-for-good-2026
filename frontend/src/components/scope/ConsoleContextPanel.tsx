@@ -32,7 +32,11 @@ function ProgressionChain({ summary }: { summary: DemoDatasetSummary }) {
       {steps.map((step, index) => (
         <li key={step.label} className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-xl font-semibold tabular-nums tracking-tight text-text">{step.value.toLocaleString()}</div>
+            {/* An unknowable count prints as a dash rather than a zero. This
+                panel reads the full artifact, where every step is measured,
+                so the dash is a guard against a future caller passing a
+                narrowed scope through (#161), not a state seen today. */}
+            <div className="text-xl font-semibold tabular-nums tracking-tight text-text">{step.value === null ? '—' : step.value.toLocaleString()}</div>
             <div className="mt-0.5 text-xs leading-4 text-text-muted">{step.label}</div>
             <div
               className={`mt-1.5 text-[10px] uppercase tracking-[0.18em] ${

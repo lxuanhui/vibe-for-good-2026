@@ -20,12 +20,81 @@ when changing that subsystem.
 | Infrastructure | Flask runs on Lambda behind API Gateway; Terraform owns the deployed configuration; CORS is Flask-owned. | 2026-09-09, Amplify; 2026-09-07, Lambda / CORS |
 | Service selection | DynamoDB and S3 are authorised without a fresh argument each time; every service switched on gets a cost row in `docs/infra.md` in the same PR. | 2026-09-09, DynamoDB and S3 are authorised |
 | Frontend tests | Vitest + jsdom + Testing Library, run in CI. They guard behaviours the product boundary depends on — explicit trigger, honest not-run state, no chain-of-thought — not the map, which jsdom cannot draw. | 2026-09-10, frontend test runner |
-| Review period | The scope form's date pickers are bounded to the coverage the committed artifact declares in `source.window`, read at runtime. The window is still a label rather than a filter (#161). | 2026-09-10, review period bounds |
+| Review period | The session's review period filters the register server-side, end-of-day inclusive, and every scope count is recomputed from the filtered set. The scope form's date pickers stay bounded to the coverage the artifact declares in `source.window`. | 2026-09-10, review period is a filter; review period bounds |
 | Line endings | `.gitattributes` normalises all text to LF in the repository and on checkout; binary artifacts are declared explicitly rather than left to git's heuristic. | 2026-09-10, line endings |
 
 **Use this log:** entries retain the original diagnosis, rejected alternatives,
 and historical context. A later entry can supersede an earlier one; do not
 apply an older decision without checking the entries above it.
+
+---
+
+## 2026-09-10 - The review period filters the register, and every count beside it is recomputed from the filtered set
+
+**Status:** done · PR #188 · Closes #161
+
+**Decision.** `get_audit` filters the committed artifact's events to the
+session's own review period before serving them. The closing date is read as
+the *end* of that day, so a period that names 2019-09-03 includes the
+detections made at 10:00 on it. `eventCount`, `reviewQueueCount`,
+`compression` and `qualifiedObservations` in the served scope are computed
+from the filtered set. `rawObservations` is served as `null` for a narrowed
+window, and the register component no longer re-sends the period as a
+`?since=/?until=` query filter — the backend is the single authority on what
+the period means.
+
+**Why.** A review created for `2019-09-02 → 2019-09-03` returned all 3,610
+FireEvents, every one of them detected across the full 09-01..09-05 window,
+and printed the auditor's dates over them: on the engagement report as "Audit
+scope", and in the evidence drawer as the span each detection bar is drawn
+inside. That is the console blurring which data is real, which `CLAUDE.md`
+says the demo must never do. The bound added for #95 stopped the label naming
+a period the dataset does not hold at all; it did nothing about a sub-range.
+
+**Rejected: filtering the events but leaving the scope counts as the
+artifact's totals.** This is what the code already did with the dates, one
+layer down — a register of 812 events sitting under `eventCount: 3610` is the
+same mislabel, and the number an auditor quotes is the one in the summary,
+not the row count they scrolled past.
+
+**Rejected: computing `rawObservations` for the window.** 21,519 is the
+pre-clustering detection count, and the 1,048 it exceeds `qualifiedObservations`
+by are detections dropped at the confidence gate *before* any event existed to
+attribute them to. There is no per-day breakdown to filter, so any figure for a
+sub-window would be manufactured. It is served as `null`, and
+`AuditProgression.rawObservations` is `number | null` in the frontend to match.
+
+**Rejected: `compression = eventCount / reviewQueueCount`.** Tried first, and
+wrong in a way worth recording because it looked right: it produced 9.1× at
+full coverage against the artifact's own 1.0×. `compression` in the artifact
+is Stage-1's ratio, whose denominator is events not classified
+`LIKELY_NON_FIRE`; the served `reviewQueueCount` (396) is the *later*
+calibrated HIGH/URGENT routing count. The two are different measurements with
+similar names, and dividing by the wrong one would have put a fabricated ~9×
+efficiency figure on the demo screen — exactly the number the decision log's
+Stage-1 entry says not to manufacture. The Stage-1 denominator is now derived
+separately. The naming collision itself is #187.
+
+**Rejected: a blank table for an in-range empty period.** A blank table reads
+as something that failed to load. The register now states "No FireEvents were
+detected in this period", names the period and buffer, and says explicitly
+that it returned nothing rather than failing — a measurement, which an empty
+table is not.
+
+**Verified.** At full coverage the served scope reproduces the artifact's own
+figures on every field, so the demo's default path is unchanged: 3,610 events,
+`compression` 1.0, `rawObservations` 21519. A sub-window narrows all of them
+together; a period inside the coverage with no detections returns 200 with an
+empty register and `history_status` AVAILABLE, not a 404.
+
+`cached_reconstruction_ready` changed with it: it compared the triage detail
+file's entry count to the event count, which a filtered register legitimately
+breaks. It now checks that every *served* event has a detail entry — coverage
+rather than equality — which is what the evidence drawer actually needs.
+
+**Open.** The window is a filter over one committed artifact, not a build
+parameter: the pipeline is not re-run for it. If #89 makes the pipeline the
+real path, the period becomes a genuine input and this becomes the shim.
 
 ---
 
@@ -88,6 +157,13 @@ fix that one.
 ## 2026-09-10 - The review period is bounded by the dataset, because it is printed as fact
 
 **Status:** done · PR #162 · Closes #95
+
+> **Partly superseded 2026-09-10 by PR #188.** The window is a real filter
+> now; the paragraphs below describing it as a label copied onto the scope
+> describe the behaviour this entry was written against, not current
+> behaviour. The bound itself stands and is still the reason an auditor
+> cannot name a period the evidence does not cover — see the entry of that
+> date for why an in-range empty window still needs it.
 
 #95 asked for a datepicker on the date inputs. Both inputs were already
 `type="date"`, so a native picker and a date-typed value were there; the
