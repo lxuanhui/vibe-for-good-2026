@@ -33,7 +33,7 @@ import os
 import time
 import urllib.error
 import urllib.request
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -48,7 +48,31 @@ SOUTHEAST_ASIA_BBOX = (90.0, -12.0, 145.0, 25.0)
 # VIIRS on Suomi-NPP, near-real-time. 375 m resolution against MODIS's 1 km,
 # and the same sensor family the committed 2019 artifact was clustered from.
 SENSOR = "VIIRS_SNPP_NRT"
-WINDOW_DAYS = 1
+
+# The window the layer *claims*, and the one it actually serves: a rolling 24
+# hours ending now, filtered here rather than asked for upstream.
+#
+# The area API's day range, given no explicit [DATE], is anchored on the
+# current UTC calendar day rather than on a rolling window. A `1` therefore
+# means "since 00:00 UTC today", which at 02:00 UTC is a two-hour window --
+# and VIIRS/Suomi-NPP crosses this region near 18:30 UTC (previous day) and
+# 06:30 UTC, so an early-UTC request contains no Southeast Asian overpass at
+# all and comes back empty for reasons that have nothing to do with fires.
+#
+# Fetching two days and filtering to 24 hours here is correct under either
+# reading of the parameter -- calendar-anchored or rolling -- so it does not
+# rest on which one is right. Measured against the live API at 01:51 UTC on
+# 2026-09-10: two days returned 5,389 detections, every one stamped 09-09 and
+# every one inside a rolling 24 hours. One day returned nothing at all.
+FETCH_DAYS = 2
+WINDOW_HOURS = 24
+
+# The columns a real FIRMS CSV answer carries. FIRMS serves its errors as
+# plain text with HTTP 200 ("Invalid MAP_KEY.", transaction-limit notices), and
+# a one-line error body parses as a header with no rows -- which would render
+# as an empty region, i.e. "no fires are burning". Checking the header is what
+# keeps "we looked and found nothing" apart from "we could not look".
+REQUIRED_COLUMNS = ("latitude", "longitude")
 
 # One upstream fetch serves every visitor for this long. Without it each
 # browser is its own FIRMS client against a per-key transaction cap, and the
@@ -71,7 +95,7 @@ class FirmsUnavailable(RuntimeError):
 
 def _fetch_csv(map_key: str) -> str:
     bbox = ",".join(str(value) for value in SOUTHEAST_ASIA_BBOX)
-    url = f"{FIRMS_ROOT}/api/area/csv/{map_key}/{SENSOR}/{bbox}/{WINDOW_DAYS}"
+    url = f"{FIRMS_ROOT}/api/area/csv/{map_key}/{SENSOR}/{bbox}/{FETCH_DAYS}"
     try:
         # S310 suppressed deliberately: the scheme and host are the module
         # constants above and the only interpolated values are a key from the
@@ -91,9 +115,22 @@ def _acquired_at(row: dict[str, str]) -> str | None:
     return f"{date}T{time_of_day[:2]}:{time_of_day[2:]}:00Z"
 
 
-def _to_features(payload: str) -> list[dict[str, Any]]:
+def _to_features(payload: str, *, map_key: str) -> list[dict[str, Any]]:
+    reader = csv.DictReader(io.StringIO(payload))
+    header = reader.fieldnames or []
+    if not all(column in header for column in REQUIRED_COLUMNS):
+        # Report what upstream actually said rather than a generic failure --
+        # "Invalid MAP_KEY" and "you have exhausted your transactions" need
+        # different responses from us, and neither is a statement about fires.
+        # The key is redacted because this message reaches the browser in the
+        # 503 body, and a FIRMS error page could echo the URL it was given.
+        first_line = payload.strip().splitlines()[0][:200] if payload.strip() else "(empty response)"
+        raise FirmsUnavailable(
+            f"NASA FIRMS did not return detection data: {first_line.replace(map_key, '<map_key>')}"
+        )
+
     features: list[dict[str, Any]] = []
-    for row in csv.DictReader(io.StringIO(payload)):
+    for row in reader:
         try:
             longitude = float(row["longitude"])
             latitude = float(row["latitude"])
@@ -120,6 +157,33 @@ def _to_features(payload: str) -> list[dict[str, Any]]:
     return features
 
 
+def _within_window(features: list[dict[str, Any]], *, as_of: datetime) -> list[dict[str, Any]]:
+    """Keep only detections inside the rolling window the layer claims.
+
+    A detection whose timestamp will not parse is dropped rather than kept:
+    the client draws an unplaceable one at the window's far edge, which is a
+    reasonable way to *render* something already known to be in range, but
+    including it here would put it inside a 24-hour claim nothing measured.
+    """
+    cutoff = as_of - timedelta(hours=WINDOW_HOURS)
+    kept: list[dict[str, Any]] = []
+    for feature in features:
+        acquired_at = feature["properties"].get("acquiredAt")
+        if not acquired_at:
+            continue
+        try:
+            observed = datetime.fromisoformat(acquired_at)
+        except ValueError:
+            continue
+        # Lower bound only. A detection cannot be observed in the future, so
+        # an upper bound would police nothing but clock skew between this
+        # Lambda and FIRMS -- and it would do it by silently dropping real
+        # detections, which is the failure this whole route exists to avoid.
+        if observed >= cutoff:
+            kept.append(feature)
+    return kept
+
+
 def live_detections(*, now: float | None = None) -> dict[str, Any]:
     """Current regional detections, served from cache where one is warm.
 
@@ -137,12 +201,15 @@ def live_detections(*, now: float | None = None) -> dict[str, Any]:
     if cached is not None and clock - _cache["at"] < CACHE_SECONDS:
         return cached
 
-    features = _to_features(_fetch_csv(map_key))
+    fetched_at = datetime.now(UTC)
+    features = _within_window(
+        _to_features(_fetch_csv(map_key), map_key=map_key), as_of=fetched_at
+    )
     payload = {
         "status": "ready",
         "sensor": SENSOR,
-        "windowHours": WINDOW_DAYS * 24,
-        "fetchedAt": datetime.now(UTC).isoformat(timespec="seconds"),
+        "windowHours": WINDOW_HOURS,
+        "fetchedAt": fetched_at.isoformat(timespec="seconds"),
         "detections": {"type": "FeatureCollection", "features": features},
     }
     _cache.update(payload=payload, at=clock)

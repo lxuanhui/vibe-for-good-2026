@@ -15,7 +15,7 @@ when changing that subsystem.
 | Investigation | Scores, review routing, graph edges, and propagation are separate deterministic evidence outputs; none establishes causation. | 2026-09-09, graph; review routing; 2026-09-08, triage / graph / surface growth |
 | AI interpretation | Claude runs only after an explicit auditor request, receives bounded EvidenceObjects plus graph summaries, and returns schema-validated Investigator/Skeptic findings retained with the audit session. | 2026-09-09, structured analysis |
 | Analysis delivery | Analysis is an async job on a second Lambda: POST starts one, GET polls it and never spends tokens. It does not fit API Gateway's 30s response cap. | 2026-09-10, async job |
-| Live regional context | The landing map's live NASA FIRMS layer is proxied by the API. A FIRMS MAP_KEY cannot be domain-restricted, so it can never ship in the bundle. | 2026-09-10, FIRMS proxy |
+| Live regional context | The landing map's live NASA FIRMS layer is proxied by the API. A FIRMS MAP_KEY cannot be domain-restricted, so it can never ship in the bundle. Two days are fetched and filtered to a rolling 24 h here; a non-CSV body is an error, not an absence of fires. | 2026-09-10, FIRMS proxy; rolling window |
 | Map and imagery | Camera fitting is bounds-driven; map context is not an unscoped fire browser. Satellite display processing is deterministic and provenance-preserving. | 2026-09-09, audit session / landing; 2026-09-08, Copernicus scenes |
 | Infrastructure | Flask runs on Lambda behind API Gateway; Terraform owns the deployed configuration; CORS is Flask-owned. | 2026-09-09, Amplify; 2026-09-07, Lambda / CORS |
 | Service selection | DynamoDB and S3 are authorised without a fresh argument each time; every service switched on gets a cost row in `docs/infra.md` in the same PR. | 2026-09-09, DynamoDB and S3 are authorised |
@@ -23,6 +23,71 @@ when changing that subsystem.
 **Use this log:** entries retain the original diagnosis, rejected alternatives,
 and historical context. A later entry can supersede an earlier one; do not
 apply an older decision without checking the entries above it.
+
+---
+
+## 2026-09-10 - The live FIRMS window is fetched wide and narrowed here, and a non-CSV answer is an error
+
+**Status:** done · PR #155 · Closes #154
+
+The proxy in the entry below shipped, deployed, answered `200`, reported
+`status: ready`, `sensor: VIIRS_SNPP_NRT`, `windowHours: 24` — and carried
+**zero features**. Every field was true except the one that mattered: the
+layer drew an empty Southeast Asia, which reads as *no fires are burning*.
+That is the exact fabricated observation the 503-not-empty-collection
+decision below exists to prevent, arriving through a path that decision did
+not cover.
+
+Two separate causes, either of which alone produces it.
+
+**The area API's day range is anchored on the UTC calendar day, not on a
+rolling window.** `.../VIIRS_SNPP_NRT/{bbox}/1` means "since 00:00 UTC
+today", so at 01:44 UTC it is a 104-minute window. VIIRS/Suomi-NPP crosses
+this region near 18:30 UTC the previous day and 06:30 UTC, so an early-UTC
+request contains no Southeast Asian overpass at all. Measured directly
+against the real API at 01:51 UTC on 2026-09-10: `day_range=2` returned
+**5,389 detections, every one of them stamped 2026-09-09** (03:30Z to
+19:38Z) and every one inside a rolling 24 hours. Not one row bore today's
+date. `day_range=1` had nothing to return.
+
+So the route fetches `FETCH_DAYS = 2` and filters to `WINDOW_HOURS = 24`
+server-side. Fetching wide and narrowing here is correct under *either*
+reading of the parameter — calendar-anchored or rolling — so the fix does not
+rest on which one is right, and `windowHours: 24` becomes true by
+construction rather than by assertion. The filter is a lower bound only: a
+detection cannot be observed in the future, so an upper bound would police
+nothing but clock skew between the Lambda and FIRMS, and would do it by
+dropping real detections.
+
+**Rejected: `day_range=1` plus an explicit `[DATE]` of yesterday.** It fixes
+the empty early-UTC case and breaks the late-UTC one, where the freshest
+overpass is today's. Rejected too: widening to the `5` the day range caps at
+— more upstream bytes and more parsing for detections the layer then throws
+away.
+
+**FIRMS serves its errors as plain text with HTTP 200.** "Invalid MAP_KEY.",
+transaction-limit notices. `csv.DictReader` reads a one-line error body as a
+*header* and yields no rows, so an unusable key and a quiet fire season were
+indistinguishable — both rendered as an empty region. The parser now checks
+the header for `latitude`/`longitude` and raises `FirmsUnavailable` carrying
+upstream's own first line, because "invalid key" and "you have exhausted your
+transactions" need different responses from us and neither is a statement
+about fires. The key is redacted out of that message: it reaches the browser
+in the 503 body, and a FIRMS error page can echo the URL it was given.
+
+**A detection whose timestamp will not parse is dropped rather than kept.**
+The client draws an unparseable one at the faintest end of the age ramp,
+which is a fair way to *render* something already known to be in range;
+counting it here would place it inside a 24-hour claim nothing measured. The
+two are not in conflict — they answer different questions.
+
+**And a count of zero now says so in words.** The console said `0 thermal
+detections · past 24 h`, which reads as a measurement of the region rather
+than of what FIRMS returned. An empty layer and an unanswered one draw the
+same blank map, so the label is the only thing that separates them.
+
+Verified end to end against the live API before merging: 5,389 features
+served locally through the route, and the key absent from the response body.
 
 ---
 
