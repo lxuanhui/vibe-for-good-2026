@@ -10,6 +10,36 @@ export const DEFAULT_MANAGEMENT_UNIT_GEOMETRY = {
   coordinates: [[[116.0, -4.05], [116.5, -4.05], [116.5, -3.55], [116.0, -3.55], [116.0, -4.05]]] as [number, number][][],
 }
 
+/** Where a point-and-radius scope starts before the user moves it: the
+  centre of the demo area, so the first circle still lands on real events. */
+export const DEFAULT_SCOPE_POINT = { latitude: -3.8, longitude: 116.25, radiusKm: 25 }
+
+// The same limits `set_point_scope` enforces in backend/app/audits.py. Kept
+// here so the form refuses a value before a round trip, not instead of the
+// server doing so.
+export const POINT_SCOPE_LIMITS = { maxLatitude: 85, minRadiusKm: 0.1, maxRadiusKm: 250 }
+
+const CIRCLE_VERTICES = 64
+const KM_PER_DEGREE = 111.32
+
+/** The polygon the API stores for a point-and-radius scope, built the same way
+  (`circle_polygon` in backend/app/audits.py: 64 vertices, equirectangular) so
+  the preview shows the boundary the register will actually be cut to. */
+export function circlePolygon(latitude: number, longitude: number, radiusKm: number): { type: 'Polygon'; coordinates: [number, number][][] } {
+  const latDelta = radiusKm / KM_PER_DEGREE
+  const lonDelta = radiusKm / (KM_PER_DEGREE * Math.max(Math.abs(Math.cos((latitude * Math.PI) / 180)), 0.01))
+  const ring: [number, number][] = []
+  for (let step = 0; step < CIRCLE_VERTICES; step += 1) {
+    const angle = (2 * Math.PI * step) / CIRCLE_VERTICES
+    let lon = longitude + lonDelta * Math.cos(angle)
+    if (lon > 180) lon -= 360
+    if (lon < -180) lon += 360
+    ring.push([lon, latitude + latDelta * Math.sin(angle)])
+  }
+  ring.push(ring[0])
+  return { type: 'Polygon', coordinates: [ring] }
+}
+
 export interface ScopePreview {
   geometry: unknown
   displayGeometry: FeatureCollection<Polygon | MultiPolygon>

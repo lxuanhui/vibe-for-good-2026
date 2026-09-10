@@ -6,6 +6,7 @@ import { fetchAuditRegister } from '../../api/client'
 import { useAppStore } from '../../store/useAppStore'
 import { Button } from '../ui/Button'
 import { RegisterSummary as CompactRegisterSummary } from './RegisterSummary'
+import { EarthMark } from '../brand/EarthMark'
 
 type RegisterFilters = {
   triage: AuditEventSummary['triage']['state'] | 'ALL'
@@ -214,7 +215,7 @@ export function HistoricalInvestigation({ scope, onOpenScope, onOpenScopedMap }:
   })
 
   return <div className="flex h-full flex-col bg-bg text-text">
-    <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border-strong bg-panel px-5 py-3"><div><div className="text-sm font-semibold">Historical Fire Register</div><div className="text-xs text-text-muted">{scope.review_start} → {scope.review_end}</div></div><div className="flex flex-wrap items-center gap-2">{onOpenScope && <Button onClick={onOpenScope}>EDIT SCOPE</Button>}{onOpenScopedMap && <Button onClick={onOpenScopedMap}>VIEW SCOPED MAP</Button>}<Button variant="primary" disabled={!selection.length || !onOpenScopedMap} onClick={onOpenScopedMap}>{`INVESTIGATE ON MAP (${selection.length})`}</Button></div></div>
+    <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border-strong bg-panel px-5 py-3"><div className="flex items-center gap-2.5"><EarthMark className="h-7 w-7 shrink-0 text-accent" /><div><div className="text-sm font-semibold">Historical Fire Register</div><div className="text-xs text-text-muted">{scope.review_start} → {scope.review_end}</div></div></div><div className="flex flex-wrap items-center gap-2">{onOpenScope && <Button onClick={onOpenScope}>EDIT SCOPE</Button>}{onOpenScopedMap && <Button onClick={onOpenScopedMap}>VIEW SCOPED MAP</Button>}<Button variant="primary" disabled={!selection.length || !onOpenScopedMap} onClick={onOpenScopedMap}>{`INVESTIGATE ON MAP (${selection.length})`}</Button></div></div>
     {progression && <CompactRegisterSummary progression={progression} />}
     <section aria-label="Register filters" className="shrink-0 border-b border-border bg-panel px-5 py-3">
       <div className="flex flex-wrap items-end gap-2">

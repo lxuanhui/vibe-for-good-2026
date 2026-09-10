@@ -148,10 +148,13 @@ source is.
 
 ## Brand Commitments
 
-None are binding. The current name — "Environmental Assurance Console" — and
-the dark ground / cyan accent palette in `frontend/src/index.css` were reviewed
-and confirmed as provisional scaffolding, not identity. A future session may
-replace either. The single-colour-system rule above is a code constraint that
+The name is **atmosclear.ai**, chosen by the team on 2026-09-10 (#257) and
+held in `frontend/src/lib/brand.ts`; the earth mark beside it is
+`components/brand/EarthMark.tsx`, mirrored in `public/favicon.svg`. That
+replaced "Environmental Assurance Console", which had been recorded here as
+provisional scaffolding. The dark ground / cyan accent palette in
+`frontend/src/index.css` is still provisional and a future session may
+replace it. The single-colour-system rule above is a code constraint that
 outlives whatever palette replaces it.
 
 ## Evidence on Hand

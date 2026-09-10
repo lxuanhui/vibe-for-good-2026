@@ -26,11 +26,12 @@ from pathlib import Path
 from typing import Any
 
 from data_pipeline.analysis.investigator_skeptic import run_structured_analysis
+from flask import g, has_request_context
 
 from app import audit_store
 from app.analysis_provider import bedrock_runner
-from app.audits import get_audit as get_audit_session
-from app.audits import get_scope_geometry
+from app.audits import get_audit as _load_audit_session
+from app.audits import get_scope_geometry as _load_scope_geometry
 from app.review_routing import attach_routing, routing_diagnostics
 
 DATA_DIR = Path(__file__).parent / "data"
@@ -366,6 +367,59 @@ def _triage_for_audit(audit_id: str) -> dict[str, Any]:
     return details.get(audit_id) or details.get("demo-2019-haze", {})
 
 
+def _request_memo(key: tuple[Any, ...], compute: Any) -> Any:
+    """Memoise a read for the rest of the current Flask request.
+
+    A report with six packed events made 36 `get_audit` calls and 56 session
+    reads (#270): `find_event`, `evidence_for_event`, `analysis_for_event`,
+    `_pack`, `investigation_map` and `progression` each re-read DynamoDB and
+    re-routed all 3,610 events. On Lambda that crossed the 29 s timeout, which
+    API Gateway reports as a bodyless 500. Within one request the session
+    cannot change underneath these readers -- every write goes through
+    `audit_store`'s compare-and-set, which does its own read -- so the first
+    answer stands for the request. Outside a request (the analysis worker,
+    unit code) there is no memo and nothing is cached.
+    """
+    if not has_request_context():
+        return compute()
+    memo = getattr(g, "_audit_memo", None)
+    if memo is None:
+        memo = g._audit_memo = {}
+    if key not in memo:
+        memo[key] = compute()
+    return memo[key]
+
+
+def get_audit_session(audit_id: str) -> dict[str, Any] | None:
+    return _request_memo(("session", audit_id), lambda: _load_audit_session(audit_id))
+
+
+def get_scope_geometry(audit_id: str) -> Any:
+    return _request_memo(("geometry", audit_id), lambda: _load_scope_geometry(audit_id))
+
+
+def _session_pack(audit_id: str) -> dict[str, dict[str, Any]]:
+    # Read once per request. `add_to_pack` and `remove_from_pack` write through
+    # `audit_store`'s compare-and-set, which re-reads for itself, and nothing
+    # reads the pack again in the same request after writing it.
+    return _request_memo(("pack", audit_id), lambda: audit_store.pack(audit_id))
+
+
+@lru_cache(maxsize=32)
+def _routed_window(since: datetime | None, until: datetime | None) -> list[dict[str, Any]]:
+    # The artifact is immutable and routing is a pure function of the event,
+    # so the routed register for a review window is the same for every audit
+    # that names it. Cached per container, keyed by the window alone; a
+    # cache miss costs one pass over the demo register.
+    demo = _load_events()["audits"]["demo-2019-haze"]
+    return attach_routing(scoped_register_events(demo["events"], since=since, until=until))
+
+
+@lru_cache(maxsize=4)
+def _routed_artifact(audit_id: str) -> list[dict[str, Any]]:
+    return attach_routing(_load_events()["audits"][audit_id]["events"])
+
+
 def _review_window(session: dict[str, Any]) -> tuple[datetime | None, datetime | None]:
     """The session's review period as an inclusive range of UTC instants.
 
@@ -446,10 +500,18 @@ def review_queue_fields(events: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def get_audit(audit_id: str) -> dict[str, Any] | None:
-    """The reconstructed history for an audit id, if one has been built."""
+    """The reconstructed history for an audit id, if one has been built.
+
+    Memoised for the request; see `_request_memo`. Callers read the result
+    and never mutate it, which is what makes sharing one copy safe.
+    """
+    return _request_memo(("audit", audit_id), lambda: _build_audit(audit_id))
+
+
+def _build_audit(audit_id: str) -> dict[str, Any] | None:
     artifact = _load_events()["audits"].get(audit_id)
     if artifact is not None:
-        events = attach_routing(artifact["events"])
+        events = _routed_artifact(audit_id)
         # The artifact's own `reviewQueueCount` is Stage-1's queue (3,610 on
         # the demo scope) and its `compression` is Stage-1's ratio. Both are
         # replaced here by the same-named served fields -- so the artifact's
@@ -480,7 +542,7 @@ def get_audit(audit_id: str) -> dict[str, Any] | None:
     # The base register population is every clustered event in the audit's
     # review window. Stage-1 state, sufficiency, priority, and workflow are
     # annotations or explicit user filters, never membership gates.
-    events = attach_routing(scoped_register_events(demo["events"], since=since, until=until))
+    events = _routed_window(since, until)
     narrowed = len(events) != len(demo["events"])
     return {
         "scope": {
@@ -570,7 +632,7 @@ def progression(
     fire_events = len(events)
     observations_to_events = round(qualified / fire_events, 2) if fire_events else None
     scope_compression = round(fire_events / in_scope, 2) if in_scope else None
-    pack = audit_store.pack(audit_id) if get_audit_session(audit_id) else AUDIT_PACKS.get(audit_id, {})
+    pack = _session_pack(audit_id) if get_audit_session(audit_id) else AUDIT_PACKS.get(audit_id, {})
     route_summary = routing_diagnostics(events)
     return {
         # None when a narrowed window makes the pre-clustering raw count
@@ -1032,7 +1094,10 @@ def _analysis_store(audit_id: str) -> dict[str, dict[str, Any]] | None:
     if get_audit(audit_id) is None:
         return None
     if get_audit_session(audit_id):
-        return audit_store.analyses(audit_id)
+        # One read per request, not one per packed event: `_save_analysis`
+        # mutates this same dict before writing it back, so the memo and the
+        # store stay in step within the request.
+        return _request_memo(("analyses", audit_id), lambda: audit_store.analyses(audit_id))
     return AUDIT_ANALYSES.setdefault(audit_id, {})
 
 
@@ -1103,7 +1168,7 @@ def _pack(audit_id: str) -> dict[str, dict[str, Any]] | None:
     if get_audit(audit_id) is None:
         return None
     if get_audit_session(audit_id):
-        return audit_store.pack(audit_id)
+        return _session_pack(audit_id)
     return AUDIT_PACKS.setdefault(audit_id, {})
 
 

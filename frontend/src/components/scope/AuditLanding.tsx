@@ -6,11 +6,13 @@ import { FIRMS_HOTSPOT_COLORS } from '../../lib/layerColors'
 import { Button } from '../ui/Button'
 import { illuminationReference, nightCoverage } from '../../lib/illumination'
 import { SOLAR_NIGHT_COLOR } from '../../lib/layerColors'
+import { REGIONAL_MAP_BOUNDS } from '../../lib/regionalBounds'
+import { APP_DESCRIPTOR } from '../../lib/brand'
+import { Brand } from '../brand/Brand'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
 type FirmsProperties = { confidence: string; frp: number; ageHours: number }
 
-const SEA_BOUNDS: [number, number, number, number] = [90, -12, 145, 25]
 const FIRMS_REFRESH_MS = 15 * 60 * 1000
 const CLOCK_REFRESH_MS = 60 * 1000
 
@@ -129,7 +131,7 @@ export function AuditLanding({ onStartAudit, onOpenContext }: { onStartAudit: ()
           mapStyle="/scoped-map-style.json"
           transformRequest={transformRequest}
           initialViewState={{ longitude: 117.5, latitude: -12, zoom: 3 }}
-          maxBounds={SEA_BOUNDS}
+          maxBounds={REGIONAL_MAP_BOUNDS}
           minZoom={3}
           maxZoom={10}
           attributionControl={false}
@@ -160,6 +162,7 @@ export function AuditLanding({ onStartAudit, onOpenContext }: { onStartAudit: ()
         </div>}
       </div>
       <section className="absolute right-5 top-5 z-10 max-w-md rounded-xl border border-border-strong bg-panel/95 p-5 shadow-2xl backdrop-blur">
+        <Brand subtitle={APP_DESCRIPTOR} className="mb-4" />
         <p className="text-xs uppercase tracking-[0.18em] text-accent">Southeast Asia · live satellite watch</p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">Start with an audit scope.</h1>
         <p className="mt-3 text-sm leading-6 text-text-muted">Live FIRMS thermal detections provide regional context only. FireEvents appear after you define an authorised management-unit boundary and review period.</p>
@@ -172,7 +175,7 @@ export function AuditLanding({ onStartAudit, onOpenContext }: { onStartAudit: ()
         </div>
         <div className="mt-3 text-right text-[10px] uppercase tracking-[0.14em] text-text-faint">NIGHT SHADE: CURRENT SUN</div>
         <Button variant="primary" className="mt-5 w-full py-3 uppercase tracking-[0.14em]" onClick={onStartAudit}>START AUDIT</Button>
-        <p className="mt-3 text-[11px] leading-4 text-text-faint">Upload GeoJSON → validate scope → build the cached historical register → inspect selected FireEvents.</p>
+        <p className="mt-3 text-[11px] leading-4 text-text-faint">Choose a boundary (demo area, point and radius, or GeoJSON) → validate scope → build the cached historical register → inspect selected FireEvents.</p>
         <button
           type="button"
           onClick={onOpenContext}

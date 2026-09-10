@@ -9,7 +9,7 @@ when changing that subsystem.
 | Area | Current decision | Detail |
 |---|---|---|
 | Product boundary | Evidence supports human review; it never establishes blame, intent, or legal responsibility. | Standing constraints |
-| Audit flow | Scope-first: create an audit from uploaded GeoJSON before rendering FireEvents. The regional landing may show labelled FIRMS context only. | 2026-09-09, audit session / landing |
+| Audit flow | Scope-first: create an audit from a chosen boundary (labelled demo area, point and radius, or uploaded GeoJSON) before rendering FireEvents. The regional landing may show labelled FIRMS context only; the scoped map pans freely but the register stays cut to scope plus buffer. | 2026-09-10, scoped map pans freely; 2026-09-09, audit session / landing |
 | API state | Audit IDs and scope state persist in DynamoDB in deployed environments; in-memory state is local development only. Every write is revision-checked — there is no unconditional write path — and both backends implement the same compare-and-set. | 2026-09-09, audit session / landing; 2026-09-10, conditional writes |
 | Derived data | Clustered events, weather, imagery selection, peat context, and prepared graph data are offline artifacts, not request-time Lambda work. | 2026-09-09, graph; weather and imagery; 2026-09-08, clustering |
 | Investigation | Scores, review routing, graph edges, and propagation are separate deterministic evidence outputs; none establishes causation. | 2026-09-09, graph; review routing; 2026-09-08, triage / graph / surface growth |
@@ -22,11 +22,97 @@ when changing that subsystem.
 | Service selection | DynamoDB and S3 are authorised without a fresh argument each time; every service switched on gets a cost row in `docs/infra.md` in the same PR. | 2026-09-09, DynamoDB and S3 are authorised |
 | Frontend tests | Vitest + jsdom + Testing Library, run in CI. They guard behaviours the product boundary depends on — explicit trigger, honest not-run state, no chain-of-thought — not the map, which jsdom cannot draw. | 2026-09-10, frontend test runner |
 | Review period | The session's review period filters the register server-side, end-of-day inclusive, and every scope count is recomputed from the filtered set. The scope form's date pickers stay bounded to the coverage the artifact declares in `source.window`. | 2026-09-10, review period is a filter; review period bounds |
+| Brand | The console is `atmosclear.ai`; name, descriptor and description live in `frontend/src/lib/brand.ts`, the earth mark in `components/brand/EarthMark.tsx`, mirrored by hand in `public/favicon.svg` and `index.html`. | 2026-09-10, atmosclear.ai |
 | Line endings | `.gitattributes` normalises all text to LF in the repository and on checkout; binary artifacts are declared explicitly rather than left to git's heuristic. | 2026-09-10, line endings |
 
 **Use this log:** entries retain the original diagnosis, rejected alternatives,
 and historical context. A later entry can supersede an earlier one; do not
 apply an older decision without checking the entries above it.
+
+---
+
+## 2026-09-10 - The console is named atmosclear.ai, and its mark is a graticule earth held in one component
+
+**Status:** done · PR #269 · Closes #257
+
+**Decision.** The product name is `atmosclear.ai`, chosen by the team on
+2026-09-10. It replaces the provisional "Environmental Assurance Console",
+which survives only as the descriptor line under the wordmark
+(`APP_DESCRIPTOR`). The name, descriptor and one-paragraph description live
+in `frontend/src/lib/brand.ts`, and every header renders them through
+`components/brand/Brand.tsx`, so a rename is one constant. The mark is
+`components/brand/EarthMark.tsx`: a line-drawn globe made of a circle, one
+meridian ellipse and three parallels, inheriting `currentColor` so it takes
+the accent token like everything else. `public/favicon.svg` and
+`public/apple-touch-icon.png` (rendered from it at 180 px) repeat the same
+geometry by hand with the dark ground and accent hex baked in, because a
+static asset cannot read Tailwind tokens. `index.html` repeats the name and
+description by hand too, because Vite's entry is static and cannot import
+`brand.ts`; both places carry a comment naming the other.
+
+**Why.** #257 asked for the name, an earth logo and filled HTML headers the
+day before the demo, and the strings had been scattered across seven
+components as literals. Putting them behind one module was the only way to
+change the name in the same PR without missing a header, and it is what
+makes the next rename cheap.
+
+**Rejected: a coastline globe.** A recognisable Indonesia outline at 16 px
+is a blob, and a globe that reads as a specific landmass invites the
+reading that the product covers that landmass and nothing else. The
+graticule reads as "earth" at every size the console uses, from the favicon
+to the report eyebrow, and says nothing about jurisdiction.
+
+**Rejected: importing brand.ts into index.html.** Vite only processes
+`<script type="module">` in the entry; the `<title>` and `<meta>` tags are
+static. A plugin to template them was not worth adding for two strings.
+
+**Open.** The colour palette is still provisional (PRODUCT.md, Brand
+Commitments). The mark is drawn in the accent teal; if the palette changes,
+`favicon.svg` and the touch icon must be re-rendered by hand.
+
+---
+
+## 2026-09-10 - The scoped map pans freely inside regional guard rails, and the boundary is chosen in the scope panel, never defaulted
+
+**Status:** done · PR #267 · Closes #249 · Refs #87 (console half), #127
+
+**Decision.** `ScopedMapLanding` no longer pins MapLibre's `maxBounds` to
+the audit's context-buffer bbox. Both console maps share one set of wide
+regional guard rails (`lib/regionalBounds.ts`, roughly Indian Ocean to
+Papua). The register request is unchanged: it is still fetched for scope
+plus buffer only, so dragging away from the audit shows basemap, not more
+FireEvents. The area of focus is changed in the scope panel, which now
+offers the three boundary sources the API records as `scope_source`:
+the server-owned demo study area (the default, labelled as a demo), a
+point and radius (centre typed or placed by clicking the preview map,
+radius in km, mirrored client-side as the same 64-vertex circle the API
+stores), and a GeoJSON upload. The upload path refuses to build without a
+file rather than substituting an area the auditor never chose.
+
+**Why.** #249: the scoped map could not be dragged at all, because
+MapLibre clamps the camera to `maxBounds` and the buffer bbox was smaller
+than the viewport, and the only no-file path was a rectangle hard-coded in
+the console and posted through `/scope/upload` as if it were the auditor's.
+The backend half of #87 (PR #216) had already added the point and demo
+endpoints; nothing in the console called them.
+
+**Rejected: make the register follow the viewport.** Dragging the map to
+a new area and having events appear there is the Indonesia-wide fire
+browser #127 rejected on purpose. The camera is for looking; the scope
+panel is for choosing, and the session records what was chosen.
+
+**Rejected: change the default geometry to a circle.** The imagery and
+wind-oriented spread edges are precomputed for the 16 events inside the
+demo rectangle plus buffer. A circle of similar size would shift the
+in-scope set at the corners the night before the demo, for no gain. The
+demo area stays the same rectangle, now set through `/scope/demo` so the
+session says so.
+
+**Open.** A moved scope gets a register and triage anywhere in the archive
+(Sumatra and Kalimantan, 2019 haze window) but no imagery and only
+distance-only graph edges outside the enriched 16; the evidence drawer
+already says imagery is unavailable. Drawing a polygon on the map (#87's
+optional path) is not built; upload covers it.
 
 ---
 
@@ -516,6 +602,8 @@ behaviour; no console route is shaped that way.
 ## 2026-09-10 - A scope can be a point and radius or the server-owned demo area, and the session records which
 
 **Status:** done · PR #216 · Refs #87 (backend half; the console half is open)
+
+> **Console half landed 2026-09-10 by PR #267 (#249).** The scope panel now offers all three sources and calls these endpoints; see the entry of that date.
 
 **Decision.** Two more ways to set an audit scope, both server-side:
 `POST /api/audits/{id}/scope/point` takes latitude, longitude and a radius
