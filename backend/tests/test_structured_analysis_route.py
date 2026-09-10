@@ -134,6 +134,24 @@ def test_unsupported_provider_evidence_is_rejected_and_not_persisted():
     assert audit_events.analysis_for_event(AUDIT, event_id) is None
 
 
+def test_conflicting_finding_is_returned_as_mixed_analysis(client):
+    event_id = _event_id(client)
+
+    def conflicting_provider(agent_input):
+        result = _provider(agent_input)
+        result["findings"][1]["supporting_evidence_ids"] = [agent_input.evidence_ids[0]]
+        result["findings"][1]["contradicting_evidence_ids"] = [agent_input.evidence_ids[0]]
+        return result
+
+    _reset()
+    app = create_app({"TESTING": True, "ANALYSIS_PROVIDER": conflicting_provider})
+    result = app.test_client().post(f"/api/audits/{AUDIT}/events/{event_id}/analyse")
+    assert result.get_json()["jobStatus"] == "COMPLETE"
+    finding = result.get_json()["analysis"]["final_assessment"]["investigator"]["findings"][1]
+    assert finding["mixed_evidence_ids"]
+    assert result.get_json()["analysis"]["validation_status"] == "VALID_WITH_AMBIGUITY"
+
+
 def test_poll_reports_running_work_without_starting_a_second_job(client, monkeypatch):
     """The deployed shape: dispatch hands off, and GET never spends tokens."""
     event_id = _event_id(client)

@@ -171,5 +171,7 @@ wrong. See the root `.env.example` for the full credential index.
   feasibility spike that writes to no database.
 - **Most API endpoints.** Live: `/api/health`, `/api/hello`, the flat
   `/api/events` pair, and `GET /api/audits/{id}/events`, which serves a
-  committed artifact. The rest of `Environmental_Assurance_Spec.md` §24 (API)
-  — overlays, reports, the agent loop — is still mocked in the frontend.
+  committed artifact. FIRMS and hydrology overlays are now backend routes;
+  reports and the agent loop are still mocked in the frontend. Hydrology
+  remains explicitly unavailable until a materialized #240 cache subset is
+  supplied.

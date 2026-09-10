@@ -52,6 +52,9 @@ export const useAppStore = create<AppState>((set) => ({
 
   layerVisibility: {
     firms: false,
+    groundwater: false,
+    peatclsm: false,
+    'soil-moisture': false,
     'sar-backscatter': false,
     khg: true,
     concessions: false,

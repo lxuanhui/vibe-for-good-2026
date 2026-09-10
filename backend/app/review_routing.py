@@ -115,7 +115,14 @@ def routing_diagnostics(events: list[dict[str, Any]]) -> dict[str, Any]:
     """Explain concentration and report each route's inspectable reasons."""
     routes = [route_event(event) for event in events]
     priority_counts = Counter(item["investigationPriority"] for item in routes)
-    review_counts = Counter(item["reviewState"] for item in routes)
+    # The register already carries the workflow decision on each row. Read it
+    # from that represented collection so a scoped diagnostic cannot drift
+    # back to a dataset-wide calibration or a second routing decision.
+    review_states = [
+        event.get("reviewState", route["reviewState"])
+        for event, route in zip(events, routes)
+    ]
+    review_counts = Counter(review_states)
     sufficiency_counts = Counter(item["evidenceSufficiency"] for item in routes)
     reason_counts = Counter(reason for item in routes for reason in item["escalationReasonCodes"])
     component_counts: Counter[str] = Counter()
@@ -144,7 +151,7 @@ def routing_diagnostics(events: list[dict[str, Any]]) -> dict[str, Any]:
             }
             for key in sorted(component_counts)
         },
-        "humanReviewCount": sum(item["escalatedForHumanReview"] for item in routes),
-        "humanReviewPercentage": pct(sum(item["escalatedForHumanReview"] for item in routes)),
+        "humanReviewCount": review_counts["HUMAN_REVIEW"],
+        "humanReviewPercentage": pct(review_counts["HUMAN_REVIEW"]),
         "explanation": "Stage-1 validity and partial evidence are scored separately; ambiguous events remain review-recommended without entering the human-review queue by default.",
     }

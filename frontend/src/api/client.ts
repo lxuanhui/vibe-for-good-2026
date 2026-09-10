@@ -132,6 +132,18 @@ export async function fetchInvestigationMap(auditId: string, eventIds: string[])
   return apiGet<InvestigationMap>(`/audits/${encodeURIComponent(auditId)}/graph?event_ids=${query}`)
 }
 
+export async function fetchAuditOverlay(
+  auditId: string,
+  layer: OverlayLayerId,
+  filters: { bbox?: BBox; date?: string } = {},
+): Promise<FeatureCollection<unknown, unknown>> {
+  const query = new URLSearchParams()
+  if (filters.bbox) query.set('bbox', `${filters.bbox.minLon},${filters.bbox.minLat},${filters.bbox.maxLon},${filters.bbox.maxLat}`)
+  if (filters.date) query.set('date', filters.date)
+  const suffix = query.toString() ? `?${query}` : ''
+  return apiGet<FeatureCollection<unknown, unknown>>(`/audits/${encodeURIComponent(auditId)}/overlays/${layer}${suffix}`)
+}
+
 export async function fetchAuditEventEvidence(auditId: string, eventId: string): Promise<EventEvidenceResponse> {
   return apiGet<EventEvidenceResponse>(`/audits/${encodeURIComponent(auditId)}/events/${encodeURIComponent(eventId)}/evidence`)
 }
@@ -160,9 +172,10 @@ export function fetchProcessedImageryManifest(): Promise<ProcessedImageryManifes
 // analysis or one error -- rather than pushing job state into every caller.
 const ANALYSIS_POLL_DEADLINE_MS = 5 * 60 * 1000
 
-export async function generateInvestigationAnalysis(auditId: string, eventId: string): Promise<StructuredAnalysis> {
+export async function generateInvestigationAnalysis(auditId: string, eventId: string, onProgress?: (job: AnalysisJob) => void): Promise<StructuredAnalysis> {
   const path = `/audits/${encodeURIComponent(auditId)}/events/${encodeURIComponent(eventId)}/analyse`
   let job = await apiPost<AnalysisJob>(path, '')
+  onProgress?.(job)
   const deadline = Date.now() + ANALYSIS_POLL_DEADLINE_MS
   while (job.jobStatus === 'RUNNING') {
     if (Date.now() > deadline) {
@@ -172,6 +185,7 @@ export async function generateInvestigationAnalysis(auditId: string, eventId: st
     }
     await delay(null, Math.max(1, job.pollAfterSeconds ?? 5) * 1000)
     job = await apiGet<AnalysisJob>(path)
+    onProgress?.(job)
   }
   if (job.jobStatus !== 'COMPLETE' || !job.analysis) {
     throw new Error(job.error ?? 'Investigation analysis could not be generated.')

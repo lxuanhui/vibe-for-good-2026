@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import type { AuditEventSummary, AuditProgression, AuditScope } from '../../api/types'
 import { fetchAuditRegister } from '../../api/client'
 import { useAppStore } from '../../store/useAppStore'
@@ -34,7 +35,7 @@ function eventRows(events: AuditEventSummary[], selected: string[], toggle: (id:
       <td className="px-3 py-2 text-text-muted">{event.evidenceSufficiency}</td>
       <td className="px-3 py-2">{event.investigationPriority}</td>
       <td className="px-3 py-2 text-text-muted">{event.reviewState}</td>
-      <td className="px-3 py-2 text-right">{event.maxFrp?.toFixed(1) ?? '—'}</td>
+      <td className="px-3 py-2 text-right">{event.maxFrp?.toFixed(1) ?? 'n/a'}</td>
     </tr>
   ))
 }
@@ -50,34 +51,96 @@ function compareEvents(a: AuditEventSummary, b: AuditEventSummary, key: SortKey)
 }
 
 function SummaryHelp({ label, children }: { label: string; children: ReactNode }) {
-  return <details className="relative inline-block align-middle"><summary aria-label={`About ${label}`} className="flex h-4 w-4 cursor-pointer list-none items-center justify-center rounded-full border border-border-strong text-[10px] text-text-muted hover:text-text"><span aria-hidden="true">?</span></summary><div role="note" className="absolute right-0 z-10 mt-2 w-64 rounded border border-border-strong bg-panel-raised p-3 text-left text-[11px] leading-4 text-text shadow-lg">{children}</div></details>
+  const [open, setOpen] = useState(false)
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const popoverRef = useRef<HTMLDivElement>(null)
+
+  useLayoutEffect(() => {
+    if (!open) return
+
+    const updatePosition = () => {
+      const trigger = triggerRef.current
+      const popover = popoverRef.current
+      if (!trigger || !popover) return
+
+      const triggerRect = trigger.getBoundingClientRect()
+      const margin = 8
+      const gap = 8
+      const viewportWidth = document.documentElement.clientWidth || window.innerWidth
+      const viewportHeight = document.documentElement.clientHeight || window.innerHeight
+      const width = popover.offsetWidth || 256
+      const height = popover.offsetHeight
+      const left = Math.min(Math.max(triggerRect.right - width, margin), Math.max(margin, viewportWidth - width - margin))
+      const belowTop = triggerRect.bottom + gap
+      const top = belowTop + height <= viewportHeight - margin
+        ? belowTop
+        : Math.max(margin, triggerRect.top - height - gap)
+
+      setPosition({ top, left })
+    }
+
+    updatePosition()
+    window.addEventListener('resize', updatePosition)
+    window.addEventListener('scroll', updatePosition, true)
+    return () => {
+      window.removeEventListener('resize', updatePosition)
+      window.removeEventListener('scroll', updatePosition, true)
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+
+    const dismissOnOutsideClick = (event: MouseEvent) => {
+      const target = event.target as Node
+      if (!triggerRef.current?.contains(target) && !popoverRef.current?.contains(target)) setOpen(false)
+    }
+    const dismissOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false)
+        triggerRef.current?.focus()
+      }
+    }
+
+    document.addEventListener('mousedown', dismissOnOutsideClick)
+    document.addEventListener('keydown', dismissOnEscape)
+    return () => {
+      document.removeEventListener('mousedown', dismissOnOutsideClick)
+      document.removeEventListener('keydown', dismissOnEscape)
+    }
+  }, [open])
+
+  return <>
+    <button ref={triggerRef} type="button" aria-label={`About ${label}`} aria-expanded={open} aria-controls={`help-${label.replaceAll(' ', '-')}`} onClick={() => { setPosition(null); setOpen((current) => !current) }} className="flex h-4 w-4 cursor-pointer items-center justify-center rounded-full border border-border-strong text-[10px] text-text-muted hover:text-text"><span aria-hidden="true">?</span></button>
+    {open && createPortal(<div ref={popoverRef} id={`help-${label.replaceAll(' ', '-')}`} role="note" className="fixed z-10 max-h-[calc(100vh-1rem)] w-64 max-w-[calc(100vw-1rem)] overflow-y-auto rounded border border-border-strong bg-panel-raised p-3 text-left text-[11px] leading-4 text-text shadow-lg" style={position ? { top: position.top, left: position.left } : { visibility: 'hidden', top: 0, left: 0 }}>{children}</div>, document.body)}
+  </>
 }
 
 export function RegisterSummary({ progression }: { progression: AuditProgression }) {
   const eventDenominator = progression.fireEvents.toLocaleString()
-  return <>
-    <section aria-label="Historical register population summary" className="shrink-0 border-b border-border bg-border">
-    <div className="grid gap-px bg-border md:grid-cols-3">
-      <section aria-labelledby="clustering-summary" className="bg-panel px-4 py-3">
+  return <section aria-label="Historical register population summary" className="shrink-0 border-b border-border bg-panel">
+    <div aria-label="Register processing flow" className="flex flex-col gap-3 px-4 py-3 md:grid md:grid-cols-[minmax(0,1.5fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] md:items-center md:gap-0">
+      <section aria-labelledby="clustering-summary" data-flow-stage="observation-derivation" className="min-w-0">
         <div className="mb-2 flex items-center gap-2"><h2 id="clustering-summary" className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-faint">Observation derivation</h2><SummaryHelp label="observation derivation">Spatially and temporally related FIRMS observations are deterministically clustered into FireEvents. An observation is a satellite detection, not an individual fire.</SummaryHelp></div>
         <div className="flex items-end gap-3"><div><div className="font-semibold text-accent">{progression.qualifiedObservations.toLocaleString()}</div><div className="text-[10px] text-text-faint">QUALIFIED FIRMS OBSERVATIONS</div></div><div className="pb-3 text-text-faint">→</div><div><div className="font-semibold text-accent">{eventDenominator}</div><div className="text-[10px] text-text-faint">CLUSTERED FIREEVENTS</div></div></div>
-        <p className="mt-2 text-[10px] text-text-muted">{progression.observationsToEventsCompression?.toFixed(1) ?? '—'} observations per FireEvent on average. This is clustering, not a review queue.</p>
       </section>
-      <section aria-labelledby="scope-summary" className="bg-panel px-4 py-3">
+      <div aria-hidden="true" data-flow-arrow className="block rotate-90 px-4 text-center text-text-faint md:block md:rotate-0">→</div>
+      <section aria-labelledby="scope-summary" data-flow-stage="current-audit-scope" className="min-w-0 md:px-4">
         <div className="mb-2 flex items-center gap-2"><h2 id="scope-summary" className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-faint">Current audit scope</h2></div>
-        <div className="font-semibold text-accent">{progression.inScopeAndBuffer?.toLocaleString() ?? '—'}</div>
+        <div className="font-semibold text-accent">{progression.inScopeAndBuffer?.toLocaleString() ?? 'n/a'}</div>
         <div className="text-[10px] text-text-faint">IN SCOPE</div>
-        <p className="mt-2 text-[10px] text-text-muted">{progression.scopeBoundaryAvailable ? `Count includes the configured context buffer: ${progression.inScopeAndBuffer?.toLocaleString() ?? '—'} of ${eventDenominator} FireEvents.` : 'No private audit boundary supplied; scope count is unavailable.'}</p>
+        <p className="mt-2 text-[10px] text-text-muted">{progression.scopeBoundaryAvailable ? `Count includes the configured context buffer: ${progression.inScopeAndBuffer?.toLocaleString() ?? 'n/a'} of ${eventDenominator} FireEvents.` : 'No private audit boundary supplied; scope count is unavailable.'}</p>
       </section>
-      <section aria-labelledby="routing-summary" className="bg-panel px-4 py-3">
+      <div aria-hidden="true" data-flow-arrow className="block rotate-90 px-4 text-center text-text-faint md:block md:rotate-0">→</div>
+      <section aria-labelledby="routing-summary" data-flow-stage="scoped-routing" className="min-w-0 md:px-4">
         <div className="mb-2 flex items-center gap-2"><h2 id="routing-summary" className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-faint">Scoped routing diagnostic</h2><SummaryHelp label="routing dimensions"><p>FIRMS observations are clustered into FireEvents. Stage 1 classification indicates fire support and is separate from evidence sufficiency.</p><p className="mt-2">Priority is a review-routing aid, separate from workflow status. Routing is not proof of causality or responsibility.</p><p className="mt-2">Because you control filtering, the register can include low-confidence or likely-non-fire events for inspection.</p></SummaryHelp></div>
         <div className="font-semibold text-accent">{progression.requiringHumanReview.toLocaleString()}</div>
         <div className="text-[10px] text-text-faint">ROUTED TO HUMAN REVIEW IN CURRENT REGISTER</div>
         <p className="mt-2 text-[10px] text-text-muted">{(progression.routingDiagnostics.humanReviewPercentage * 100).toFixed(1)}% of {eventDenominator} FireEvents in this register.</p>
       </section>
     </div>
-    </section>
-  </>
+  </section>
 }
 
 // The selected-events + graph investigation used to render on its own page
@@ -85,7 +148,7 @@ export function RegisterSummary({ progression }: { progression: AuditProgression
 // ScopedMapLanding instead -- one map surface, not two -- so
 // "INVESTIGATE ON MAP" just hands the current selection off through the
 // store and switches to it, the same way "VIEW SCOPED MAP" does.
-export function HistoricalInvestigation({ scope, onOpenScopedMap, onOpenScope }: { scope: AuditScope; onOpenScopedMap?: () => void; onOpenScope?: () => void }) {
+export function HistoricalInvestigation({ scope, onOpenScope, onOpenScopedMap }: { scope: AuditScope; onOpenScope?: () => void; onOpenScopedMap?: () => void }) {
   const selection = useAppStore((s) => s.registerSelection)
   const toggleSelection = useAppStore((s) => s.toggleRegisterSelection)
   const [events, setEvents] = useState<AuditEventSummary[]>([])
@@ -147,8 +210,7 @@ export function HistoricalInvestigation({ scope, onOpenScopedMap, onOpenScope }:
   })
 
   return <div className="flex h-full flex-col bg-bg text-text">
-    {onOpenScope && <div className="flex shrink-0 items-center justify-end border-b border-border bg-panel px-5 py-2"><Button onClick={onOpenScope}>EDIT AUDIT SCOPE</Button></div>}
-    <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border-strong bg-panel px-5 py-3"><div><div className="text-sm font-semibold">Historical Fire Register</div><div className="text-xs text-text-muted">{progression ? `${progression.fireEvents.toLocaleString()} FireEvents` : 'FireEvents'} · {scope.review_start} → {scope.review_end} · {scope.context_buffer_km} km context buffer</div></div><div className="flex items-center gap-2">{onOpenScopedMap && <Button onClick={onOpenScopedMap}>VIEW SCOPED MAP</Button>}<Button variant="primary" disabled={!selection.length || !onOpenScopedMap} onClick={onOpenScopedMap}>{`INVESTIGATE ON MAP (${selection.length})`}</Button></div></div>
+    <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border-strong bg-panel px-5 py-3"><div><div className="text-sm font-semibold">Historical Fire Register</div><div className="text-xs text-text-muted">{progression ? `${progression.fireEvents.toLocaleString()} FireEvents` : 'FireEvents'} · {scope.review_start} → {scope.review_end} · {scope.context_buffer_km} km context buffer</div></div><div className="flex flex-wrap items-center gap-2">{onOpenScope && <Button onClick={onOpenScope}>EDIT SCOPE</Button>}{onOpenScopedMap && <Button onClick={onOpenScopedMap}>VIEW SCOPED MAP</Button>}<Button variant="primary" disabled={!selection.length || !onOpenScopedMap} onClick={onOpenScopedMap}>{`INVESTIGATE ON MAP (${selection.length})`}</Button></div></div>
     {progression && <RegisterSummary progression={progression} />}
     <section aria-label="Register filters" className="shrink-0 border-b border-border bg-panel px-5 py-3">
       <div className="flex flex-wrap items-end gap-2">

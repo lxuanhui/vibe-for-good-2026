@@ -42,7 +42,7 @@
     "firstDetected": "2026-09-02T14:18:00Z",
     "status": "CONVERGED",
     "qualifiesForInvestigation": true,
-    "topHypothesis": "H1 — Environmental / regional fire-weather conditions",
+    "topHypothesis": "H1: Environmental / regional fire-weather conditions",
     "supportScore": 82,
     "peatClassification": "production_zone",
     "detections": [

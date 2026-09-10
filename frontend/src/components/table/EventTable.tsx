@@ -131,17 +131,17 @@ export function EventTable({ events }: { events: FireEvent[] }) {
                   <StatusBadge status={event.status} />
                 </td>
                 <td className="max-w-[160px] truncate px-3 py-2 text-text-muted" title={event.topHypothesis}>
-                  {event.topHypothesis ?? '—'}
+                  {event.topHypothesis ?? 'n/a'}
                 </td>
                 <td className="px-3 py-2">
                   {event.supportScore != null ? (
                     <ScoreBadge score={event.supportScore} showLabel={false} />
                   ) : (
-                    '—'
+                    'n/a'
                   )}
                 </td>
                 <td className="px-3 py-2 text-text-muted">{PEAT_LABEL[event.peatClassification]}</td>
-                <td className="px-3 py-2 text-text-muted">{event.daysSinceLastSurfaceDetection ?? '—'}</td>
+                <td className="px-3 py-2 text-text-muted">{event.daysSinceLastSurfaceDetection ?? 'n/a'}</td>
               </tr>
             ))}
           </tbody>

@@ -117,6 +117,36 @@ def test_unknown_evidence_id_is_rejected_before_analysis_is_persisted():
         run_structured_analysis("FIRE_001", EVIDENCE, HYPOTHESES, agent, agent, max_rounds=1)
 
 
+def test_conflicting_evidence_is_normalised_to_mixed_without_losing_the_finding():
+    def agent(agent_input):
+        value = _assessment(agent_input.role, agent_input.round_number)
+        value["findings"]["H2"]["supporting_evidence_ids"] = ["ENV_001", "ENV_002"]
+        value["findings"]["H2"]["contradicting_evidence_ids"] = ["ENV_002"]
+        return value
+
+    result = run_structured_analysis("FIRE_001", EVIDENCE, HYPOTHESES, agent, agent, max_rounds=1)
+    finding = result.final_round.investigator.findings[1]
+    assert finding.supporting_evidence_ids == ("ENV_001",)
+    assert finding.contradicting_evidence_ids == ()
+    assert finding.mixed_evidence_ids == ("ENV_002",)
+    assert result.validation_status == "VALID_WITH_AMBIGUITY"
+    assert result.repaired is True
+
+
+def test_structured_output_gets_one_bounded_retry():
+    calls: dict[AgentRole, int] = {}
+
+    def agent(agent_input):
+        calls[agent_input.role] = calls.get(agent_input.role, 0) + 1
+        if calls[agent_input.role] == 1:
+            return {"findings": []}
+        return _assessment(agent_input.role, agent_input.round_number)
+
+    result = run_structured_analysis("FIRE_001", EVIDENCE, HYPOTHESES, agent, agent, max_rounds=1)
+    assert result.status == "UNRESOLVED"
+    assert calls == {AgentRole.INVESTIGATOR: 2, AgentRole.SKEPTIC: 2}
+
+
 def test_factual_finding_without_evidence_reference_is_rejected():
     def agent(agent_input):
         value = _assessment(agent_input.role, agent_input.round_number)

@@ -76,8 +76,8 @@ def test_envelope_dict_none_when_any_field_missing():
 
 
 def test_capped_dimensions_leaves_reach_within_the_gate_untouched():
-    # 3 + 5 = 8 == MAX_ENVELOPE_REACH_KM exactly -- not over, no scaling.
-    assert _capped_dimensions(5.0, 4.0, 3.0) == (5.0, 4.0, 3.0)
+    # 3 + 2 = 5 == MAX_ENVELOPE_REACH_KM exactly -- not over, no scaling.
+    assert _capped_dimensions(2.0, 1.5, 3.0) == (2.0, 1.5, 3.0)
 
 
 def test_capped_dimensions_scales_a_pair_that_would_blanket_the_map():
@@ -115,11 +115,11 @@ def test_envelope_dict_caps_a_pair_that_would_otherwise_blanket_the_map():
 
 def test_envelope_dict_produces_a_closed_polygon_when_complete():
     class Features:
-        # 3 + 5 = 8 == MAX_ENVELOPE_REACH_KM exactly -- no scaling, so the
+        # 3 + 2 = 5 == MAX_ENVELOPE_REACH_KM exactly -- no scaling, so the
         # output should equal the input dimensions unchanged.
-        surface_envelope_semi_major_km = 5.0
-        surface_envelope_semi_minor_km = 4.0
-        surface_envelope_center_offset_km = 3.0
+        surface_envelope_semi_major_km = 3.0
+        surface_envelope_semi_minor_km = 1.5
+        surface_envelope_center_offset_km = 2.0
         surface_envelope_orientation_deg = 270.0
         elapsed_time_hours = 1.0
 
@@ -129,8 +129,8 @@ def test_envelope_dict_produces_a_closed_polygon_when_complete():
     assert result["polygon"][0] == result["polygon"][-1]
     assert len(result["polygon"]) == 49
     assert result["orientationDeg"] == 270.0
-    assert result["semiMajorKm"] == 5.0
-    assert result["semiMinorKm"] == 4.0
+    assert result["semiMajorKm"] == 3.0
+    assert result["semiMinorKm"] == 1.5
 
 
 def test_build_graph_and_edges_by_source_produce_a_real_envelope():

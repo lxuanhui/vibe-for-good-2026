@@ -6,7 +6,7 @@ export function Limitations({ items }: { items: string[] }) {
       <ul className="space-y-1.5">
         {items.map((item) => (
           <li key={item} className="flex gap-2 text-xs text-text-muted">
-            <span className="text-text-faint">—</span>
+            <span className="text-text-faint">•</span>
             <span>{item}</span>
           </li>
         ))}

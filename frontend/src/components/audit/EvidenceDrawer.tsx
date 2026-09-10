@@ -4,6 +4,7 @@ import { fetchProcessedImageryManifest } from '../../api/client'
 import type { EventEvidenceResponse, EvidenceObject, InvestigationMap, ProcessedImageryAsset, StructuredAnalysis, StructuredAnalysisAssessment } from '../../api/types'
 import { Button } from '../ui/Button'
 import { Toggle } from '../ui/Toggle'
+import { AnalysisProgress } from './AnalysisProgress'
 
 function valueText(value: unknown): string {
   if (value == null) return 'not evaluated'
@@ -40,6 +41,29 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 
 function MetricSection({ title, note, items }: { title: string; note: string; items: EvidenceObject[] }) {
   return <Section title={title}><p className="mb-2 text-[11px] leading-4 text-text-muted">{note}</p><EvidenceList items={items} /></Section>
+}
+
+function AvailabilityStatus({ status }: { status: EventEvidenceResponse['availability'][number]['status'] }) {
+  if (status === 'available') return { symbol: '✓', label: 'Available', className: 'text-status-good' }
+  if (status === 'no_suitable_pass') return { symbol: '!', label: 'Limited · no suitable pass', className: 'text-status-moderate' }
+  return { symbol: '×', label: 'Unavailable', className: 'text-status-urgent' }
+}
+
+function AvailabilitySummary({ items }: { items: EventEvidenceResponse['availability'] }) {
+  return <Section title="Availability">
+    <div className="divide-y divide-border/60 rounded border border-border bg-bg/60 text-[11px] print:border-black/20 print:bg-transparent">
+      {items.map((item) => {
+        const status = AvailabilityStatus({ status: item.status })
+        return <div key={item.kind} className="flex items-center justify-between gap-3 px-2 py-1.5" title={item.reason}>
+          <span className="capitalize">{item.kind}</span>
+          <span className={`flex items-center gap-1 text-right ${status.className}`} aria-label={`${item.kind}: ${status.label}. ${item.reason}`}>
+            <span aria-hidden="true">{status.symbol}</span>
+            {status.label}
+          </span>
+        </div>
+      })}
+    </div>
+  </Section>
 }
 
 // A real timeline, not a fabricated one: the artifact has each event's first
@@ -122,7 +146,7 @@ function WeatherSummary({ items }: { items: EvidenceObject[] }) {
     <thead><tr className="text-left text-text-faint"><th className="pb-1 font-normal">Variable</th>{windowOrder.map((w) => <th key={w} className="pb-1 pl-2 text-right font-normal">{w}</th>)}</tr></thead>
     <tbody>{typeOrder.map((type) => <tr key={type} className="border-t border-border/60">
       <td className="py-1 pr-2 capitalize">{type.replace(/_/g, ' ')}</td>
-      {windowOrder.map((w) => { const item = byType.get(type)?.get(w); return <td key={w} className="py-1 pl-2 text-right">{item ? formatWeatherValue(item) : '—'}</td> })}
+      {windowOrder.map((w) => { const item = byType.get(type)?.get(w); return <td key={w} className="py-1 pl-2 text-right">{item ? formatWeatherValue(item) : 'n/a'}</td> })}
     </tr>)}</tbody>
   </table>
 }
@@ -281,13 +305,14 @@ function AnalysisAssessmentSummary({ assessment }: { assessment: StructuredAnaly
     {assessment.findings.map((finding) => <article key={finding.hypothesis_id} className="border-t border-border/60 pt-2 first:border-0 first:pt-0">
       <div className="flex justify-between gap-2"><span className="font-mono">{finding.hypothesis_id}</span><span>{finding.support_score}/100 · {finding.evidence_sufficiency}</span></div>
       <p className="mt-1 text-text-muted">{finding.summary}</p>
-      <p className="mt-1 text-[10px] text-text-faint">Supports: {finding.supporting_evidence_ids.join(', ') || '—'} · Contradicts: {finding.contradicting_evidence_ids.join(', ') || '—'}</p>
+      <p className="mt-1 text-[10px] text-text-faint">Supports: {finding.supporting_evidence_ids.join(', ') || 'n/a'} · Contradicts: {finding.contradicting_evidence_ids.join(', ') || 'n/a'}</p>
     </article>)}
   </div>
 }
 
-function StructuredAnalysisSection({ analysis, loading, error, onGenerate }: { analysis?: StructuredAnalysis; loading: boolean; error?: string; onGenerate: () => void }) {
-  return <Section title="AI interpretation — Investigator / Skeptic">
+function StructuredAnalysisSection({ analysis, loading, error, startedAt, stage, onGenerate }: { analysis?: StructuredAnalysis; loading: boolean; error?: string; startedAt?: string; stage?: string | null; onGenerate: () => void }) {
+  return <Section title="AI interpretation: Investigator / Skeptic">
+    {!analysis && loading && startedAt && <AnalysisProgress startedAt={startedAt} stage={stage} returnMessage="The job keeps running if you close this drawer. Reopen it to see the result." />}
     {!analysis && <><p className="text-[11px] leading-4 text-text-muted">No structured analysis has been run for this FireEvent. Generation uses only the EvidenceObjects and relationship summaries shown in this audit.</p><Button variant="primary" className="mt-3 w-full text-[10px]" disabled={loading} onClick={onGenerate}>{loading ? 'GENERATING INVESTIGATION ANALYSIS…' : 'GENERATE INVESTIGATION ANALYSIS'}</Button></>}
     {error && <div role="alert" className="mt-3 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-[11px] text-red-200">{error}</div>}
     {analysis && <><p className="mb-2 text-[11px] leading-4 text-text-muted">Final structured assessments are evidence-linked interpretations, separate from deterministic evidence and human review. They do not establish cause or responsibility.</p><div className="grid gap-2 lg:grid-cols-2"><AnalysisAssessmentSummary assessment={analysis.final_assessment.investigator} /><AnalysisAssessmentSummary assessment={analysis.final_assessment.skeptic} /></div><div className="mt-3 rounded border border-border bg-bg/60 p-2 text-[11px]"><div className="font-semibold">Unresolved disagreement / verification</div>{analysis.unresolved_questions.length ? <ul className="mt-1 space-y-1 text-text-muted">{analysis.unresolved_questions.map((question, index) => <li key={`${question.question}-${index}`}>• {question.question} <span className="font-mono text-text-faint">({question.evidence_ids.join(', ')})</span></li>)}</ul> : <p className="mt-1 text-text-faint">No final disagreement was retained.</p>}</div><p className="mt-2 text-[10px] text-text-faint">Model/pipeline: {analysis.algorithm_version}. Evidence IDs are shown above; no private reasoning transcript is stored or displayed.</p></>}
@@ -310,6 +335,8 @@ export function EvidenceDrawer({
   onRetry,
   analysis,
   analysisLoading,
+  analysisStartedAt,
+  analysisStage,
   analysisError,
   onGenerateAnalysis,
 }: {
@@ -328,9 +355,12 @@ export function EvidenceDrawer({
   onRetry: () => void
   analysis?: StructuredAnalysis
   analysisLoading: boolean
+  analysisStartedAt?: string
+  analysisStage?: string | null
   analysisError?: string
   onGenerateAnalysis: () => void
 }) {
+  const [showQualityHelp, setShowQualityHelp] = useState(false)
   const grouped = useMemo(() => {
     const items = data?.derivedEvidence ?? []
     const categories = ['peat', 'weather', 'surface', 'propagation', 'imagery']
@@ -367,11 +397,24 @@ export function EvidenceDrawer({
     {error && <div role="alert" className="m-4 rounded border border-status-urgent/40 bg-status-urgent/10 p-3 text-xs text-red-200"><div>{error}</div><Button className="mt-2" onClick={onRetry}>RETRY EVIDENCE</Button></div>}
     {data && <>
       <Section title="Summary">
-        <div className="grid grid-cols-2 gap-2 text-xs"><div><span className="text-text-muted">Scope relation</span><div>{data.scopeRelation}</div></div><div><span className="text-text-muted">Sufficiency</span><div>{data.evidenceSufficiency.value}</div></div><div><span className="text-text-muted">Investigation priority</span><div>{data.investigationPriority}</div></div><div><span className="text-text-muted">Human workflow</span><div>{data.reviewState}</div></div><div><span className="text-text-muted">Chronology</span><div>{data.event.firstDetection.slice(0, 16)} → {data.event.lastDetection.slice(0, 16)}</div></div><div><span className="text-text-muted">Observations</span><div>{data.event.observationCount} · max FRP {data.event.maxFrp?.toFixed(2) ?? '—'} MW</div></div></div>
+        <div className="grid grid-cols-2 gap-2 text-xs"><div><span className="text-text-muted">Scope relation</span><div>{data.scopeRelation}</div></div><div><span className="text-text-muted">Sufficiency</span><div>{data.evidenceSufficiency.value}</div></div><div><span className="text-text-muted">Investigation priority</span><div>{data.investigationPriority}</div></div><div><span className="text-text-muted">Human workflow</span><div>{data.reviewState}</div></div><div><span className="text-text-muted">Chronology</span><div>{data.event.firstDetection.slice(0, 16)} → {data.event.lastDetection.slice(0, 16)}</div></div><div><span className="text-text-muted">Observations</span><div>{data.event.observationCount} · max FRP {data.event.maxFrp?.toFixed(2) ?? 'n/a'} MW</div></div></div>
         <DetectionWindow firstDetection={data.event.firstDetection} lastDetection={data.event.lastDetection} reviewStart={reviewStart} reviewEnd={reviewEnd} />
         <p className="mt-2 text-[10px] text-text-muted">{data.evidenceSufficiency.reason}</p>
-        <p className="mt-1 text-[10px] text-text-muted">Priority and workflow are deterministic routing aids; neither establishes cause, responsibility, or exoneration.</p>
-        <p className="mt-1 text-[10px] text-text-muted">Sourced from NASA FIRMS, quality {((data.observedEvidence[0]?.quality ?? 0.82) * 100).toFixed(0)}%. Full observed-evidence provenance is in the exported PDF.</p>
+        <div className="relative mt-1 flex items-start gap-1 text-[10px] text-text-muted">
+          <span>Sourced from NASA FIRMS, quality {data.observedEvidence[0]?.quality == null ? 'n/a' : `${(data.observedEvidence[0].quality * 100).toFixed(0)}%`}</span>
+          <button
+            type="button"
+            className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border border-text-faint text-[9px] font-semibold leading-none text-text-muted hover:border-accent hover:text-accent"
+            aria-label="Explain FIRMS quality"
+            aria-expanded={showQualityHelp}
+            onClick={() => setShowQualityHelp((open) => !open)}
+          >
+            ?
+          </button>
+          {showQualityHelp && <div role="note" className="absolute top-5 left-0 z-10 max-w-xs rounded border border-border-strong bg-panel p-2 text-[10px] leading-4 text-text-muted shadow-lg">
+            Quality is the evidence-quality value attached to the NASA FIRMS EvidenceObject. The backend assigns 0.82 (82%) to these observed FIRMS records. It is not a fire probability or burned-area estimate.
+          </div>}
+        </div>
         <div className="mt-3 print:hidden">
           <Toggle
             checked={showObservations}
@@ -381,10 +424,10 @@ export function EvidenceDrawer({
           />
         </div>
       </Section>
-      <Section title="Availability / limitations"><div className="space-y-2">{data.availability.map((item) => <div key={item.kind} className="rounded border border-border bg-bg/60 p-2 text-[11px] print:border-black/20 print:bg-transparent"><div className="flex justify-between"><span className="capitalize">{item.kind}</span><span className="text-status-moderate">{item.status}</span></div><p className="mt-1 text-text-muted">{item.reason}</p></div>)}</div></Section>
+      <AvailabilitySummary items={data.availability} />
       <RelatedFireEvents graph={graph} error={graphError} eventId={eventId} />
       <DerivedSummary complexity={grouped.complexity} priority={grouped.priority} />
-      <StructuredAnalysisSection analysis={analysis} loading={analysisLoading} error={analysisError} onGenerate={onGenerateAnalysis} />
+      <StructuredAnalysisSection analysis={analysis} loading={analysisLoading} error={analysisError} startedAt={analysisStartedAt} stage={analysisStage} onGenerate={onGenerateAnalysis} />
       <MetricSection title="Peat / event-buffer intersection" note="The drawer shows the event footprint or buffer intersection only when a peat EvidenceObject is available. Peat overlap is environmental context and does not establish an underground path, cause, or responsibility." items={grouped.peat} />
       <Section title="Weather time window"><p className="mb-2 text-[11px] leading-4 text-text-muted">Every Open-Meteo/ERA5 hourly variable, during the event and the 7 days before it. Historical values, not a forecast; missing weather is not negative evidence.</p><WeatherSummary items={grouped.weather} /></Section>
       <Section title="Imagery acquisition metadata"><p className="mb-2 text-[11px] leading-4 text-text-muted">Closest usable Sentinel-1 (SAR) and Sentinel-2 (optical) scenes before and after the event. Processed display assets are loaded from the committed imagery manifest; catalogue quicklooks are metadata only.</p><ImagerySummary eventId={eventId} items={grouped.imagery} /></Section>
@@ -395,11 +438,11 @@ export function EvidenceDrawer({
           Kept off-screen so the interactive drawer stays succinct. */}
       <div className="hidden print:block">
         <Section title="Observed evidence (full)"><EvidenceList items={data.observedEvidence} /></Section>
-        <Section title="Fire Complexity — every candidate feature"><EvidenceList items={grouped.complexity} /></Section>
-        <Section title="Investigation Priority — every component"><EvidenceList items={grouped.priority} /></Section>
-        <Section title="Weather — every variable/window as full EvidenceObjects"><EvidenceList items={grouped.weather} /></Section>
-        <Section title="Imagery — full scene metadata"><EvidenceList items={grouped.imagery} /></Section>
-        {graph && graph.edges.length > 0 && <Section title="Related FireEvents — full relationship evidence">
+        <Section title="Fire Complexity: every candidate feature"><EvidenceList items={grouped.complexity} /></Section>
+        <Section title="Investigation Priority: every component"><EvidenceList items={grouped.priority} /></Section>
+        <Section title="Weather: every variable/window as full EvidenceObjects"><EvidenceList items={grouped.weather} /></Section>
+        <Section title="Imagery: full scene metadata"><EvidenceList items={grouped.imagery} /></Section>
+        {graph && graph.edges.length > 0 && <Section title="Related FireEvents: full relationship evidence">
           <div className="space-y-2">{graph.edges.map((edge) => <article key={`${edge.sourceEventId}-${edge.targetEventId}`} className="rounded border border-black/20 p-2 text-[11px]">
             <div className="flex justify-between gap-2"><span className="font-mono">{edge.sourceEventId} → {edge.targetEventId}</span><span>{edge.distanceKm} km</span></div>
             <div className="mt-1">{edge.state} · {edge.supportingEvidenceIds?.join(', ') || 'no supporting IDs'} · {edge.modelVersion}</div>

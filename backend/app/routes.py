@@ -149,11 +149,17 @@ def list_audit_events(audit_id: str):
     matched = audit_events.filter_events(
         audit["events"], bbox=bbox, since=since, until=until, state=state
     )
+    has_register_filter = any(value is not None for value in (bbox, since, until, state))
+    matched_routing = audit_events.routing_diagnostics(matched)
+    register_progression = audit_events.progression(
+        audit_id,
+        matched if has_register_filter else None,
+    )
     return jsonify(
         auditId=audit_id,
-        scope=audit["scope"],
+        scope={**audit["scope"], "reviewQueueCount": matched_routing["humanReviewCount"]},
         source=audit_events.source_provenance(),
-        progression=audit_events.progression(audit_id),
+        progression=register_progression,
         total=len(matched),
         limit=limit,
         offset=offset,
@@ -305,3 +311,26 @@ def get_live_firms_detections():
     # reloading browser skip the request entirely.
     response.headers["Cache-Control"] = f"public, max-age={firms_live.CACHE_SECONDS}"
     return response
+
+
+@api.get("/audits/<audit_id>/overlays/<layer>")
+def get_audit_overlay(audit_id: str, layer: str):
+    """Serve an audit-scoped overlay from the same population as the register."""
+    if layer not in {"firms", "groundwater", "peatclsm", "soil-moisture"}:
+        return jsonify(error=f"Unknown audit overlay {layer}"), 404
+    if audit_events.history_status(audit_id) != "AVAILABLE":
+        return jsonify(error=f"No reconstructed history for audit {audit_id}"), 404
+    try:
+        bbox = audit_events.parse_bbox(request.args.get("bbox"))
+        raw_date = request.args.get("date")
+        date = None
+        if raw_date is not None:
+            parsed = audit_events.parse_timestamp(raw_date, "date")
+            if parsed is None or "T" in raw_date or "t" in raw_date:
+                raise audit_events.FilterError("date must be an ISO 8601 date")
+            date = raw_date
+    except audit_events.FilterError as exc:
+        return jsonify(error=str(exc)), 400
+    if layer == "firms":
+        return jsonify(audit_events.firms_overlay(audit_id, bbox=bbox, date=date))
+    return jsonify(audit_events.hydrology_overlay(audit_id, layer, bbox=bbox, date=date))

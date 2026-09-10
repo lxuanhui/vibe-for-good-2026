@@ -28,6 +28,7 @@ export function Toggle({ checked, onChange, label, disabled, disabledHint, swatc
       <button
         type="button"
         role="switch"
+        aria-label={label}
         aria-checked={checked}
         disabled={disabled}
         onClick={onChange}

@@ -37,8 +37,8 @@ The map loads real derived 2019 FIRMS FireEvents from the audit-scoped API;
 the audit-scope panel overlays the map so review dates, a private GeoJSON
 management-unit boundary, and a configurable context buffer remain validated
 before history build. The register remains the primary screening workspace and
-is opened from the map after the same handoff. The static FIRMS export remains
-a separately labelled layer.
+is opened from the map after the same handoff. The scoped map includes a
+separately labelled FIRMS Hotspots layer for raw observations.
 
 The real demo path uses the audit-scoped Flask endpoints:
 `POST /api/audits`, `POST /api/audits/{id}/scope/upload`,

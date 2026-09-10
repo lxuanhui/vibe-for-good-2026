@@ -11,7 +11,7 @@ export function Stage1Gate({ gate }: { gate: Stage1GateResult }) {
             passed ? 'border-status-good/50 text-status-good' : 'border-status-urgent/50 text-status-urgent'
           }`}
         >
-          {passed ? 'Passed — qualified for investigation' : 'Rejected — no investigation budget spent'}
+          {passed ? 'Passed. Qualified for investigation' : 'Rejected. No investigation budget spent'}
         </span>
       </div>
       <ol className="space-y-2">

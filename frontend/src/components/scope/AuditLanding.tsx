@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Layer, Map, Source } from 'react-map-gl/maplibre'
 import type { FeatureCollection, Point } from 'geojson'
 import { fetchLiveFirmsDetections } from '../../api/client'
+import { FIRMS_HOTSPOT_COLORS } from '../../lib/layerColors'
 import { Button } from '../ui/Button'
 import { illuminationReference, nightCoverage } from '../../lib/illumination'
 import { SOLAR_NIGHT_COLOR } from '../../lib/layerColors'
@@ -141,9 +142,9 @@ export function AuditLanding({ onStartAudit, onOpenContext }: { onStartAudit: ()
         >
           <Source id="solar-night-coverage" type="geojson" data={night}><Layer id="solar-night-coverage-fill" type="fill" paint={{ 'fill-color': SOLAR_NIGHT_COLOR, 'fill-opacity': 0.3 }} /></Source>
           <Source id="firms-live-sea" type="geojson" data={hotspots}>
-            <Layer id="firms-live-glow" type="circle" paint={{ 'circle-color': '#ff351b', 'circle-radius': ['interpolate', ['linear'], ['get', 'frp'], 0, 7, 30, 15, 100, 25], 'circle-blur': 0.8, 'circle-opacity': ['interpolate', ['linear'], ['get', 'ageHours'], 0, 0.85, 6, 0.6, 24, 0.18] }} />
-            <Layer id="firms-live-hotspots" type="circle" paint={{ 'circle-color': '#ff5c2e', 'circle-radius': ['interpolate', ['linear'], ['get', 'frp'], 0, 2.5, 30, 5, 100, 8], 'circle-stroke-color': '#ffe6a3', 'circle-stroke-width': 0.8, 'circle-opacity': ['interpolate', ['linear'], ['get', 'ageHours'], 0, 1, 6, 0.86, 24, 0.42] }} />
-            <Layer id="firms-live-cores" type="circle" paint={{ 'circle-color': '#fff4ce', 'circle-radius': 1.5, 'circle-opacity': ['interpolate', ['linear'], ['get', 'ageHours'], 0, 1, 24, 0.5] }} />
+            <Layer id="firms-live-glow" type="circle" paint={{ 'circle-color': FIRMS_HOTSPOT_COLORS.glow, 'circle-radius': ['interpolate', ['linear'], ['get', 'frp'], 0, 7, 30, 15, 100, 25], 'circle-blur': 0.8, 'circle-opacity': ['interpolate', ['linear'], ['get', 'ageHours'], 0, 0.85, 6, 0.6, 24, 0.18] }} />
+            <Layer id="firms-live-hotspots" type="circle" paint={{ 'circle-color': FIRMS_HOTSPOT_COLORS.point, 'circle-radius': ['interpolate', ['linear'], ['get', 'frp'], 0, 2.5, 30, 5, 100, 8], 'circle-stroke-color': FIRMS_HOTSPOT_COLORS.stroke, 'circle-stroke-width': 0.8, 'circle-opacity': ['interpolate', ['linear'], ['get', 'ageHours'], 0, 1, 6, 0.86, 24, 0.42] }} />
+            <Layer id="firms-live-cores" type="circle" paint={{ 'circle-color': FIRMS_HOTSPOT_COLORS.core, 'circle-radius': 1.5, 'circle-opacity': ['interpolate', ['linear'], ['get', 'ageHours'], 0, 1, 24, 0.5] }} />
           </Source>
         </Map>
         {(firmsStatus !== 'ready' || hotspots.features.length === 0) && <div className={`pointer-events-none absolute inset-0 z-[5] flex items-center justify-center ${firmsStatus === 'loading' ? 'bg-status-info/[0.04]' : ''}`} aria-hidden="true">
