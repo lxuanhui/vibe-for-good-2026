@@ -51,7 +51,7 @@ def test_extract_clipped_rows_preserves_units_and_drops_outside_or_nan(tmp_path)
         handle["longitude"] = np.array([116.2, 116.3, 116.2])
         handle["sm_surface"] = np.array([0.31, np.nan, 0.4])
         handle["sm_rootzone"] = np.array([0.42, 0.52, -9999.0])
-        handle["depth_to_water_table_from_surface_in_peat"] = np.array([0.8, -1.2, -9999.0])
+        handle["depth_to_water_table_from_surface_in_peat"] = np.array([0.08, -1.2, -9999.0])
 
     rows = smap.extract_clipped_rows(source)
     assert rows == [{
@@ -59,7 +59,7 @@ def test_extract_clipped_rows_preserves_units_and_drops_outside_or_nan(tmp_path)
         "longitude": 116.2,
         "surface_soil_moisture_m3_m3": 0.31,
         "root_zone_soil_moisture_m3_m3": 0.42,
-        "depth_to_water_table_from_surface_in_peat_m": 0.8,
+        "depth_to_water_table_from_surface_in_peat_m": 0.08,
     }, {
         "latitude": -3.8,
         "longitude": 116.3,
@@ -86,7 +86,7 @@ def test_cache_marks_peatclsm_water_level_available(tmp_path):
         handle["latitude"] = np.array([-3.8])
         handle["longitude"] = np.array([116.2])
         handle["sm_surface"] = np.array([0.31])
-        handle["depth_to_water_table_from_surface_in_peat"] = np.array([0.8])
+        handle["depth_to_water_table_from_surface_in_peat"] = np.array([0.08])
 
     result = smap.build_cache(tmp_path, source_file=source, session=_Session())
     assert result.status == smap.SourceStatus.OK

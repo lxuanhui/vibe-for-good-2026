@@ -664,7 +664,8 @@ def run_structured_analysis(
                             current_round,
                             exc,
                         )
-            assert last_error is not None
+            if last_error is None:  # pragma: no cover - loop always sets it before falling through
+                raise RuntimeError("Retry loop exited without recording a failure")
             raise last_error
 
         # Both roles in a round read only the *previous* round, never each

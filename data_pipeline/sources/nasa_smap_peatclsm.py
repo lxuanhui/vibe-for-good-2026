@@ -186,6 +186,10 @@ def extract_clipped_rows(source_file: Path, *, bbox=DEMO_BBOX) -> list[dict[str,
                 row["surface_soil_moisture_m3_m3"] = float(surface_value)
             if root_value is not None and _valid(root_value, 0, 1):
                 row["root_zone_soil_moisture_m3_m3"] = float(root_value)
+            # Negative is below the peat surface (drained/degraded peat can sit
+            # metres down in the dry season this demo covers); positive is
+            # shallow ponding above it, which peat rarely holds more than ~15cm
+            # of -- a larger positive reading is a sentinel/unit issue, not water.
             if water_table_value is not None and _valid(water_table_value, -5, 0.15):
                 row["depth_to_water_table_from_surface_in_peat_m"] = float(water_table_value)
             if flux_value is not None and _valid(flux_value, -0.001, 0.001):
