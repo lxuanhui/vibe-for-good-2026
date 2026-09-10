@@ -32,7 +32,7 @@ apply an older decision without checking the entries above it.
 
 ## 2026-09-10 - The thermal-lobe radius is the clustering module's 1 km and is refused at or above the clustering radius; no served artifact carried the metric
 
-**Status:** done · PR #PRNUM · Closes #213 · Refs #86, #214
+**Status:** done · PR #254 · Closes #213 · Refs #86, #214
 
 **Decision.** `complexity/fire_complexity.py` no longer has a lobe radius of
 its own. It imports `DEFAULT_LOBE_DISTANCE_KM` (1 km) from
@@ -492,7 +492,7 @@ always 1 for every event in the artifact (0 of 1,842 multi-observation
 events have more). That is #213, not fixed here because it
 changes a served metric and so needs regeneration.
 
-> **Fixed 2026-09-10 by PR #PRNUM (#213).** The complexity module now uses
+> **Fixed 2026-09-10 by PR #254 (#213).** The complexity module now uses
 > the clustering module's 1 km lobe radius and refuses one at or above the
 > clustering radius. No regeneration was due: no committed artifact carries
 > the metric, and the API serves every complexity field as "not evaluated"
