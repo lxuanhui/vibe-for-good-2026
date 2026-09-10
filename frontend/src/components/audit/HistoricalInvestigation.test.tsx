@@ -168,6 +168,7 @@ test('reports human-review routing for the current register population', () => {
   expect(screen.getByRole('heading', { name: 'Observation derivation' })).toBeTruthy()
   expect(screen.getByText('20,471')).toBeTruthy()
   expect(screen.getAllByText('3,610').length).toBeGreaterThan(0)
+  expect(screen.queryByText('5.7 observations per FireEvent on average. This is clustering, not a review queue.')).toBeNull()
   expect(screen.getByText('Count includes the configured context buffer: 16 of 3,610 FireEvents.')).toBeTruthy()
   expect(screen.getByRole('heading', { name: 'Scoped routing diagnostic' })).toBeTruthy()
   expect(screen.getByText('ROUTED TO HUMAN REVIEW IN CURRENT REGISTER')).toBeTruthy()
