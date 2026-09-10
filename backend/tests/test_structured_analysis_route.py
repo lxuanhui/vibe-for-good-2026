@@ -160,7 +160,7 @@ def test_poll_reports_running_work_without_starting_a_second_job(client, monkeyp
     monkeypatch.setattr(
         analysis_jobs,
         "_invoke_worker",
-        lambda function_name, audit_id, event: invocations.append(
+        lambda function_name, audit_id, event, job_id: invocations.append(
             {"function": function_name, "auditId": audit_id, "eventId": event}
         ),
     )
@@ -254,3 +254,83 @@ def test_a_running_job_reports_its_stage_and_stored_prose_follows_the_copy_rules
     assert summaries
     assert all("\u2014" not in summary for summary in summaries)
     assert summaries[0] == "VH backscatter fell after 03 Sep, no revegetation, consistent with sustained combustion"
+
+
+def test_two_simultaneous_dispatches_start_one_job_and_invoke_the_worker_once(monkeypatch):
+    """#189: the claim is atomic, so the loser of a race polls the winner's job.
+
+    The barrier parks both threads after the read-side check and before the
+    write, which is exactly the window the old read-then-`start` left open.
+    """
+    import threading
+
+    _reset()
+    event_id = _event_id(create_app({"TESTING": True}).test_client())
+    monkeypatch.setenv("ANALYSIS_WORKER_FUNCTION", "vibe-analysis-worker")
+    invocations: list[str] = []
+    invocations_lock = threading.Lock()
+
+    def _invoke(function_name, audit_id, event, *claim):
+        # `*claim` so the test still runs, and fails on the count, against the
+        # read-then-act it was written to catch, which passed no job id.
+        with invocations_lock:
+            invocations.append(claim[0] if claim else None)
+
+    monkeypatch.setattr(analysis_jobs, "_invoke_worker", _invoke)
+
+    both_past_the_read = threading.Barrier(2, timeout=5)
+    real_evidence = audit_events.analysis_evidence
+
+    def evidence_then_wait(audit_id, event):
+        pack = real_evidence(audit_id, event)
+        both_past_the_read.wait()
+        return pack
+
+    monkeypatch.setattr(audit_events, "analysis_evidence", evidence_then_wait)
+
+    results: list[dict] = []
+    results_lock = threading.Lock()
+
+    def press():
+        job = analysis_jobs.dispatch(AUDIT, event_id)
+        with results_lock:
+            results.append(job)
+
+    presses = [threading.Thread(target=press) for _ in range(2)]
+    for thread in presses:
+        thread.start()
+    for thread in presses:
+        thread.join(timeout=10)
+
+    assert len(results) == 2
+    assert len(invocations) == 1, f"the worker was invoked {len(invocations)} times for one event"
+    assert {job["jobStatus"] for job in results} == {"RUNNING"}
+    assert len({job["jobId"] for job in results}) == 1, "both requests must describe the same job"
+    assert invocations == [results[0]["jobId"]]
+    _reset()
+
+
+def test_a_re_dispatched_stale_job_ignores_the_dead_workers_late_outcome(client, monkeypatch):
+    """The second half of #189: re-claiming a stale row must not leave the old
+    worker able to write COMPLETE or a stage over the new job."""
+    event_id = _event_id(client)
+    monkeypatch.setenv("ANALYSIS_WORKER_FUNCTION", "vibe-analysis-worker")
+    monkeypatch.setattr(analysis_jobs, "_invoke_worker", lambda *args: None)
+
+    first = client.post(f"/api/audits/{AUDIT}/events/{event_id}/analyse").get_json()
+    audit_store.update(
+        analysis_jobs.job_key(AUDIT, event_id),
+        lambda record: record.__setitem__("startedAt", "2019-09-01T00:00:00+00:00"),
+    )
+    second = client.post(f"/api/audits/{AUDIT}/events/{event_id}/analyse").get_json()
+    assert second["jobId"] != first["jobId"]
+
+    # The dead worker turns out not to be dead and finishes under its old claim.
+    late = analysis_jobs.run(AUDIT, event_id, provider=_provider, job_id=first["jobId"])
+    assert late["jobId"] == second["jobId"]
+    polled = client.get(f"/api/audits/{AUDIT}/events/{event_id}/analyse").get_json()
+    assert (polled["jobId"], polled["jobStatus"], polled["stage"]) == (second["jobId"], "RUNNING", "Starting")
+
+    # The live claim records normally.
+    analysis_jobs.run(AUDIT, event_id, provider=_provider, job_id=second["jobId"])
+    assert client.get(f"/api/audits/{AUDIT}/events/{event_id}/analyse").get_json()["jobStatus"] == "COMPLETE"

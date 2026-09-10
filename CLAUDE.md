@@ -54,8 +54,12 @@ than products. One role is now filled: **audit session state lives in
 DynamoDB** (`aws_dynamodb_table.audit_state`, PAY_PER_REQUEST), because
 Lambda served later register/graph/evidence calls from a different warm
 container than the one that created the audit, so process-local dicts lost
-the scope. That decision covers *session state only*; the
-bulky-immutable-evidence and disposable-cache roles are still unfilled.
+the scope. That decision covers *session state only*. The **disposable
+cache** role is filled too: `GET /api/firms/live` keeps the shared copy of
+its 15-minute cache in S3 (`aws_s3_bucket.cache`, one gzipped object,
+lifecycle-expired), because a cold container's process-local dict was empty
+and every cold start refetched from NASA. Only the bulky-immutable-evidence
+role is still unfilled.
 
 **DynamoDB and S3 are now authorised** (owner's call, 2026-09-09), so filling
 those roles no longer needs a fresh argument about the service — but it does

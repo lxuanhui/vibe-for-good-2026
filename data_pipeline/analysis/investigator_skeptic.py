@@ -16,7 +16,7 @@ from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any
+from typing import Any, ClassVar
 
 ALGORITHM_VERSION = "investigator-skeptic-v1"
 MAX_ROUNDS = 3
@@ -173,17 +173,33 @@ class AgentInput:
     def evidence_ids(self) -> tuple[str, ...]:
         return tuple(item["evidence_id"] for item in self.evidence)
 
+    # The fields every call in one assessment shares, in the order they are
+    # serialized. Kept as a named tuple of keys rather than implied by
+    # `to_dict` so a provider can split the serialized input at the boundary
+    # and a test can pin it.
+    SHARED_FIELDS: ClassVar[tuple[str, ...]] = ("event_id", "evidence", "evidence_ids", "hypotheses")
+
     def to_dict(self) -> dict[str, Any]:
-        """Serialize the provider input without any hidden conversation state."""
+        """Serialize the provider input without any hidden conversation state.
+
+        Key order is deliberate and is part of the contract: the pack, its
+        ID list and the hypotheses come first, then the fields that differ
+        per role and per round. All four provider calls in an assessment
+        share the same pack and hypotheses, so serialized this way they share
+        a byte-identical prefix that a provider can mark for prompt caching
+        (#147). Serialized with the role first, as before, the shared prefix
+        was the system framing alone, well under any cacheable minimum.
+        The content is unchanged; only its order is.
+        """
 
         return {
             "event_id": self.event_id,
-            "role": self.role.value,
-            "round": self.round_number,
-            "phase": self.phase.value,
             "evidence": [dict(item) for item in self.evidence],
             "evidence_ids": list(self.evidence_ids),
             "hypotheses": [dict(item) for item in self.hypotheses],
+            "role": self.role.value,
+            "round": self.round_number,
+            "phase": self.phase.value,
             "prior_assessment": self.prior_assessment.to_dict()
             if self.prior_assessment
             else None,

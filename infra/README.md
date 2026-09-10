@@ -155,8 +155,13 @@ the bucket name is a literal here and in `bootstrap/variables.tf` — change
 both together.
 
 **The CI role is service-scoped, not action-scoped.** It can manage Lambda,
-API Gateway, logs, and IAM roles whose names start with `vibe-for-good-2026`,
-plus the state bucket. That is deliberately looser than least privilege:
+API Gateway, logs, DynamoDB tables, and IAM roles whose names start with
+`vibe-for-good-2026`, plus the state bucket. Those grants live in
+`bootstrap/`. A grant a main-stack resource needs beyond them is declared in
+`ci_role.tf` in this stack as an inline policy on the role, which the role
+may put on itself: planned on the PR, applied on merge, no hand step. The
+cache-bucket grant is the first. Bootstrap holds only what CI cannot give
+itself: the role, its trust policy, and the state bucket. That is deliberately looser than least privilege:
 tightening it to individual actions is worth doing before this account holds
 anything else, and splitting it into a read-only plan role and a write apply
 role would be the next step after that.

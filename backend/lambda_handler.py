@@ -15,9 +15,20 @@ cannot drift apart -- the worker is not a separate service, only a second
 door into the same code with a longer timeout.
 """
 
+import logging
+
 from apig_wsgi import make_lambda_handler
 
 from app import analysis_jobs, create_app
+
+# The runtime attaches its CloudWatch handler to the root logger but leaves
+# the level at WARNING, so an INFO record from `app.*` is dropped before it
+# reaches the handler. The one INFO record that matters is the per-call
+# Bedrock usage line in `analysis_provider` (cache read/write tokens), which
+# is how the cost figure in docs/infra.md gets measured rather than
+# estimated. Scoped to this package, not the root, so boto3 and urllib3 stay
+# quiet.
+logging.getLogger("app").setLevel(logging.INFO)
 
 # Built once per cold start and reused across invocations in the same
 # execution environment.
@@ -42,4 +53,4 @@ def analysis_worker(event, context):
         # Raising is right here: Lambda records the failure and the payload,
         # and there is no job row to mark failed -- nothing valid was named.
         raise ValueError("analysis worker payload requires auditId and eventId")
-    return analysis_jobs.run(audit_id, event_id)
+    return analysis_jobs.run(audit_id, event_id, job_id=event.get("jobId"))

@@ -23,8 +23,8 @@
   },
   "acquisition": {
     "collection": "sentinel-1-grd",
-    "product_id": "S1A_IW_GRDH_1SDV_20190904T215955_20190904T220020_028877_0345E3_7233_COG",
-    "acquisition_time": "2019-09-04T21:59:55.687449Z",
+    "product_id": "S1A_IW_GRDH_1SDV_20190904T220020_20190904T220045_028877_0345E3_4185_COG",
+    "acquisition_time": "2019-09-04T22:00:20.687603Z",
     "time_range": {
       "from": "2019-09-04T00:00:00Z",
       "to": "2019-09-04T23:59:59Z"
@@ -36,8 +36,8 @@
       "state": "descending"
     },
     "cloud_cover_pct": null,
-    "temporal_distance_hours": 16.348802,
-    "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-1-grd/items/S1A_IW_GRDH_1SDV_20190904T215955_20190904T220020_028877_0345E3_7233_COG"
+    "temporal_distance_hours": 16.355747,
+    "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-1-grd/items/S1A_IW_GRDH_1SDV_20190904T220020_20190904T220045_028877_0345E3_4185_COG"
   },
   "processing": {
     "recipe_id": "s1-vvvh-db-composite-v1",
@@ -74,5 +74,5 @@
   ],
   "source": "Copernicus Data Space Ecosystem, Sentinel Hub Process API",
   "generator_version": "cdse-process-imagery-v1",
-  "generated_at": "2026-09-10T05:56:08+00:00"
+  "generated_at": "2026-09-10T11:38:02+00:00"
 }

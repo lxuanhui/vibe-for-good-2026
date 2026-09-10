@@ -298,7 +298,15 @@ def get_live_firms_detections():
     except firms_live.FirmsUnavailable as exc:
         current_app.logger.warning("Live FIRMS layer unavailable: %s", exc)
         return jsonify(status="unavailable", reason=str(exc)), 503
+    started = perf_counter()
     response = jsonify(payload)
+    # The encode stage is the one `firms_live` cannot see; logged beside its
+    # read line so a cold request's time splits fully (#251). ~10 ms locally.
+    current_app.logger.info(
+        "Live FIRMS layer encoded: encode_ms=%.1f bytes=%d",
+        (perf_counter() - started) * 1000,
+        response.calculate_content_length() or 0,
+    )
     # The server already caches upstream for the same window; saying so lets a
     # reloading browser skip the request entirely.
     response.headers["Cache-Control"] = f"public, max-age={firms_live.CACHE_SECONDS}"

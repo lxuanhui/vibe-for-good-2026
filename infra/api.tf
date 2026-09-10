@@ -83,6 +83,90 @@ resource "aws_iam_role_policy" "audit_state" {
   policy = data.aws_iam_policy_document.audit_state.json
 }
 
+# --- Shared live-layer cache ----------------------------------------------
+#
+# `GET /api/firms/live` caches its upstream NASA fetch for 15 minutes. That
+# cache used to be a dict in the Lambda process, which is the failure the
+# audit-state table above already worked through: a cold container starts
+# with an empty dict, so the first visitor after every cold start waited on
+# NASA (~2.4s of extra time-to-first-byte, measured), and two warm containers
+# each spent an upstream transaction for the same window. This bucket is the
+# copy every container shares. It fills spec §8's disposable-cache role and
+# nothing else: one object, overwritten on every refresh, expired by the
+# lifecycle rule below if the route stops refreshing it. Never audit
+# evidence; the evidence path reads the committed 2019 artifact.
+#
+# S3 rather than a row in the audit-state table because the payload does not
+# reliably fit DynamoDB's 400 KB item: ~100 KB gzipped at the 5,389
+# detections measured on 2026-09-10, past the cap near 20,000 detections,
+# which is a haze-season day (docs/decision-log.md, 2026-09-10, live FIRMS
+# cache). The account id keeps the name globally unique without inventing a
+# suffix nobody would recognise.
+data "aws_caller_identity" "current" {}
+
+resource "aws_s3_bucket" "cache" {
+  bucket = "${local.name}-cache-${data.aws_caller_identity.current.account_id}"
+}
+
+# Same reasoning as the state bucket in bootstrap/state.tf: private, one
+# tenant, public access blocked -- and here the contents are a public feed,
+# so a customer managed key would add a key policy for no confidentiality.
+# trivy:ignore:AWS-0132
+resource "aws_s3_bucket_server_side_encryption_configuration" "cache" {
+  bucket = aws_s3_bucket.cache.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "cache" {
+  bucket                  = aws_s3_bucket.cache.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# The route overwrites its one object every 15 minutes while anyone is
+# looking. If nobody is, this is what stops a stale copy sitting there
+# forever. It is hygiene, not the freshness rule: the route itself never
+# serves an object older than its own CACHE_SECONDS whatever this says
+# (backend/app/firms_live.py). No versioning, deliberately -- a cache has no
+# previous version worth keeping.
+resource "aws_s3_bucket_lifecycle_configuration" "cache" {
+  bucket = aws_s3_bucket.cache.id
+
+  rule {
+    id     = "expire-live-cache"
+    status = "Enabled"
+
+    filter {
+      prefix = "firms-live/"
+    }
+
+    expiration {
+      days = 1
+    }
+  }
+}
+
+# Object read/write under the one prefix the route uses. No ListBucket and
+# no Delete: the route never enumerates and expiry is the lifecycle rule's.
+data "aws_iam_policy_document" "live_cache" {
+  statement {
+    actions   = ["s3:GetObject", "s3:PutObject"]
+    resources = ["${aws_s3_bucket.cache.arn}/firms-live/*"]
+  }
+}
+
+resource "aws_iam_role_policy" "live_cache" {
+  name   = "${local.name}-live-cache"
+  role   = aws_iam_role.api.id
+  policy = data.aws_iam_policy_document.live_cache.json
+}
+
 # Bedrock Converse authorizes against bedrock:InvokeModel. The model/profile
 # is a Terraform variable because availability differs by account and region;
 # this role receives no other Bedrock permissions.
@@ -154,6 +238,11 @@ resource "aws_lambda_function" "api" {
       # touches FIRMS, so it is not given the key.
       NASA_FIRMS_MAP_KEY = var.nasa_firms_map_key
 
+      # The shared copy of that route's 15-minute cache, so a cold container
+      # reads it instead of refetching from NASA. Unset locally, where the
+      # process-local cache is the only level and is enough.
+      LIVE_CACHE_BUCKET = aws_s3_bucket.cache.bucket
+
       # Unset locally, which is what makes `analysis_jobs.dispatch` run the
       # work inline for the dev server instead of reporting a job nothing
       # will ever pick up.
@@ -164,6 +253,7 @@ resource "aws_lambda_function" "api" {
   depends_on = [
     aws_iam_role_policy_attachment.api_logs,
     aws_iam_role_policy.audit_state,
+    aws_iam_role_policy.live_cache,
     aws_iam_role_policy.bedrock_inference,
     aws_iam_role_policy.invoke_analysis_worker,
     aws_cloudwatch_log_group.api,

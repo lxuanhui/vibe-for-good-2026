@@ -399,17 +399,66 @@ def _review_window(session: dict[str, Any]) -> tuple[datetime | None, datetime |
     )
 
 
+# The two review-queue figures a scope serves come from different stages and
+# have different denominators, and the response says so beside each one so a
+# reader never has to infer it. `reviewQueueCount` is the later calibrated
+# routing count (HIGH/URGENT priority, `review_routing`); `compression` is
+# Stage-1's events-to-review-queue ratio over every event not classified
+# LIKELY_NON_FIRE (data_pipeline/triage/stage1.py). They are not a matched
+# pair: on the demo scope the first is 396 and the second is 1.0 over 3,610,
+# and a maintainer who "fixes" that by dividing eventCount by reviewQueueCount
+# manufactures a ~9x reduction nothing measured (#187). Naming the population
+# is what keeps that fix from looking like one.
+REVIEW_QUEUE_BASIS = {
+    "population": "CALIBRATED_ROUTING",
+    "description": "FireEvents routed to HUMAN_REVIEW by calibrated review routing, "
+    "which is HIGH or URGENT investigation priority.",
+}
+COMPRESSION_BASIS = {
+    "numerator": "eventCount",
+    "denominator": "stage1ReviewQueueCount",
+    "description": "Stage-1 events-to-review-queue ratio. The denominator is every FireEvent "
+    "Stage-1 did not classify LIKELY_NON_FIRE, a state FIRMS-only input cannot reach, "
+    "so the ratio is 1.0 on this dataset by design.",
+}
+
+
+def review_queue_fields(events: list[dict[str, Any]]) -> dict[str, Any]:
+    """The review-queue figures for a served scope, each naming its population.
+
+    One function for both scope paths so the artifact-backed and session-backed
+    responses cannot describe the same number differently. Every value is
+    derived from the events actually served: a narrowed register carrying the
+    artifact's unfiltered totals is the same mislabel one layer down.
+    """
+    # Stage-1 routes everything that is not LIKELY_NON_FIRE, a state FIRMS-only
+    # input cannot reach (CLAUDE.md, "State of things"), so this equals the
+    # event count today and the ratio stays 1.0x. Derived rather than assumed,
+    # so it stays honest if richer input ever makes the state reachable.
+    stage1_queue = sum(1 for event in events if event["triage"]["state"] != "LIKELY_NON_FIRE")
+    return {
+        "reviewQueueCount": routing_diagnostics(events)["humanReviewCount"],
+        "reviewQueueBasis": REVIEW_QUEUE_BASIS,
+        "stage1ReviewQueueCount": stage1_queue,
+        "compression": round(len(events) / stage1_queue, 4) if stage1_queue else None,
+        "compressionBasis": COMPRESSION_BASIS,
+    }
+
+
 def get_audit(audit_id: str) -> dict[str, Any] | None:
     """The reconstructed history for an audit id, if one has been built."""
     artifact = _load_events()["audits"].get(audit_id)
     if artifact is not None:
         events = attach_routing(artifact["events"])
+        # The artifact's own `reviewQueueCount` is Stage-1's queue (3,610 on
+        # the demo scope) and its `compression` is Stage-1's ratio. Both are
+        # replaced here by the same-named served fields -- so the artifact's
+        # Stage-1 count is what `stage1ReviewQueueCount` carries, under a
+        # name that says so, rather than being silently overwritten by the
+        # calibrated routing count as it was before #187.
         return {
             **artifact,
-            "scope": {
-                **artifact["scope"],
-                "reviewQueueCount": routing_diagnostics(events)["humanReviewCount"],
-            },
+            "scope": {**artifact["scope"], **review_queue_fields(events)},
             "events": events,
         }
     # The current history adapter has one committed real dataset. Once a
@@ -432,12 +481,6 @@ def get_audit(audit_id: str) -> dict[str, Any] | None:
     # review window. Stage-1 state, sufficiency, priority, and workflow are
     # annotations or explicit user filters, never membership gates.
     events = attach_routing(scoped_register_events(demo["events"], since=since, until=until))
-    review_queue = routing_diagnostics(events)["humanReviewCount"]
-    # Stage-1 routes everything that is not LIKELY_NON_FIRE, a state FIRMS-only
-    # input cannot reach (CLAUDE.md, "State of things"), so this equals the
-    # event count today and the ratio stays 1.0x. Derived rather than assumed,
-    # so it stays honest if richer input ever makes the state reachable.
-    stage1_queue = sum(1 for event in events if event["triage"]["state"] != "LIKELY_NON_FIRE")
     narrowed = len(events) != len(demo["events"])
     return {
         "scope": {
@@ -446,19 +489,11 @@ def get_audit(audit_id: str) -> dict[str, Any] | None:
             "reviewEnd": session["review_end"],
             "contextBufferKm": session["context_buffer_km"],
             "eventCount": len(events),
-            "reviewQueueCount": review_queue,
-            # Recomputed rather than copied from the artifact: a filtered
-            # register carrying the artifact's unfiltered totals is the same
-            # mislabel one layer down.
-            #
-            # Careful -- this is NOT eventCount/reviewQueueCount, despite the
-            # two sitting side by side. `compression` is Stage-1's
-            # events-to-review-queue figure, whose denominator is "events not
-            # LIKELY_NON_FIRE" (data_pipeline/triage/stage1.py:191), while the
-            # `reviewQueueCount` served above is the later calibrated
-            # HIGH/URGENT routing count. Dividing by the wrong one turns a
-            # documented 1.0x into a ~9x reduction nothing measured. See #187.
-            "compression": round(len(events) / stage1_queue, 4) if stage1_queue else None,
+            # Recomputed from the window's events rather than copied from the
+            # artifact, and each figure names its population; see
+            # `review_queue_fields` for why the two must never be divided
+            # into each other.
+            **review_queue_fields(events),
             # Every observation in the artifact was clustered into exactly one
             # event, so summing the window's events narrows this honestly --
             # and reproduces the artifact's own 20,471 at full coverage.

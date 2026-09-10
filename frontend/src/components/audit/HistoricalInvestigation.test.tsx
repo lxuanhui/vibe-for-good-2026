@@ -264,3 +264,13 @@ test('keeps routing explanation out of the normal register layout', () => {
   expect(screen.queryByRole('region', { name: 'Decision-oriented routing summary' })).toBeNull()
   expect(screen.getByRole('heading', { name: 'Scoped routing diagnostic' })).toBeTruthy()
 })
+
+test('offers a direct action to edit the audit scope', async () => {
+  fetchAuditRegisterMock.mockResolvedValue({ events: [], progression: progression(0) })
+  const onOpenScope = vi.fn()
+
+  render(<HistoricalInvestigation scope={scope('2019-09-02', '2019-09-03')} onOpenScope={onOpenScope} />)
+
+  fireEvent.click(await screen.findByRole('button', { name: 'EDIT SCOPE' }))
+  expect(onOpenScope).toHaveBeenCalledTimes(1)
+})

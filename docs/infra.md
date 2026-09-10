@@ -27,6 +27,7 @@ bucket and the CI role).
 | **Amplify Hosting** | `console` app + PR previews | The frontend, and a preview per pull request | **$0.02** |
 | **CloudWatch Logs** | 3 groups, 14-day retention, ~11 KB stored | Both Lambdas and API Gateway. Retention is explicit so the groups die with the stack | **$0.00** |
 | **S3** | `vibe-for-good-2026-tfstate-apse1` — versioned, encrypted, lifecycle-expired | Terraform state. Not application storage | **$0.01** |
+| **S3** | `vibe-for-good-2026-dev-cache-<account>` — encrypted, public access blocked, objects expire after a day | The shared copy of `GET /api/firms/live`'s 15-minute cache, so a cold Lambda container reads ~100 KB from S3 instead of refetching from NASA. One object, overwritten every refresh; the spec's disposable-cache role | not yet billed (created 2026-09-10); est. **< $0.01**: one PUT per refresh and one GET per cold start at $0.005 and $0.0004 per thousand, ~0.1 MB stored |
 | **IAM** | 3 roles + inline policies, 1 OIDC provider | CI authenticates over OIDC; there are no access keys in this repo by design | free |
 
 **Total for this project: about $0.03/month**, and most of that is Amplify
@@ -79,12 +80,40 @@ Only three things, in order of likelihood:
    So ~$15 per 100 assessments. Cheaper models are not a saving here: the
    one tried below Haiku 4.5 (Gemma 3 27B) was slower and failed schema
    validation, and cost per *successful* assessment is the only figure that
-   matters. The
-   real lever is Bedrock prompt caching on the ~19k-token evidence prefix
-   every one of the four calls repeats — cache reads are $0.10/1M against
-   $1.00/1M, taking an assessment to roughly $0.09 with no quality tradeoff.
-   Not built yet (#147); the Lambda share of the same request is a rounding
-   error beside it.
+   matters. The Lambda share of the same request is a rounding error beside
+   it.
+
+   The prefix every one of the four calls repeats (system framing, evidence
+   pack, hypotheses) is sent behind a Bedrock cache point (#147). Cache
+   reads bill at $0.10/1M against $1.00/1M fresh, cache writes at $1.25/1M.
+   The two roles of a round run in parallel and a cache entry is readable
+   only once the response that wrote it has begun, so per assessment that
+   is **two writes and two reads, not one write and three reads**. Measured
+   on 2026-09-10 through the production adapter (`bedrock_runner` with the
+   real 128-object pack for the demo event, Haiku 4.5, `max_rounds=2`, four
+   calls per assessment), which corrects the per-call figure above: the
+   real prefix is ~36k tokens, not ~19k, so the uncached baseline is nearer
+   $0.20 than $0.15.
+
+   | Assessment | Fresh input | Cache write | Cache read | Output | Wall | Cost |
+   |---|---|---|---|---|---|---|
+   | Uncached (`BEDROCK_PROMPT_CACHE=0`) | 152,422 | 0 | 0 | 8,900 | 41.8s | ~$0.20 |
+   | Cached, first in 5 min | 7,526 | 72,488 | 72,488 | 9,094 | 33.3s | ~$0.15 |
+   | Cached, second within 5 min | 7,446 | 0 | 144,976 | 8,904 | 36.5s | ~$0.07 |
+
+   Per call: round 1 sends 34 fresh tokens and writes 36,244; round 2 sends
+   ~3.7k fresh (the round-1 output it reasons over) and reads 36,244. The
+   input side of the bill falls from ~$0.152 to ~$0.105 on a cold cache and
+   to ~$0.022 when a second assessment lands inside the 5-minute TTL, which
+   is the demo pattern; output tokens are now the larger share of the bill.
+   The issue's ~$0.09 assumed the one-write case; reaching it means running
+   round 1 sequentially, ~9s more on the job, which was not taken (decision
+   log, 2026-09-10, prompt caching). These are local runs through the
+   deployed code path, not worker-log figures: no deployed assessment had
+   run when they were taken. Each deployed call logs its `usage` including
+   `cacheReadInputTokens` and `cacheWriteInputTokens` at INFO in the
+   worker's log group, so the first real assessments can be checked against
+   this table.
 
    The structural risk is not the model, it is a retry loop: an unbounded
    poll or auto-retry re-triggering analysis would multiply this line

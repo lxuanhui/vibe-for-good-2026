@@ -155,3 +155,87 @@ def test_sentinel1_does_not_apply_optical_cloud_threshold():
     assert result.sentinel1_pre_event is not None
     assert result.sentinel1_pre_event.product_id == "S1-CLOUDY-BUT-USABLE"
     assert result.sentinel1_pre_event.cloud_cover_pct == 99
+
+
+# The #193 shape: a scope-bbox search returns tiles that touch the box, and
+# the tile closest in time to an event can stop short of the event itself.
+def _square(west: float, south: float, east: float, north: float) -> dict:
+    return {
+        "type": "Polygon",
+        "coordinates": [[[west, south], [east, south], [east, north], [west, north], [west, south]]],
+    }
+
+
+EVENT_LOCATION = (-3.455, 115.903)  # (lat, lon): the western-edge demo event
+
+
+def test_a_scene_whose_footprint_excludes_the_event_is_not_selected_even_when_closest_in_time():
+    closest_but_elsewhere = _feature("S2-EAST", "2026-01-10T06:00:00Z", cloud_cover=5)
+    closest_but_elsewhere["geometry"] = _square(116.0, -4.0, 117.0, -3.0)
+    covering = _feature("S2-WEST", "2026-01-08T06:00:00Z", cloud_cover=5)
+    covering["geometry"] = _square(115.0, -4.0, 116.0, -3.0)
+
+    result = select_scenes([], [closest_but_elsewhere, covering], EVENT_START, EVENT_END, location=EVENT_LOCATION)
+
+    scene = result.sentinel2_pre_event
+    assert scene is not None
+    assert scene.product_id == "S2-WEST"
+    assert scene.provenance["footprint_check"] == {
+        "performed": True,
+        "method": "geometry",
+        "event_centroid": {"lat": -3.455, "lon": 115.903},
+        "contains_event_centroid": True,
+    }
+    assert scene.algorithm_version == "copernicus-scene-selector-v2"
+
+
+def test_no_covering_scene_means_no_scene_rather_than_the_nearest_wrong_one():
+    elsewhere = _feature("S1-EAST", "2026-01-10T06:00:00Z", collection="sentinel-1-grd")
+    elsewhere["geometry"] = _square(116.0, -4.0, 117.0, -3.0)
+    no_footprint = _feature("S1-UNKNOWN", "2026-01-09T06:00:00Z", collection="sentinel-1-grd")
+
+    result = select_scenes([elsewhere, no_footprint], [], EVENT_START, EVENT_END, location=EVENT_LOCATION)
+
+    assert result.sentinel1_pre_event is None
+    assert result.sentinel1_post_event is None
+
+
+def test_footprint_check_falls_back_to_bbox_and_handles_multipolygons_with_holes():
+    by_bbox = _feature("S2-BBOX", "2026-01-13T06:00:00Z", cloud_cover=5)
+    by_bbox["bbox"] = [115.0, -4.0, 116.0, -3.0]
+    holed = _feature("S2-HOLE", "2026-01-13T05:00:00Z", cloud_cover=5)
+    holed["geometry"] = {
+        "type": "MultiPolygon",
+        "coordinates": [
+            [
+                [[115.0, -4.0], [116.0, -4.0], [116.0, -3.0], [115.0, -3.0], [115.0, -4.0]],
+                [[115.8, -3.6], [116.0, -3.6], [116.0, -3.3], [115.8, -3.3], [115.8, -3.6]],  # hole around the event
+            ]
+        ],
+    }
+
+    result = select_scenes([], [by_bbox, holed], EVENT_START, EVENT_END, location={"lat": -3.455, "lon": 115.903})
+
+    scene = result.sentinel2_post_event
+    assert scene is not None
+    assert scene.product_id == "S2-BBOX"
+    assert scene.provenance["footprint_check"]["method"] == "bbox"
+
+
+def test_a_fire_event_like_mapping_supplies_its_own_centroid():
+    elsewhere = _feature("S2-EAST", "2026-01-10T06:00:00Z", cloud_cover=5)
+    elsewhere["geometry"] = _square(116.0, -4.0, 117.0, -3.0)
+    event = {"first_detection": EVENT_START, "last_detection": EVENT_END, "centroid": {"lat": -3.455, "lon": 115.903}}
+
+    assert select_scenes([], [elsewhere], event).sentinel2_pre_event is None
+    assert select_closest_scene([elsewhere], event, ScenePosition.PRE_EVENT, collection="sentinel-2-l2a") is None
+
+
+def test_without_a_location_selection_is_by_time_alone_and_says_so():
+    elsewhere = _feature("S2-EAST", "2026-01-10T06:00:00Z", cloud_cover=5)
+    elsewhere["geometry"] = _square(116.0, -4.0, 117.0, -3.0)
+
+    scene = select_scenes([], [elsewhere], EVENT_START, EVENT_END).sentinel2_pre_event
+
+    assert scene is not None
+    assert scene.provenance["footprint_check"] == {"performed": False}
