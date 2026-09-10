@@ -544,3 +544,38 @@ def test_the_demo_artifact_scope_itself_is_never_filtered(client):
 
     assert body["total"] == 3610
     assert body["scope"]["rawObservations"] == 21519
+
+
+def test_each_review_queue_figure_names_the_population_it_was_computed_over(client):
+    """`reviewQueueCount` and `compression` are not a count and its ratio (#187).
+
+    The first is the calibrated routing count, the second is Stage-1's ratio
+    over a different denominator. A reader checking 3610 / 396 against a
+    stated 1.0 concluded one of them was broken; now the response carries the
+    denominator so the check can be done against the right number.
+    """
+    for scope in (
+        client.get(f"{BASE}?limit=1").get_json()["scope"],
+        register(client, ready_audit(client, "2019-09-01", "2019-09-05"))["scope"],
+    ):
+        # Values are unchanged by the naming: the issue is explicit that this
+        # is about inspectability, not recalibration.
+        assert scope["eventCount"] == 3610
+        assert scope["reviewQueueCount"] == 396
+        assert scope["compression"] == 1.0
+        assert scope["reviewQueueBasis"]["population"] == "CALIBRATED_ROUTING"
+        # The denominator is served under its own name, so the ratio can be
+        # reproduced from the response alone.
+        assert scope["stage1ReviewQueueCount"] == 3610
+        basis = scope["compressionBasis"]
+        assert basis["numerator"] == "eventCount"
+        assert basis["denominator"] == "stage1ReviewQueueCount"
+        assert scope["compression"] == round(scope[basis["numerator"]] / scope[basis["denominator"]], 4)
+        # And the tempting wrong division is visibly not what was served.
+        assert round(scope["eventCount"] / scope["reviewQueueCount"], 1) != scope["compression"]
+
+    # A narrowed window recomputes the denominator from the events served.
+    scope = register(client, ready_audit(client, "2019-09-02", "2019-09-03"))["scope"]
+    assert scope["eventCount"] == 1463
+    assert scope["stage1ReviewQueueCount"] == 1463
+    assert scope["reviewQueueCount"] < 396
