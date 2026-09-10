@@ -57,7 +57,6 @@ export function AuditLanding({ onStartAudit, onOpenContext }: { onStartAudit: ()
   const [hotspots, setHotspots] = useState<FeatureCollection<Point, FirmsProperties>>(emptyHotspots)
   const [firmsStatus, setFirmsStatus] = useState<'loading' | 'ready' | 'unavailable'>('loading')
   const [clock, setClock] = useState(() => new Date())
-  const [fireSoundMuted, setFireSoundMuted] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -82,32 +81,6 @@ export function AuditLanding({ onStartAudit, onOpenContext }: { onStartAudit: ()
     const refresh = window.setInterval(() => setClock(new Date()), CLOCK_REFRESH_MS)
     return () => window.clearInterval(refresh)
   }, [])
-
-  useEffect(() => {
-    if (fireSoundMuted) return
-    const Context = window.AudioContext
-    if (!Context) return
-    const context = new Context()
-    const buffer = context.createBuffer(1, context.sampleRate * 2, context.sampleRate)
-    const samples = buffer.getChannelData(0)
-    for (let index = 0; index < samples.length; index += 1) samples[index] = (Math.random() * 2 - 1) * (0.16 + Math.random() * 0.84)
-    const source = context.createBufferSource()
-    const filter = context.createBiquadFilter()
-    const gain = context.createGain()
-    source.buffer = buffer
-    source.loop = true
-    filter.type = 'lowpass'
-    filter.frequency.value = 680
-    gain.gain.value = 0.018
-    source.connect(filter).connect(gain).connect(context.destination)
-    source.start()
-    void context.resume()
-    // Browsers that block initial audio will resume this same ambience at the
-    // first interaction, without requiring the visitor to find another control.
-    const resume = () => { void context.resume() }
-    window.addEventListener('pointerdown', resume, { once: true })
-    return () => { window.removeEventListener('pointerdown', resume); source.stop(); void context.close() }
-  }, [fireSoundMuted])
 
   const transformRequest = useMemo(() => {
     if (!cartoApiKey) return undefined
@@ -161,7 +134,6 @@ export function AuditLanding({ onStartAudit, onOpenContext }: { onStartAudit: ()
         <p className="mt-3 text-sm leading-6 text-text-muted">Live FIRMS thermal detections provide regional context only. FireEvents appear after you define an authorised management-unit boundary and review period.</p>
         <div className="mt-4 flex items-center gap-2 text-[10px] uppercase tracking-[0.14em] text-text-faint"><span className="h-2 w-2 rounded-full bg-[#ff5c2e] shadow-[0_0_10px_#ff351b]" />{status}<span className="ml-auto">{light.label}</span></div>
         <Button variant="primary" className="mt-5 w-full py-3 uppercase tracking-[0.14em]" onClick={onStartAudit}>START AUDIT</Button>
-        <button type="button" onClick={() => setFireSoundMuted((muted) => !muted)} className="mt-3 text-[10px] uppercase tracking-[0.14em] text-text-faint transition-colors hover:text-text">{fireSoundMuted ? '▶  Play fire ambience' : '▮▮  Mute fire ambience'}</button>
         <p className="mt-3 text-[11px] leading-4 text-text-faint">Upload GeoJSON → validate scope → build the cached historical register → inspect selected FireEvents.</p>
         <button
           type="button"
