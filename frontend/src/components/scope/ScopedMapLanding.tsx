@@ -30,8 +30,17 @@ type TaggedGraphEdge = InvestigationMap['edges'][number] & { origin: GraphEdgeOr
 function filteredObservationPoints(evidence: EventEvidenceResponse | undefined, day: ScopedMapDay): FeatureCollection<Point> {
   return {
     type: 'FeatureCollection',
-    features: observationsForDay(evidence, day).map((obs) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [obs.lon, obs.lat] }, properties: { frp: obs.frp, acqDate: obs.acqDate } })),
+    features: observationsForDay(evidence, day).map((obs) => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [obs.lon, obs.lat] },
+      properties: { lat: obs.lat, lon: obs.lon, frp: obs.frp, confidence: obs.confidence, acqDate: obs.acqDate, acqTime: obs.acqTime },
+    })),
   }
+}
+
+function formatObservationTime(acqTime: number): string {
+  const value = String(acqTime).padStart(4, '0')
+  return `${value.slice(0, 2)}:${value.slice(2)} UTC`
 }
 
 // Merges the always-visible in-scope+buffer register with whatever a graph
@@ -140,6 +149,7 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
   const [focusGraph, setFocusGraph] = useState<InvestigationMap>()
   const [focusGraphError, setFocusGraphError] = useState('')
   const [showObservations, setShowObservations] = useState(true)
+  const [selectedObservation, setSelectedObservation] = useState<{ lat: number; lon: number; frp: number | null; confidence: string; acqDate: string; acqTime: number }>()
   const [selectedDay, setSelectedDay] = useState<ScopedMapDay>(null)
   const days = useMemo(() => observationDays(events, scope.review_start, scope.review_end), [events, scope.review_start, scope.review_end])
   const activeDay = selectedDay && days.includes(selectedDay) ? selectedDay : null
@@ -175,6 +185,7 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
   useEffect(() => {
     if (!drawerEventId) { setEvidence(undefined); setEvidenceError(''); setFocusGraph(undefined); setFocusGraphError(''); setAnalysis(undefined); setAnalysisError(''); return }
     setShowObservations(true)
+    setSelectedObservation(undefined)
     let active = true
     setEvidenceLoading(true)
     setEvidenceError('')
@@ -319,9 +330,25 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
   }, [center, scope.buffer_bbox])
 
   function handleMapClick(event: MapLayerMouseEvent) {
+    const observationFeature = event.features?.find((feature) => feature.layer?.id === 'fireevent-observations-points')
+    if (observationFeature) {
+      const feature = observationFeature
+      const properties = feature.properties as { lat?: number; lon?: number; frp?: number | null; confidence?: string; acqDate?: string; acqTime?: number } | undefined
+      if (properties?.lat != null && properties.lon != null && properties.acqDate && properties.acqTime != null) {
+        setSelectedObservation({ lat: properties.lat, lon: properties.lon, frp: properties.frp ?? null, confidence: properties.confidence ?? 'not available', acqDate: properties.acqDate, acqTime: properties.acqTime })
+      }
+      return
+    }
     const feature = event.features?.[0]
     const id = feature?.properties?.id as string | undefined
     setFocusedEventId(id)
+  }
+
+  function toggleObservations() {
+    setShowObservations((value) => {
+      if (value) setSelectedObservation(undefined)
+      return !value
+    })
   }
 
   function selectTimelineDay(day: ScopedMapDay) {
@@ -369,7 +396,7 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
           minZoom={5}
           maxZoom={15}
           maxBounds={scope.buffer_bbox ? [scope.buffer_bbox.minLon, scope.buffer_bbox.minLat, scope.buffer_bbox.maxLon, scope.buffer_bbox.maxLat] : undefined}
-          interactiveLayerIds={['audit-event-points']}
+          interactiveLayerIds={['audit-event-points', 'fireevent-observations-points']}
           onClick={handleMapClick}
           cursor="default"
           onLoad={(event) => {
@@ -414,7 +441,7 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
               not a solid wash; the dashed outline (not subject to the same
               compounding) carries the actual boundary. */}
           {showSpreadEnvelopes && envelopes.features.length > 0 && <Source id="fireevent-spread-envelope" type="geojson" data={envelopes}><Layer id="fireevent-spread-envelope-fill" type="fill" paint={{ 'fill-color': SURFACE_FIRE_ENVELOPE_COLOR, 'fill-opacity': 0.05 }} /><Layer id="fireevent-spread-envelope-line" type="line" paint={{ 'line-color': SURFACE_FIRE_ENVELOPE_COLOR, 'line-width': 1.5, 'line-dasharray': [3, 3] }} /></Source>}
-          {showObservations && observations.features.length > 0 && <Source id="fireevent-observations" type="geojson" data={observations}><Layer id="fireevent-observations-points" type="circle" paint={{ 'circle-radius': 3, 'circle-color': OBSERVATION_COLOR, 'circle-opacity': 0.85, 'circle-stroke-color': '#0a0d12', 'circle-stroke-width': 1 }} /></Source>}
+          {showObservations && observations.features.length > 0 && <Source id="fireevent-observations" type="geojson" data={observations}><Layer id="fireevent-observations-points" type="circle" paint={{ 'circle-radius': 2.5, 'circle-color': OBSERVATION_COLOR, 'circle-opacity': 0.62, 'circle-stroke-color': '#0a0d12', 'circle-stroke-width': 1 }} /></Source>}
           <Source id="audit-events" type="geojson" data={points}>
             <Layer
               id="audit-event-points"
@@ -429,11 +456,22 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
             />
           </Source>
         </Map>
+        {selectedObservation && <div role="status" aria-label="FIRMS observation details" className="pointer-events-auto absolute top-4 left-4 w-56 rounded-lg border border-amber-300/50 bg-panel/95 p-3 text-xs shadow-lg backdrop-blur">
+          <div className="flex items-center justify-between gap-2"><div className="font-semibold text-amber-300">FIRMS observation</div><button type="button" className="text-[10px] text-text-muted hover:text-text" onClick={() => setSelectedObservation(undefined)} aria-label="Close observation details">CLOSE</button></div>
+          <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-text-muted">
+            <dt>Observed</dt><dd className="text-right text-text">{selectedObservation.acqDate}</dd>
+            <dt>Time</dt><dd className="text-right text-text">{formatObservationTime(selectedObservation.acqTime)}</dd>
+            <dt>Confidence</dt><dd className="text-right capitalize text-text">{selectedObservation.confidence}</dd>
+            <dt>FRP</dt><dd className="text-right text-text">{selectedObservation.frp == null ? 'not available' : `${selectedObservation.frp.toFixed(2)} MW`}</dd>
+          </dl>
+          <p className="mt-2 border-t border-border pt-2 text-[10px] leading-4 text-text-faint">This is one observation associated with the selected FireEvent. It is not a separate fire.</p>
+        </div>}
       </div>
       <aside className="scoped-map-print-hide flex w-80 shrink-0 flex-col overflow-y-auto border-l border-border-strong bg-panel">
         <div className="border-b border-border-strong p-4">
           <div className="text-sm uppercase tracking-[0.16em] text-accent">Audit scope map</div>
           <p className="mt-3 text-xs text-text-muted">Events shown <span className="font-semibold text-accent">{loading ? '…' : visibleEvents.length.toLocaleString()}</span></p>
+          <p className="mt-2 text-[11px] leading-4 text-text-faint">Large circles are FireEvents. Smaller amber points are selected-event FIRMS observations.</p>
           <p className="mt-3 text-xs leading-5 text-text-faint">Peat is environmental context, not cause; compare it with event evidence.</p>
           {taggedEdges.length > 0 && <p className="mt-2 text-xs leading-5 text-text-faint">Lines are limited to {SCOPED_MAP_RELATIONSHIP_DISTANCE_KM} km. <span className="text-accent">Bright</span> lines are stronger candidates for the open FireEvent; weaker or unresolved links recede. <span className="opacity-60">Faint</span> lines belong to other FireEvents selected in the Fire Register.</p>}
           {envelopes.features.length > 0 && <p className="mt-2 text-xs leading-5 text-text-faint">Dashed outline: first-order wind-oriented surface-spread compatibility estimate — not a validated forecast or claim about what happened.</p>}
@@ -474,7 +512,7 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
           reviewStart={scope.review_start}
           reviewEnd={scope.review_end}
           showObservations={showObservations}
-          onToggleObservations={() => setShowObservations((value) => !value)}
+          onToggleObservations={toggleObservations}
           observationCount={observations.features.length || undefined}
           onClose={() => setFocusedEventId(undefined)}
           onRetry={() => setEvidenceReloadToken((value) => value + 1)}
