@@ -372,6 +372,10 @@ The highest-value output is often not a causal label but a question that resolve
 
 The final product is engagement-level: **Environmental Fire Review / Environmental Fire Investigation Pack**.
 
+## 22.1 Design reference
+
+[`Engagement_Review_Example_FE-20190901-1ecb99d2e4.pdf`](Engagement_Review_Example_FE-20190901-1ecb99d2e4.pdf) is an illustrative, evidence-grounded layout reference for the three fixed Investigator/Skeptic rounds. It preserves evidence IDs, disagreement, limitations and verification questions; it is not a finalized finding or a reusable event conclusion.
+
 Include:
 1. audit scope and review period
 2. source/method summary
