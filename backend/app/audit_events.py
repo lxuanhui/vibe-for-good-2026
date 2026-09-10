@@ -849,7 +849,9 @@ def analysis_evidence(audit_id: str, event_id: str) -> list[dict[str, Any]] | No
     return list(by_id.values())
 
 
-def analyse_event(audit_id: str, event_id: str, *, investigator=None, skeptic=None) -> dict[str, Any] | None:
+def analyse_event(
+    audit_id: str, event_id: str, *, investigator=None, skeptic=None, on_round=None
+) -> dict[str, Any] | None:
     """Run and persist explicit, schema-checked structured analysis.
 
     This function is deliberately reached only from an analysis job the POST
@@ -868,6 +870,7 @@ def analyse_event(audit_id: str, event_id: str, *, investigator=None, skeptic=No
         investigator,
         skeptic,
         max_rounds=2,
+        on_round=on_round,
     ).to_dict()
     _save_analysis(audit_id, event_id, result)
     return result

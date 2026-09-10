@@ -25,6 +25,8 @@ import os
 from datetime import UTC, datetime
 from typing import Any
 
+from data_pipeline.analysis.investigator_skeptic import AnalysisPhase
+
 from app import audit_events, audit_store
 from app.analysis_provider import AnalysisProviderUnavailable
 
@@ -44,6 +46,21 @@ POLL_AFTER_SECONDS = 5
 # console cannot distinguish from slow work and which blocks every retry.
 # 900s is Lambda's hard ceiling, so nothing this old is still executing.
 STALE_AFTER_SECONDS = 900
+
+# What a poll sees while the work runs. A two-round assessment is near a
+# minute, and a disabled button for that long is indistinguishable from a
+# hung one (#198); the stage is the honest alternative to a fake progress
+# bar. Text a console user reads, so it follows the ui-copy skill.
+STARTING_STAGE = "Starting"
+PHASE_LABELS = {
+    AnalysisPhase.INDEPENDENT_ASSESSMENT: "independent assessment",
+    AnalysisPhase.REBUTTAL: "rebuttal",
+    AnalysisPhase.FINAL_ASSESSMENT: "final assessment",
+}
+
+
+def stage_label(round_number: int, total_rounds: int, phase: AnalysisPhase) -> str:
+    return f"Round {round_number} of {total_rounds}: {PHASE_LABELS[phase]}"
 
 
 def job_key(audit_id: str, event_id: str) -> str:
@@ -118,6 +135,7 @@ def start(audit_id: str, event_id: str) -> dict[str, Any]:
         audit_id,
         event_id,
         jobStatus=RUNNING,
+        stage=STARTING_STAGE,
         startedAt=_now(),
         pollAfterSeconds=POLL_AFTER_SECONDS,
         completedAt=None,
@@ -127,11 +145,13 @@ def start(audit_id: str, event_id: str) -> dict[str, Any]:
 
 
 def complete(audit_id: str, event_id: str, analysis: dict[str, Any]) -> dict[str, Any]:
-    return _write(audit_id, event_id, jobStatus=COMPLETE, completedAt=_now(), analysis=analysis, error=None)
+    return _write(
+        audit_id, event_id, jobStatus=COMPLETE, stage=None, completedAt=_now(), analysis=analysis, error=None
+    )
 
 
 def fail(audit_id: str, event_id: str, message: str) -> dict[str, Any]:
-    return _write(audit_id, event_id, jobStatus=FAILED, completedAt=_now(), error=message, analysis=None)
+    return _write(audit_id, event_id, jobStatus=FAILED, stage=None, completedAt=_now(), error=message, analysis=None)
 
 
 def run(audit_id: str, event_id: str, *, provider: Any = None) -> dict[str, Any]:
@@ -142,9 +162,18 @@ def run(audit_id: str, event_id: str, *, provider: Any = None) -> dict[str, Any]
     raise to, and an unrecorded crash reads as an assessment that is still
     being prepared.
     """
+
+    def record_stage(round_number: int, total_rounds: int, phase: AnalysisPhase) -> None:
+        # A progress note must never cost the assessment: if the store
+        # refuses the write, the rounds still run and the outcome still lands.
+        try:
+            _write(audit_id, event_id, stage=stage_label(round_number, total_rounds, phase))
+        except Exception:
+            logger.warning("Could not record stage for job %s", job_key(audit_id, event_id), exc_info=True)
+
     try:
         analysis = audit_events.analyse_event(
-            audit_id, event_id, investigator=provider, skeptic=provider
+            audit_id, event_id, investigator=provider, skeptic=provider, on_round=record_stage
         )
     except AnalysisProviderUnavailable as exc:
         return fail(audit_id, event_id, str(exc))

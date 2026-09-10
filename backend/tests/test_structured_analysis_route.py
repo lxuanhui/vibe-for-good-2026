@@ -200,3 +200,39 @@ def test_a_failed_dispatch_is_recorded_rather_than_left_running(client, monkeypa
     assert response.status_code == 200
     assert response.get_json()["jobStatus"] == "FAILED"
     assert client.get(f"/api/audits/{AUDIT}/events/{event_id}/analyse").get_json()["jobStatus"] == "FAILED"
+
+
+def test_a_running_job_reports_its_stage_and_stored_prose_follows_the_copy_rules(client, monkeypatch):
+    """What #198 renders under the spinner, and what the ui-copy skill forbids on screen."""
+    event_id = _event_id(client)
+    monkeypatch.setenv("ANALYSIS_WORKER_FUNCTION", "vibe-analysis-worker")
+    monkeypatch.setattr(analysis_jobs, "_invoke_worker", lambda *args: None)
+
+    accepted = client.post(f"/api/audits/{AUDIT}/events/{event_id}/analyse").get_json()
+    assert (accepted["jobStatus"], accepted["stage"]) == ("RUNNING", "Starting")
+
+    stages_seen_by_a_poll: list[str] = []
+
+    def provider(agent_input):
+        # What GET returns while this very round is being answered.
+        stages_seen_by_a_poll.append(analysis_jobs.read(AUDIT, event_id)["stage"])
+        output = _provider(agent_input)
+        for finding in output["findings"]:
+            finding["summary"] = "VH backscatter fell after 03 Sep \u2014 no revegetation \u2014 consistent with sustained combustion"
+        return output
+
+    analysis_jobs.run(AUDIT, event_id, provider=provider)
+
+    assert stages_seen_by_a_poll[:2] == ["Round 1 of 2: independent assessment"] * 2
+    assert stages_seen_by_a_poll[2:] == ["Round 2 of 2: rebuttal"] * 2
+    completed = client.get(f"/api/audits/{AUDIT}/events/{event_id}/analyse").get_json()
+    assert (completed["jobStatus"], completed["stage"]) == ("COMPLETE", None)
+    summaries = [
+        finding["summary"]
+        for analysis_round in completed["analysis"]["rounds"]
+        for role in ("investigator", "skeptic")
+        for finding in analysis_round[role]["findings"]
+    ]
+    assert summaries
+    assert all("\u2014" not in summary for summary in summaries)
+    assert summaries[0] == "VH backscatter fell after 03 Sep, no revegetation, consistent with sustained combustion"

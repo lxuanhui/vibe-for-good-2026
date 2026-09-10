@@ -29,6 +29,88 @@ apply an older decision without checking the entries above it.
 
 ---
 
+## 2026-09-10 - Analysis findings get a register and a word cap in the prompt, not a second model to rewrite them
+
+**Status:** done · PR #200 · Closes #199 · Refs #198, #194
+
+**Decision.** The Investigator/Skeptic prompt in `backend/app/analysis_provider.py`
+now states who reads the output and how it is written: summaries of at most
+25 words, questions of at most 20 and reasons of at most 15, measured then
+"consistent with", one figure per clause, no em-dashes, a short banned-phrase
+list, and "estimated" or "inferred" rather than "confirmed" or "caused". The
+caps live in `data_pipeline/analysis/investigator_skeptic.py` so the number
+the model is told is the number the validator measures. The validator
+normalises any dash that arrives anyway (`plain_text`: a spaced dash becomes a
+full stop or comma, a bare one between digits an en-dash, any other a colon)
+and logs, without rejecting, text over its cap. The job record carries a
+`stage` ("Starting", "Round 1 of 2: independent assessment", "Round 2 of 2:
+rebuttal") written between rounds, which is what lets the console show real
+progress (#198).
+
+**Why.** The owner's report was that the findings were "extremely verbose and
+claudish". The schema-only prompt gave the model no register at all: its one
+style instruction was "one concise evidence-grounded sentence". The proposed
+fix was a second call to an OpenAI model to rewrite the prose into clearer
+English. Rejected, for reasons worth keeping:
+
+- It adds a provider outside AWS the night before the demo: a credential in
+  the Lambda environment, a dependency in a bundle near its 250 MB edge, new
+  egress, a new cost line.
+- It adds latency to a job already near a minute, in the direction #198 is
+  trying to make bearable.
+- It bypasses the product boundary. The validator checks evidence IDs on the
+  first model's output; a rewriting model that hedges, drops "consistent
+  with" or promotes "estimated" to "confirmed" is never re-checked. That is
+  AI interpretation rewritten by a second AI with no evidence trace.
+- The 2026-09-10 Bedrock entry rejected "terser findings" as a *latency*
+  trade. A register and a cap on the sentence trade no substance: the
+  finding count, the sufficiency field and the ID lists are untouched.
+
+**Measured.** Same event (`FE-20190901-f300bcd6f8`, 70 evidence items, six
+hypotheses), same model, temperature 0, two rounds, from a laptop in
+`ap-southeast-1`. "Before" is the prompt on `main` at 0bc49c1.
+
+| | Before | After (run 1) | After (run 2) |
+|---|---|---|---|
+| Wall time, two rounds | 51.7 s | 37.7 s | 36.4 s |
+| Output tokens, four calls | 17,557 | 13,419 | 13,237 |
+| Summary words, mean / max | 30.0 / 42 | 23.3 / 35 | 22.5 / 35 |
+| Summaries over 25 words | 18 of 24 | 6 of 24 | 3 of 24 |
+| Question words, mean / max | 23.1 / 38 | 15.9 / 22 | 15.5 / 22 |
+| Reason words, mean / max | 21.8 / 39 | 13.0 / 23 | 13.0 / 19 |
+| Em-dashes | 0 | 0 | 0 |
+
+The latency gain was not the aim and is real: the model writes a third fewer
+output tokens, and output tokens are what the wall clock is made of.
+
+**Two findings about validation that the measurement surfaced, both now
+covered by the prompt.** The "before" prompt was rejected by the pipeline on
+one of two runs: the Skeptic returned a finding with neither a supporting nor
+a contradicting ID, which `Finding` refuses. Temperature 0 does not make
+Bedrock deterministic. The first draft of the new prompt was rejected on two
+of two runs for the mirror fault, an `unresolved_question` with empty
+`evidence_ids`, because a rule written for summaries ("keep IDs out of the
+sentence") was read as a rule for questions. The prompt now says, for
+findings and for questions separately, that at least one supplied ID is
+required and that an empty list fails the whole assessment. Both final runs
+passed. The lesson worth keeping: every validator rule the pipeline enforces
+must be stated in the prompt in the same terms, because a rule the model
+cannot see is a FAILED job the auditor pays for twice.
+
+**Rejected: rejecting over-length text.** A 26-word summary on screen is a
+style fault; a FAILED job for it is a paid retry. Over-cap text is logged
+with its length so drift is visible in CloudWatch.
+
+**Rejected: a progress bar.** A bar implies a rate nobody has; the stage
+names the round that is actually running.
+
+**Open.** #198 renders the stage. If the owner still wants a rewrite pass
+after reading the new output, the AWS-native shape is a second Haiku call
+with the evidence-ID validator run again on its result, and it needs its own
+entry here.
+
+---
+
 ## 2026-09-10 - Sentinel context images are rendered once by the CDSE Process API and served as static files
 
 **Status:** done · PR #192 · Closes #191 · Refs #171
