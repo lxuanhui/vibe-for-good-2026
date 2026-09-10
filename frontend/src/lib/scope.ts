@@ -1,3 +1,4 @@
+import type { Feature, FeatureCollection, MultiPolygon, Polygon } from 'geojson'
 import type { BBox } from '../api/types'
 
 // The one real dataset behind this demo is the committed 2019 Kalimantan
@@ -11,12 +12,25 @@ export const DEFAULT_MANAGEMENT_UNIT_GEOMETRY = {
 
 export interface ScopePreview {
   geometry: unknown
+  displayGeometry: FeatureCollection<Polygon | MultiPolygon>
   bbox: BBox
   centroid: [number, number]
   bufferBbox: BBox
   bufferGeometry: {
     type: 'Polygon'
     coordinates: [number, number][][]
+  }
+}
+
+/** MapLibre sources are most reliable when polygon geometry is wrapped in a feature collection. */
+export function displayGeometry(geojson: unknown): FeatureCollection<Polygon | MultiPolygon> {
+  const record = asRecord(geojson)
+  if (!record) throw new Error('Upload a GeoJSON object.')
+  if (record.type === 'FeatureCollection') return geojson as FeatureCollection<Polygon | MultiPolygon>
+  if (record.type === 'Feature') return { type: 'FeatureCollection', features: [geojson as Feature<Polygon | MultiPolygon>] }
+  return {
+    type: 'FeatureCollection',
+    features: [{ type: 'Feature', geometry: geojson as Polygon | MultiPolygon, properties: {} }],
   }
 }
 
@@ -130,5 +144,5 @@ export function buildScopePreview(geojson: unknown, contextBufferKm: number): Sc
     coordinates: [bufferRing],
   }
 
-  return { geometry: geojson, bbox, centroid, bufferBbox, bufferGeometry }
+  return { geometry: geojson, displayGeometry: displayGeometry(geojson), bbox, centroid, bufferBbox, bufferGeometry }
 }

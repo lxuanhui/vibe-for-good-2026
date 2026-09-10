@@ -49,8 +49,9 @@ body {
   display: none;
 }
 
-/* The engagement report is exported through the browser's print-to-PDF flow
-   (#144). Two things break there and neither shows on screen.
+/* The engagement report and the scoped-map evidence document are exported
+   through the browser's print-to-PDF flow (#144, #170). Two things break
+   there and neither shows on screen.
 
    The report scrolls inside the console shell, and the shell is what clips:
    `relative h-screen overflow-hidden` in App.tsx. Releasing height and
@@ -91,6 +92,62 @@ body {
 
   @page {
     margin: 12mm;
+  }
+
+  /* The map is useful context on screen, but it is not a document layout.
+     Leave the evidence drawer as the only printable surface so browsers do
+     not scale a map/sidebar composition down to fit the paper. */
+  .scoped-map-print-hide {
+    display: none !important;
+  }
+
+  .scoped-map-print-root,
+  .scoped-map-print-shell {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+
+  .evidence-drawer {
+    position: static !important;
+    width: auto !important;
+    max-width: none !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    display: block !important;
+    font-size: 10pt;
+    line-height: 1.35;
+  }
+
+  .evidence-drawer section {
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+
+  .evidence-drawer h3,
+  .evidence-drawer article {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  .evidence-drawer article {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .evidence-drawer table {
+    width: 100%;
+    table-layout: fixed;
+  }
+
+  .evidence-drawer th,
+  .evidence-drawer td,
+  .evidence-drawer p,
+  .evidence-drawer span,
+  .evidence-drawer div {
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   html,

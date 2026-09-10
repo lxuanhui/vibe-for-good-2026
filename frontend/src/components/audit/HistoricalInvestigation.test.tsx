@@ -14,9 +14,9 @@
  *
  * The API seam is mocked rather than the network; jsdom fetches nothing.
  */
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
-import { HistoricalInvestigation } from './HistoricalInvestigation'
+import { HistoricalInvestigation, RegisterSummary } from './HistoricalInvestigation'
 import { fetchAuditRegister } from '../../api/client'
 import type { AuditEventSummary, AuditProgression, AuditScope } from '../../api/types'
 
@@ -98,7 +98,10 @@ test('the register shows the count the chosen period returned, not the dataset t
 
   render(<HistoricalInvestigation scope={scope('2019-09-02', '2019-09-03')} />)
 
-  expect(await screen.findByText(/2 FireEvents/)).toBeTruthy()
+  // The count is deliberately not just /2 FireEvents/: the register summary
+  // (#178) repeats that phrase in its own routing/scope breakdowns, so a loose
+  // match is ambiguous once both render together. This pins it to the header.
+  expect(await screen.findByText(/2 FireEvents · 2019-09-02 → 2019-09-03/)).toBeTruthy()
   expect(screen.getByText('fe-1')).toBeTruthy()
   expect(screen.getByText('fe-2')).toBeTruthy()
   expect(screen.getByText(/2019-09-02 → 2019-09-03/)).toBeTruthy()
@@ -126,4 +129,68 @@ test('an empty period reads as a measurement rather than a table that failed', a
   expect(screen.getByText(/did not fail to load/)).toBeTruthy()
   expect(screen.queryByRole('table')).toBeNull()
   expect(screen.queryByRole('alert')).toBeNull()
+})
+
+const summaryProgression: AuditProgression = {
+  rawObservations: 21519,
+  qualifiedObservations: 20471,
+  fireEvents: 3610,
+  requiringHumanReview: 396,
+  selected: 0,
+  selectedEventIds: [],
+  compression: 5.67,
+  observationsToEventsCompression: 5.67,
+  inScopeAndBuffer: 16,
+  scopeBoundaryAvailable: true,
+  scopeCompression: 225.6,
+  routingDiagnostics: {
+    humanReviewCount: 396,
+    humanReviewPercentage: 396 / 3610,
+    priorityDistribution: {
+      MEDIUM: { count: 3214, percentage: 3214 / 3610 },
+      HIGH: { count: 396, percentage: 396 / 3610 },
+    },
+    reviewStateDistribution: {
+      REVIEW_RECOMMENDED: { count: 3214, percentage: 3214 / 3610 },
+      HUMAN_REVIEW: { count: 396, percentage: 396 / 3610 },
+    },
+    evidenceSufficiencyDistribution: {
+      PARTIAL: { count: 3610, percentage: 1 },
+    },
+    escalationReasonCodes: {},
+    componentContributionDistribution: {},
+  },
+}
+
+test('keeps scope selection and global routing populations separate', () => {
+  render(<RegisterSummary progression={summaryProgression} />)
+
+  expect(screen.getByRole('heading', { name: 'Observation derivation' })).toBeTruthy()
+  expect(screen.getByText('20,471')).toBeTruthy()
+  expect(screen.getAllByText('3,610').length).toBeGreaterThan(0)
+  expect(screen.getByText('Count includes the configured context buffer: 16 of 3,610 FireEvents.')).toBeTruthy()
+  expect(screen.getByText('11.0% of 3,610 FireEvents; this is not a subset count of the In Scope figure.')).toBeTruthy()
+  expect(screen.queryByText('observations → FireEvents → in scope + buffer → human review')).toBeNull()
+})
+
+test('provides contextual help for clustering and routing dimensions', () => {
+  render(<RegisterSummary progression={summaryProgression} />)
+
+  const helpButtons = screen.getAllByText('?')
+  fireEvent.click(helpButtons[0])
+  fireEvent.click(helpButtons[1])
+
+  expect(screen.getByText(/deterministically clustered into FireEvents/)).toBeTruthy()
+  expect(screen.getByText(/separate dimensions/)).toBeTruthy()
+})
+
+test('summarizes routing decisions without exposing implementation totals', () => {
+  render(<RegisterSummary progression={summaryProgression} />)
+
+  expect(screen.getByRole('region', { name: 'Decision-oriented routing summary' })).toBeTruthy()
+  expect(screen.getByText('396 of 3,610 FireEvents')).toBeTruthy()
+  expect(screen.getByText(/Ambiguous events can be review-recommended/)).toBeTruthy()
+  expect(screen.getByText('partial')).toBeTruthy()
+  expect(screen.queryByText(/Component/)).toBeNull()
+  expect(screen.queryByText(/Escalation/)).toBeNull()
 })

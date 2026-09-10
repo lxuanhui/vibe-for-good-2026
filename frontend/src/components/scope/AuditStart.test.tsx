@@ -44,6 +44,14 @@ function summary(window: string) {
 
 afterEach(cleanup)
 
+test('renders the audit scope step label without a slash', () => {
+  fetchDemoDatasetSummaryMock.mockRejectedValue(new Error('the API did not answer'))
+  render(<AuditStart onReady={vi.fn()} />)
+
+  expect(screen.getByText('01 Audit scope')).toBeTruthy()
+  expect(screen.queryByText('01 / Audit scope')).toBeNull()
+})
+
 test('the pickers are bounded to the window the artifact says it covers', async () => {
   fetchDemoDatasetSummaryMock.mockResolvedValue(summary(`${COVERAGE_START}..${COVERAGE_END}`))
   render(<AuditStart onReady={vi.fn()} />)
@@ -105,4 +113,29 @@ test('an unreachable dataset summary leaves the form usable rather than guessing
   expect(start.getAttribute('max')).toBeNull()
   expect(screen.queryByText(/Selectable range is/)).toBeNull()
   expect(screen.getByRole('button', { name: /BUILD FIRE HISTORY/i })).toHaveProperty('disabled', false)
+})
+
+test('keeps upload guidance concise and validates unsupported geometry clearly', async () => {
+  fetchDemoDatasetSummaryMock.mockRejectedValue(new Error('the API did not answer'))
+  const { container } = render(<AuditStart onReady={vi.fn()} />)
+
+  expect(screen.getAllByRole('listitem')).toHaveLength(2)
+  expect(screen.getByText('Accepts Polygon, MultiPolygon, Feature, or FeatureCollection GeoJSON.')).toBeTruthy()
+  expect(screen.queryByText(/Showing the default demo area/)).toBeNull()
+
+  const input = container.querySelector('input[type="file"]')
+  if (!input) throw new Error('The scope panel has no GeoJSON file input.')
+  const invalidFile = { name: 'point.geojson', text: async () => '{"type":"Point","coordinates":[100,1]}' } as File
+  fireEvent.change(input, { target: { files: [invalidFile] } })
+
+  expect((await screen.findByRole('alert')).textContent).toContain('Polygon or MultiPolygon')
+})
+
+test('does not render the redundant scope-first control', () => {
+  fetchDemoDatasetSummaryMock.mockRejectedValue(new Error('the API did not answer'))
+  const onClose = vi.fn()
+  render(<AuditStart onReady={vi.fn()} onClose={onClose} />)
+
+  expect(screen.queryByText('Scope first')).toBeNull()
+  expect(screen.getByRole('button', { name: 'CLOSE' })).toBeTruthy()
 })

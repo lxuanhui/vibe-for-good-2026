@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import type { AuditScope } from '../../api/types'
 import { buildFireHistory, createAuditReview, fetchDemoDatasetSummary, uploadAuditScope, uploadAuditScopeGeometry } from '../../api/client'
 import { buildScopePreview, DEFAULT_MANAGEMENT_UNIT_GEOMETRY } from '../../lib/scope'
+import { INDONESIA_FILL_COLOR } from '../../lib/layerColors'
 import { Button } from '../ui/Button'
 import { ScopePreviewMap } from './ScopePreviewMap'
 
@@ -130,12 +131,12 @@ export function AuditStart({ onReady, overlay = false, fullScreen = false, onClo
           <div className="text-sm font-semibold tracking-wide">Environmental Assurance Console</div>
           <div className="text-[10px] uppercase tracking-[0.2em] text-text-faint">Create audit review</div>
         </div>
-        <div className="flex items-center gap-3"><span className="rounded border border-accent-muted px-2 py-1 text-[10px] uppercase tracking-widest text-accent">Scope first</span>{onClose && <Button onClick={onClose}>CLOSE</Button>}</div>
+        {onClose && <Button onClick={onClose}>CLOSE</Button>}
       </header>
 
       <main className="mx-auto grid w-full max-w-6xl flex-1 gap-6 overflow-auto p-6 lg:grid-cols-[minmax(320px,0.8fr)_minmax(420px,1.2fr)]">
         <section className="rounded-xl border border-border-strong bg-panel p-6 shadow-2xl">
-          <p className="mb-2 text-xs uppercase tracking-[0.2em] text-accent">01 / Audit scope</p>
+          <p className="mb-2 text-xs uppercase tracking-[0.2em] text-accent">01 Audit scope</p>
           <h1 className="text-2xl font-semibold tracking-tight">Start with the management unit.</h1>
           <p className="mt-3 text-sm leading-6 text-text-muted">
             Set the review period and upload the private boundary authorised for this engagement. No company identity or public concession lookup is required.
@@ -204,11 +205,10 @@ export function AuditStart({ onReady, overlay = false, fullScreen = false, onClo
                 onChange={(event) => void handleFileChange(event.target.files?.[0] ?? null)}
                 className="block w-full cursor-pointer rounded border border-border-strong bg-bg px-3 py-2 text-xs text-text file:mr-3 file:rounded file:border-0 file:bg-panel-raised file:px-2 file:py-1 file:text-xs file:text-text"
               />
-              <span className="block text-[11px] text-text-faint">
-                Accepts Polygon, MultiPolygon, Feature, or FeatureCollection GeoJSON. No boundary to
-                upload yet? Leave this empty to use a small default area inside the committed real
-                2019 Kalimantan haze window -- the only period this demo has real FireEvents for.
-              </span>
+              <ul className="list-disc space-y-1 pl-4 text-[11px] text-text-faint">
+                <li>Accepts Polygon, MultiPolygon, Feature, or FeatureCollection GeoJSON.</li>
+                <li>Leave empty to use the default area; invalid or unsupported geometry is rejected.</li>
+              </ul>
             </label>
 
             {(fileError || submitError) && <p className="rounded border border-status-urgent/40 bg-status-urgent/10 px-3 py-2 text-xs leading-5 text-red-200" role="alert">{fileError || submitError}</p>}
@@ -226,18 +226,18 @@ export function AuditStart({ onReady, overlay = false, fullScreen = false, onClo
               <h2 className="mt-1 text-sm font-semibold">Boundary and context buffer</h2>
             </div>
             <div className="space-y-1 text-right text-[10px] text-text-muted">
+              <div><span className="mr-1 inline-block h-2 w-2 rounded-sm" style={{ backgroundColor: INDONESIA_FILL_COLOR }} />Indonesia context</div>
               <div><span className="mr-1 inline-block h-2 w-2 rounded-full bg-accent" />Audit boundary</div>
               <div><span className="mr-1 inline-block h-2 w-2 rounded-full bg-status-moderate" />Context buffer</div>
             </div>
           </div>
           {submitting && <div role="status" className="border-t border-border px-5 py-3 text-xs text-text-muted">Scope uploaded. Checking the cached real historical dataset and preparing the register…</div>}
-          {!file && !submitting && <div className="border-t border-border bg-panel-raised px-5 py-2 text-[11px] text-text-faint">Showing the default demo area (no file uploaded) -- choose a file above to replace it.</div>}
           <div className="relative min-h-[360px] flex-1 bg-bg">
             {preview ? (
               <ScopePreviewMap scope={preview} />
             ) : (
               <div className="flex h-full min-h-[360px] items-center justify-center px-10 text-center text-sm text-text-faint">
-                That file could not be read as a GeoJSON polygon. Fix it and re-upload, or remove the file to use the default demo area.
+                That file could not be previewed. Fix it and re-upload, or remove the file to use the default area.
               </div>
             )}
           </div>

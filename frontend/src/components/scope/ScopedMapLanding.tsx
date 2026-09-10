@@ -1,16 +1,27 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Layer, Map, Source, type MapLayerMouseEvent } from 'react-map-gl/maplibre'
-import type { Feature, FeatureCollection, Geometry, LineString, Point, Polygon } from 'geojson'
+import type { Feature, FeatureCollection, Geometry, LineString, Point } from 'geojson'
 import type { AuditEventSummary, AuditScope, EventEvidenceResponse, InvestigationMap, InvestigationMapNode, StructuredAnalysis } from '../../api/types'
 import { addToAuditPack, fetchAuditRegister, fetchInvestigationBundle, fetchInvestigationMap, generateInvestigationAnalysis } from '../../api/client'
 import { AUDIT_EVENT_COLORS, AUDIT_SCOPE_BOUNDARY_COLOR, AUDIT_SCOPE_BUFFER_COLOR, SURFACE_FIRE_ENVELOPE_COLOR } from '../../lib/layerColors'
 import { useAppStore } from '../../store/useAppStore'
 import { Button } from '../ui/Button'
 import { EvidenceDrawer } from '../audit/EvidenceDrawer'
+import { envelopePolygons } from './propagationEnvelopes'
+import { eventOverlapsDay, investigationDays, observationsForDay, type ScopedMapDay } from './temporalScrubber'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
 const GRAPH_LINE_COLOR = '#f97316'
 const OBSERVATION_COLOR = '#fbbf24'
+const SCOPED_MAP_RELATIONSHIP_DISTANCE_KM = 10
+const CLOCK_REFRESH_MS = 60 * 1000
+
+function southeastAsiaLight(date: Date) {
+  // UTC+8 is a useful regional midpoint. This is visual orientation only.
+  const localHour = (date.getUTCHours() + date.getUTCMinutes() / 60 + 8) % 24
+  const daylight = Math.max(0, Math.sin(((localHour - 6) / 12) * Math.PI))
+  return { daylight, label: daylight > 0.15 ? 'DAYLIGHT' : 'NIGHT' }
+}
 
 // The correlation graph is one rolled-together view now, not two flows that
 // silently replace each other: `origin` distinguishes an edge that touches
@@ -21,11 +32,10 @@ const OBSERVATION_COLOR = '#fbbf24'
 type GraphEdgeOrigin = 'focus' | 'selection'
 type TaggedGraphEdge = InvestigationMap['edges'][number] & { origin: GraphEdgeOrigin }
 
-function observationPoints(evidence: EventEvidenceResponse | undefined): FeatureCollection<Point> {
-  const observations = evidence?.event.triageDetail?.observations ?? []
+function filteredObservationPoints(evidence: EventEvidenceResponse | undefined, day: ScopedMapDay): FeatureCollection<Point> {
   return {
     type: 'FeatureCollection',
-    features: observations.map((obs) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [obs.lon, obs.lat] }, properties: { frp: obs.frp } })),
+    features: observationsForDay(evidence, day).map((obs) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [obs.lon, obs.lat] }, properties: { frp: obs.frp, acqDate: obs.acqDate } })),
   }
 }
 
@@ -64,29 +74,8 @@ function graphEdges(graphNodes: InvestigationMapNode[], edges: TaggedGraphEdge[]
       const from = nodeById[edge.sourceEventId]
       const to = nodeById[edge.targetEventId]
       return from && to
-        ? [{ type: 'Feature' as const, geometry: { type: 'LineString' as const, coordinates: [[from.centroid.lon, from.centroid.lat], [to.centroid.lon, to.centroid.lat]] }, properties: { origin: edge.origin } }]
+        ? [{ type: 'Feature' as const, geometry: { type: 'LineString' as const, coordinates: [[from.centroid.lon, from.centroid.lat], [to.centroid.lon, to.centroid.lat]] }, properties: { origin: edge.origin, state: edge.state } }]
         : []
-    }),
-  }
-}
-
-// One polygon per candidate edge that has a precomputed wind-oriented
-// surface-spread envelope (`data_pipeline/enrich_fire_spread_audit_events.py`
-// -- real historical wind, only available for this demo's in-scope+buffer
-// FireEvents). A first-order geometric compatibility estimate, not a
-// fire-behaviour forecast or a claim about what happened (evidence-framing).
-// Built from the same already-merged `taggedEdges` the correlation lines use,
-// so an envelope never appears for an edge the graph itself isn't showing.
-function envelopePolygons(edges: TaggedGraphEdge[]): FeatureCollection<Polygon> {
-  return {
-    type: 'FeatureCollection',
-    features: edges.flatMap((edge) => {
-      if (!edge.envelope) return []
-      return [{
-        type: 'Feature' as const,
-        geometry: { type: 'Polygon' as const, coordinates: [edge.envelope.polygon] },
-        properties: { state: edge.state, sourceEventId: edge.sourceEventId, targetEventId: edge.targetEventId },
-      }]
     }),
   }
 }
@@ -156,8 +145,12 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
   const [focusGraph, setFocusGraph] = useState<InvestigationMap>()
   const [focusGraphError, setFocusGraphError] = useState('')
   const [showObservations, setShowObservations] = useState(true)
+  const [selectedDay, setSelectedDay] = useState<ScopedMapDay>(null)
+  const days = useMemo(() => investigationDays(scope.review_start, scope.review_end), [scope.review_start, scope.review_end])
+  const activeDay = selectedDay && days.includes(selectedDay) ? selectedDay : null
   const [showPeatland, setShowPeatland] = useState(false)
   const [evidenceReloadToken, setEvidenceReloadToken] = useState(0)
+  const [clock, setClock] = useState(() => new Date())
   useEffect(() => {
     if (!drawerEventId) { setEvidence(undefined); setEvidenceError(''); setFocusGraph(undefined); setFocusGraphError(''); setAnalysis(undefined); setAnalysisError(''); return }
     setShowObservations(true)
@@ -181,7 +174,7 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
       .finally(() => { if (active) setEvidenceLoading(false) })
     return () => { active = false }
   }, [scope.audit_id, drawerEventId, evidenceReloadToken])
-  const observations = useMemo(() => observationPoints(evidence), [evidence])
+  const observations = useMemo(() => filteredObservationPoints(evidence, activeDay), [evidence, activeDay])
 
   async function generateAnalysis() {
     if (!drawerEventId) return
@@ -206,13 +199,22 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
   const taggedEdges = useMemo<TaggedGraphEdge[]>(() => {
     const edgeKey = (edge: { sourceEventId: string; targetEventId: string }) => `${edge.sourceEventId} ${edge.targetEventId}`
     const focusKeys = new Set((focusGraph?.edges ?? []).map(edgeKey))
+    const selected = new Set(registerSelection)
     return [
       ...(focusGraph?.edges ?? []).map((edge) => ({ ...edge, origin: 'focus' as const })),
       ...(selectionGraph?.edges ?? [])
         .filter((edge) => !focusKeys.has(edgeKey(edge)))
         .map((edge) => ({ ...edge, origin: 'selection' as const })),
-    ]
-  }, [selectionGraph, focusGraph])
+    ].filter((edge) => {
+      if (edge.distanceKm > SCOPED_MAP_RELATIONSHIP_DISTANCE_KM) return false
+      const selectedPair = selected.has(edge.sourceEventId) && selected.has(edge.targetEventId)
+      // A one-event drawer graph can rediscover another selected event as a
+      // contextual neighbour. Do not let its distance-only fallback override
+      // the multi-select rule: selected pairs need an existing deterministic
+      // graph record before they can be drawn as a relationship.
+      return !selectedPair || edge.evidence?.[0]?.type === 'candidate_edge_fire_event_graph'
+    })
+  }, [selectionGraph, focusGraph, registerSelection])
 
   useEffect(() => {
     let active = true
@@ -259,11 +261,19 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
     setCandidateIds(failed)
     if (failed.length) setPackError(`Could not add ${failed.length} selected FireEvent${failed.length === 1 ? '' : 's'} to the audit report.`)
   }
-  const points = useMemo(() => mapPoints(events, graphNodes), [events, graphNodes])
-  const edges = useMemo(() => graphEdges(graphNodes, taggedEdges), [graphNodes, taggedEdges])
-  const envelopes = useMemo(() => envelopePolygons(taggedEdges), [taggedEdges])
+  const visibleEvents = useMemo(() => events.filter((event) => eventOverlapsDay(event, activeDay)), [events, activeDay])
+  const visibleGraphNodes = useMemo(() => graphNodes.filter((node) => eventOverlapsDay(node, activeDay)), [graphNodes, activeDay])
+  const points = useMemo(() => mapPoints(visibleEvents, visibleGraphNodes), [visibleEvents, visibleGraphNodes])
+  const edges = useMemo(() => graphEdges(visibleGraphNodes, taggedEdges), [visibleGraphNodes, taggedEdges])
+  const envelopes = useMemo(() => envelopePolygons(taggedEdges, registerSelection), [taggedEdges, registerSelection])
   const [showSpreadEnvelopes, setShowSpreadEnvelopes] = useState(true)
   const center = useMemo<[number, number]>(() => scope.centroid ?? [116.25, -3.8], [scope.centroid])
+  const light = southeastAsiaLight(clock)
+
+  useEffect(() => {
+    const refresh = window.setInterval(() => setClock(new Date()), CLOCK_REFRESH_MS)
+    return () => window.clearInterval(refresh)
+  }, [])
 
   // Carto's basemap tiles now require a key on every request. The style JSON
   // stays key-free and committed; the key is appended here so it never lands
@@ -300,13 +310,13 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
     setFocusedEventId(id)
   }
 
-  return <div className="relative flex h-full w-full flex-col bg-bg text-text">
-    <header className="flex h-14 shrink-0 items-center justify-between border-b border-border-strong bg-panel px-5">
+  return <div className="scoped-map-print-root relative flex h-full w-full flex-col bg-bg text-text">
+    <header className="scoped-map-print-hide flex h-14 shrink-0 items-center justify-between border-b border-border-strong bg-panel px-5">
       <div><div className="text-sm font-semibold tracking-wide">Environmental Assurance Console</div><div className="text-[10px] uppercase tracking-[0.2em] text-text-faint">Scoped FireEvent review · {scope.review_start} → {scope.review_end}</div></div>
       <div className="flex items-center gap-2"><Button onClick={onOpenScope}>EDIT SCOPE</Button></div>
     </header>
-    <div className="relative flex min-h-0 flex-1">
-      <div className="relative min-w-0 flex-1">
+    <div className="scoped-map-print-shell relative flex min-h-0 flex-1">
+      <div className="scoped-map-print-hide relative min-w-0 flex-1">
         <Map
           // Carto's vector dark-matter style with land/water recoloured to this
           // app's palette (land INDONESIA_FILL_COLOR #364527, water --color-bg
@@ -324,6 +334,16 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
           onClick={handleMapClick}
           cursor="default"
           onLoad={(event) => {
+            // Keep scoped investigation maps in the same visual language as
+            // Audit Landing: readable green land and clearly blue water.
+            const map = event.target
+            if (map.getLayer('background')) map.setPaintProperty('background', 'background-color', '#183f37')
+            if (map.getLayer('landcover')) map.setPaintProperty('landcover', 'fill-color', '#347657')
+            if (map.getLayer('landuse')) map.setPaintProperty('landuse', 'fill-color', '#285f49')
+            if (map.getLayer('park_national_park')) map.setPaintProperty('park_national_park', 'fill-color', '#54a34f')
+            if (map.getLayer('park_nature_reserve')) map.setPaintProperty('park_nature_reserve', 'fill-color', '#438a4d')
+            if (map.getLayer('water')) map.setPaintProperty('water', 'fill-color', '#010f2b')
+            if (map.getLayer('waterway')) map.setPaintProperty('waterway', 'line-color', '#20b7d7')
             event.target.jumpTo({ center, zoom: initialViewState.zoom })
           }}
           onIdle={(event) => {
@@ -335,7 +355,15 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
           {buffer && <Source id="audit-context-buffer" type="geojson" data={buffer}><Layer id="audit-context-buffer-line" type="line" paint={{ 'line-color': AUDIT_SCOPE_BUFFER_COLOR, 'line-width': 1.5, 'line-dasharray': [2, 2], 'line-opacity': 0.9 }} /></Source>}
           {boundary && <Source id="audit-scope-boundary" type="geojson" data={boundary}><Layer id="audit-scope-fill" type="fill" paint={{ 'fill-color': AUDIT_SCOPE_BOUNDARY_COLOR, 'fill-opacity': 0.08 }} /><Layer id="audit-scope-line" type="line" paint={{ 'line-color': AUDIT_SCOPE_BOUNDARY_COLOR, 'line-width': 2 }} /></Source>}
           {showPeatland && <Source id="peatland-context" type="geojson" data="/peatland-indonesia.geojson"><Layer id="peatland-context-fill" type="fill" paint={{ 'fill-color': '#a855f7', 'fill-opacity': 0.22 }} /><Layer id="peatland-context-line" type="line" paint={{ 'line-color': '#c084fc', 'line-width': 0.7, 'line-opacity': 0.7 }} /></Source>}
-          {edges.features.length > 0 && <Source id="fireevent-graph" type="geojson" data={edges}><Layer id="fireevent-graph-line" type="line" paint={{ 'line-color': GRAPH_LINE_COLOR, 'line-width': ['match', ['get', 'origin'], 'focus', 2, 1.2], 'line-opacity': ['match', ['get', 'origin'], 'focus', 0.9, 0.4], 'line-dasharray': [1, 1] }} layout={{ 'line-cap': 'round' }} /></Source>}
+          {edges.features.length > 0 && <Source id="fireevent-graph" type="geojson" data={edges}><Layer id="fireevent-graph-line" type="line" paint={{
+            'line-color': GRAPH_LINE_COLOR,
+            // Use the deterministic relationship state already supplied by
+            // FireEventGraph. Compatibility is more legible; weaker or
+            // unresolved candidates recede without inventing a UI score.
+            'line-width': ['match', ['get', 'state'], 'PROPAGATION_COMPATIBLE', 2.2, 'PROPAGATION_WEAK', 1.5, ['match', ['get', 'origin'], 'focus', 1.5, 1]],
+            'line-opacity': ['match', ['get', 'state'], 'PROPAGATION_COMPATIBLE', ['match', ['get', 'origin'], 'focus', 0.9, 0.65], 'PROPAGATION_WEAK', ['match', ['get', 'origin'], 'focus', 0.55, 0.35], 0.25],
+            'line-dasharray': [1, 1],
+          }} layout={{ 'line-cap': 'round' }} /></Source>}
           {/* A focused event's graph can carry a dozen-plus candidate edges at
               once (see MAX_ENVELOPE_REACH_KM in enrich_fire_spread_audit_events.py);
               translucent fills from that many overlapping polygons compound
@@ -361,35 +389,48 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
             />
           </Source>
         </Map>
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-[1] mix-blend-screen transition-opacity duration-[60000ms]"
+          style={{ background: 'radial-gradient(ellipse at 14% 6%, rgba(42, 200, 255, 0.33), transparent 43%), radial-gradient(ellipse at 86% 84%, rgba(255, 166, 52, 0.18), transparent 45%), radial-gradient(ellipse at 45% 20%, transparent 18%, rgba(1, 13, 30, 0.72) 100%)', opacity: 0.82 - light.daylight * 0.6 }}
+        />
       </div>
-      <aside className="flex w-80 shrink-0 flex-col overflow-y-auto border-l border-border-strong bg-panel">
+      <aside className="scoped-map-print-hide flex w-80 shrink-0 flex-col overflow-y-auto border-l border-border-strong bg-panel">
         <div className="border-b border-border-strong p-4">
-          <div className="text-xs uppercase tracking-[0.16em] text-accent">Audit scope map</div>
-          <h1 className="mt-1 text-sm font-semibold">FireEvents in scope + context</h1>
-          <p className="mt-2 text-xs leading-5 text-text-muted">Review scoped FireEvents and optional peat context.</p>
-          <div className="mt-3 rounded border border-border bg-bg p-2 text-xs"><div className="text-text-faint">EVENTS SHOWN</div><div className="mt-1 text-lg font-semibold text-accent">{loading ? '…' : events.length.toLocaleString()}</div></div>
-          <p className="mt-3 text-[10px] leading-4 text-text-faint">Peat is environmental context, not cause. Compare it with selected-event evidence and candidate links.</p>
-          {taggedEdges.length > 0 && <p className="mt-2 text-[10px] leading-4 text-text-faint"><span className="text-accent">Bright lines</span> are the open FireEvent's own candidates; <span className="opacity-60">faint lines</span> belong to other FireEvents selected in the Fire Register.</p>}
-          {envelopes.features.length > 0 && <p className="mt-2 text-[10px] leading-4 text-text-faint">Dashed outline: a first-order wind-oriented surface-spread compatibility estimate for a candidate FireEvent pair -- not a validated fire-behaviour forecast, and not a claim about what happened.</p>}
-          {error && <div role="alert" className="mt-3 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-xs text-red-200">{error}</div>}
-          {selectionGraphError && <div role="alert" className="mt-3 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-xs text-red-200">{selectionGraphError}</div>}
-          {loading && <div role="status" className="mt-3 text-xs text-text-muted">Loading real audit FireEvents…</div>}
-          {!loading && !error && events.length === 0 && <div className="mt-3 text-xs text-text-muted">No events intersect this audit scope and buffer.</div>}
+          <div className="text-sm uppercase tracking-[0.16em] text-accent">Audit scope map</div>
+          <h1 className="mt-1 text-base font-semibold">FireEvents in scope + context</h1>
+          <p className="mt-2 text-sm leading-5 text-text-muted">Review scoped FireEvents and optional peat context.</p>
+          <div className="mt-3 rounded border border-border bg-bg p-2.5 text-sm"><div className="text-text-faint">EVENTS SHOWN</div><div className="mt-1 text-xl font-semibold text-accent">{loading ? '…' : visibleEvents.length.toLocaleString()}</div></div>
+          <div className="mt-3 rounded border border-border bg-bg p-3" aria-label="Temporal observation scrubber">
+            <div className="flex items-center justify-between text-xs uppercase tracking-[0.12em] text-text-faint"><span>OBSERVATION DAY</span><span className="text-accent">{activeDay ?? 'ALL DAYS'}</span></div>
+            <div className="mt-2 grid grid-cols-3 gap-1.5">
+              <button type="button" aria-pressed={activeDay === null} onClick={() => setSelectedDay(null)} className={`rounded border px-2 py-1.5 text-xs font-semibold ${activeDay === null ? 'border-accent bg-accent/15 text-accent' : 'border-border-strong text-text-muted'}`}>ALL DAYS</button>
+              {days.map((day) => <button key={day} type="button" aria-label={`Show observations for ${day}`} aria-pressed={activeDay === day} onClick={() => setSelectedDay(day)} className={`rounded border px-2 py-1.5 text-xs font-semibold ${activeDay === day ? 'border-accent bg-accent/15 text-accent' : 'border-border-strong text-text-muted'}`}>{day.slice(8)}</button>)}
+            </div>
+            <p className="mt-2 text-xs leading-4 text-text-faint">FIRMS observations for the selected UTC day. Event points remain when their detection window overlaps.</p>
+          </div>
+          <p className="mt-3 text-xs leading-5 text-text-faint">Peat is environmental context, not cause; compare it with event evidence.</p>
+          {taggedEdges.length > 0 && <p className="mt-2 text-xs leading-5 text-text-faint">Lines are limited to {SCOPED_MAP_RELATIONSHIP_DISTANCE_KM} km. <span className="text-accent">Bright</span> lines are stronger candidates for the open FireEvent; weaker or unresolved links recede. <span className="opacity-60">Faint</span> lines belong to other FireEvents selected in the Fire Register.</p>}
+          {envelopes.features.length > 0 && <p className="mt-2 text-xs leading-5 text-text-faint">Dashed outline: first-order wind-oriented surface-spread compatibility estimate — not a validated forecast or claim about what happened.</p>}
+          {error && <div role="alert" className="mt-3 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-sm text-red-200">{error}</div>}
+          {selectionGraphError && <div role="alert" className="mt-3 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-sm text-red-200">{selectionGraphError}</div>}
+          {loading && <div role="status" className="mt-3 text-sm text-text-muted">Loading real audit FireEvents…</div>}
+          {!loading && !error && events.length === 0 && <div className="mt-3 text-sm text-text-muted">No events intersect this audit scope and buffer.</div>}
           <Button variant="primary" className="mt-4 w-full" onClick={onOpenRegister}>OPEN FIRE REGISTER</Button>
           <Button className="mt-2 w-full" onClick={() => setShowPeatland((shown) => !shown)}>{showPeatland ? 'HIDE PEATLAND' : 'SHOW PEATLAND'}</Button>
           {envelopes.features.length > 0 && <Button className="mt-2 w-full" onClick={() => setShowSpreadEnvelopes((shown) => !shown)}>{showSpreadEnvelopes ? 'HIDE SPREAD ENVELOPES' : 'SHOW SPREAD ENVELOPES'}</Button>}
         </div>
         <div className="p-4">
           <div className="flex items-center justify-between">
-            <div className="text-xs uppercase tracking-[0.16em] text-accent">Investigation candidates</div>
-            <span className="rounded border border-border px-1.5 py-0.5 text-[10px] text-text-muted">{packed.length} IN REPORT</span>
+            <div className="text-sm uppercase tracking-[0.16em] text-accent">Investigation candidates</div>
+            <span className="rounded border border-border px-1.5 py-0.5 text-xs text-text-muted">{packed.length} IN REPORT</span>
           </div>
-          <p className="mt-2 text-xs leading-5 text-text-muted">Select one or more scoped FireEvents to add them to the audit report. This is independent from Fire Register selection used for map comparison.</p>
-          {packError && <div role="alert" className="mt-2 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-xs text-red-200">{packError}</div>}
+          <p className="mt-2 text-sm leading-5 text-text-muted">Select scoped FireEvents for the audit report; this is separate from Fire Register map comparison.</p>
+          {packError && <div role="alert" className="mt-2 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-sm text-red-200">{packError}</div>}
           <Button className="mt-3 w-full" disabled={!drawerEventId || packed.includes(drawerEventId)} onClick={() => void addFocusedEventToPack()}>{drawerEventId ? packed.includes(drawerEventId) ? 'OPEN FIRE EVENT IS IN REPORT' : `ADD OPEN FIRE EVENT (${drawerEventId})` : 'OPEN A FIRE EVENT TO ADD IT'}</Button>
-          {!loading && events.length === 0 ? <p className="mt-3 text-[11px] text-text-faint">No scoped FireEvents are available to add.</p> : <ul className="mt-3 max-h-64 space-y-1.5 overflow-y-auto pr-1">{events.map((event) => {
+          {!loading && events.length === 0 ? <p className="mt-3 text-sm text-text-faint">No scoped FireEvents are available to add.</p> : <ul className="mt-3 max-h-64 space-y-1.5 overflow-y-auto pr-1">{events.map((event) => {
             const inReport = packed.includes(event.eventId)
-            return <li key={event.eventId} className="rounded border border-border bg-bg px-2 py-1.5 text-[11px]"><label className="flex cursor-pointer items-center gap-2"><input aria-label={`Add ${event.eventId} to audit report`} type="checkbox" checked={candidateIds.includes(event.eventId)} disabled={inReport} onChange={() => toggleCandidate(event.eventId)} /><span className="min-w-0 flex-1 truncate font-mono text-text-muted">{event.eventId}</span><span className="shrink-0 text-[10px] text-text-faint">{inReport ? 'IN REPORT' : event.investigationPriority}</span></label></li>
+            return <li key={event.eventId} className="rounded border border-border bg-bg px-2 py-1.5 text-sm"><label className="flex cursor-pointer items-center gap-2"><input aria-label={`Add ${event.eventId} to audit report`} type="checkbox" checked={candidateIds.includes(event.eventId)} disabled={inReport} onChange={() => toggleCandidate(event.eventId)} /><span className="min-w-0 flex-1 truncate font-mono text-text-muted">{event.eventId}</span><span className="shrink-0 text-xs text-text-faint">{inReport ? 'IN REPORT' : event.investigationPriority}</span></label></li>
           })}</ul>}
           <Button className="mt-3 w-full" disabled={!candidateIds.length} onClick={() => void addCandidatesToPack()}>{`ADD SELECTED TO REPORT (${candidateIds.length})`}</Button>
           <Button variant="primary" className="mt-3 w-full" onClick={onViewReport}>{`VIEW AUDIT REPORT (${packed.length})`}</Button>

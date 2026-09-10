@@ -266,8 +266,38 @@ def test_graph_prefers_the_precomputed_real_fire_event_graph_edge(client):
     )
     assert edge["state"] == "PROPAGATION_COMPATIBLE"
     assert edge["envelope"] is not None
+    assert edge["envelope"]["ownerEventId"] == edge["sourceEventId"]
     assert len(edge["envelope"]["polygon"]) > 3
     assert edge["envelope"]["polygon"][0] == edge["envelope"]["polygon"][-1]
+
+
+def test_multi_select_keeps_only_deterministic_edges_between_selected_events(client):
+    selected = ["FE-20190901-f0d0bb0675", "FE-20190904-0fb85076c0"]
+    response = client.get(f"/api/audits/{AUDIT}/graph?event_ids={','.join(selected)}")
+
+    assert response.status_code == 200
+    body = response.get_json()
+    edge = next(
+        e for e in body["edges"]
+        if {e["sourceEventId"], e["targetEventId"]} == set(selected)
+    )
+    assert edge["state"] == "PROPAGATION_COMPATIBLE"
+    assert edge["envelope"]["ownerEventId"] == "FE-20190901-f0d0bb0675"
+
+    unrelated = [
+        event["eventId"]
+        for event in client.get(f"{BASE}?limit=3").get_json()["events"]
+    ]
+    unrelated_response = client.get(
+        f"/api/audits/{AUDIT}/graph?event_ids={','.join(unrelated)}"
+    )
+    assert unrelated_response.status_code == 200
+    selected_edges = [
+        e for e in unrelated_response.get_json()["edges"]
+        if {e["sourceEventId"], e["targetEventId"]}.issubset(unrelated)
+    ]
+    assert all(e["state"] != "RELATED_POSSIBLE" for e in selected_edges)
+    assert all(e["evidence"][0]["type"] == "candidate_edge_fire_event_graph" for e in selected_edges)
 
 
 def test_unknown_event_in_a_known_audit_is_404(client):

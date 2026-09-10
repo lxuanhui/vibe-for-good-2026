@@ -161,6 +161,11 @@ def _edge_from_real(real: dict[str, Any], subject_id: str, candidate_id: str) ->
     features = real["features"]
     distance = round(features["geographic_distance_km"], 3)
     envelope = real.get("envelope")
+    if envelope is not None:
+        # The envelope is projected from the directed source event. Keep that
+        # ownership explicit at the API boundary so clients cannot mistake
+        # every candidate edge for an ellipse belonging to the open event.
+        envelope = {**envelope, "ownerEventId": real["source_event_id"]}
     evidence_id = f"GRAPH_{real['source_event_id']}_{real['target_event_id']}_fire_event_graph"
     limitations = [
         "A candidate edge is a relationship for review, not evidence of a shared cause or responsibility.",
@@ -227,6 +232,19 @@ def investigation_map(audit_id: str, event_ids: list[str]) -> dict[str, Any] | N
     real_edges = _real_edges_by_pair(_triage_for_audit(audit_id), visible)
     edges = []
     has_real_edge = False
+
+    # Multi-select must retain a deterministic relationship when both of its
+    # endpoints are selected. There is no distance-only fallback here:
+    # proximity cannot turn temporally incompatible events into a causal-
+    # looking line. Context-neighbour edges below remain useful screening
+    # context, but selected-to-selected edges are evidence-backed only.
+    for index, source in enumerate(selected):
+        for target in selected[index + 1:]:
+            real = real_edges.get(frozenset((source["eventId"], target["eventId"])))
+            if real is not None:
+                has_real_edge = True
+                edges.append(_edge_from_real(real, source["eventId"], target["eventId"]))
+
     for candidate in neighbours:
         subject = min(selected, key=lambda event: _distance_km(candidate, event))
         real = real_edges.get(frozenset((subject["eventId"], candidate["eventId"])))
