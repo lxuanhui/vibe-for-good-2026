@@ -30,6 +30,68 @@ apply an older decision without checking the entries above it.
 
 ---
 
+## 2026-09-10 - The live FIRMS cache is shared across Lambda containers as one S3 object, filling the disposable-cache role
+
+**Status:** done · PR #246 · Refs #186
+
+**Decision.** `GET /api/firms/live` keeps its process-local 15-minute cache as
+a first level and adds a second: one gzipped JSON object,
+`firms-live/current.json.gz`, in a new bucket `aws_s3_bucket.cache`. A cold
+container reads the object before it fetches; a successful fetch publishes
+it. Freshness is judged by the wall-clock stamp written inside the object,
+and a container that reads an aged entry expires its local copy at the same
+moment the shared one would. The shared level is best-effort in both
+directions: any failure to read or write falls through to the upstream
+fetch, and an upstream failure publishes nothing. This is the third of spec
+§8's persistence roles, the disposable cache; the bulky-immutable-evidence
+role is still unfilled.
+
+**Why.** The same failure the audit-state entry (2026-09-09) worked through,
+one route over: Lambda serves consecutive requests from different
+containers, and a cold container's dict is empty. Measured on the deployed
+API on 2026-09-10, a cold start cost ~2.4s of extra time-to-first-byte on the
+landing map, which is the first screen every visitor sees, and two warm
+containers each spent a FIRMS transaction for the same window.
+
+**Rejected: a row in the audit-state table.** The payload does not reliably
+fit DynamoDB's 400 KB item. Measured on synthetic payloads in the served
+shape: 97 KB gzipped at the 5,389 detections seen live on 2026-09-10, 268 KB
+at 15,000, 714 KB at 40,000. The cap is passed near 20,000 detections in 24
+hours across the Southeast Asia bounding box, which is a haze-season day, so
+the table would fail exactly when the layer matters. Chunking across items
+would work and was rejected as more code for what S3 gives for free.
+
+**Rejected: a lease against the simultaneous double miss.** Two containers
+that miss at the same instant both fetch. A lease in the shared store would
+stop that at the price of a second round trip on every miss and a stale-lease
+path to get right, to save one FIRMS transaction per coincidence against a
+quota in the thousands per ten minutes. Not worth it at this traffic; revisit
+only if FIRMS transaction errors appear in the logs.
+
+**Rejected: CloudFront; provisioned concurrency.** Both from the issue's own
+list. The first is a new distribution for a cache the app can hold itself.
+The second is always-on, so it needs the standing justification, and it does
+not stop two warm containers duplicating the fetch anyway.
+
+**Consequence for CI, and a rule.** The CI role had no S3 grant beyond the
+state bucket. The first cut put one in `bootstrap/oidc.tf`, which is applied
+by hand, so the PR could not merge until a laptop had run `terraform apply`.
+The owner rejected that: CI is where everything is applied, so nothing is
+applied from a laptop by accident. The grant now lives in `infra/ci_role.tf`
+as an inline policy the role puts on itself (it already held
+`iam:PutRolePolicy` on every project role), planned on its own PR and
+applied on merge ahead of the bucket so IAM propagation is settled. The
+actions are enumerated rather than `s3:*` because trivy flags the wildcard
+at HIGH (AWS-0345) and the S3 namespace holds object actions the CI role
+should not have; the pattern `<project>-*-cache-*` excludes the state
+bucket, which keeps its object-only grant. The trade is stated in that
+file: a PR merged to `main` can widen CI's own permissions, in the open,
+with a plan comment. Bootstrap now holds only what CI cannot give itself.
+
+**Open.** The post-deploy cold-start time-to-first-byte has not been measured
+yet; #186 stays open until it is quoted.
+---
+
 ## 2026-09-10 - The shared evidence prefix is sent behind a Bedrock cache point; round 1 stays parallel, so the saving is two reads, not three
 
 **Status:** done, measurement pending · PRs #245, #247 · Refs #147

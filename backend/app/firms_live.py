@@ -19,17 +19,23 @@ requesting: `world/1` -- every VIIRS detection on Earth for 24 hours, several
 MB of CSV -- which the client then filtered down to the region after paying to
 download it. The area API takes a bounding box.
 
-Nothing here is persisted. These detections are live orientation context, not
-audit evidence; the evidence path reads the committed, immutable 2019 artifact
-so the same review reproduces.
+Nothing here is persisted as evidence. These detections are live orientation
+context, not audit evidence; the evidence path reads the committed, immutable
+2019 artifact so the same review reproduces. The one thing stored is the
+served payload itself, in a shared cache that expires (see `_cache` below).
+That is a cache of a public feed, not a store of detections: it holds nothing
+a fresh fetch would not return, and the audit path never reads it.
 """
 
 from __future__ import annotations
 
 import csv
+import gzip
 import io
+import json
 import logging
 import os
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -86,11 +92,148 @@ CACHE_SECONDS = 900
 # time the whole request out.
 FETCH_TIMEOUT_SECONDS = 10
 
+# Two cache levels, checked in this order.
+#
+# 1. `_cache`, this process's own copy. Free to read, and it is what serves
+#    every visitor a warm container sees. It is also why a cache exists at
+#    all: without it each browser is its own FIRMS client against a per-key
+#    transaction cap.
+# 2. One shared object in S3, when `LIVE_CACHE_BUCKET` is set. Lambda serves
+#    consecutive requests from different containers, and a cold container's
+#    `_cache` is empty, so before #186 the first visitor after every cold
+#    start waited on NASA (measured: ~2.4s of extra time-to-first-byte, on
+#    the screen every visitor sees first) and two warm containers each spent
+#    their own upstream transaction for the same window. The shared copy is
+#    what a cold container reads instead. It is S3 rather than a row in the
+#    audit-state table because the payload does not reliably fit a 400 KB
+#    item: gzipped, ~100 KB at the 5,389 detections measured on 2026-09-10,
+#    past the cap near 20,000, which is a haze-season day -- so DynamoDB
+#    would fail exactly when the layer matters (decision log, 2026-09-10,
+#    live FIRMS cache).
+#
+# The shared level is best-effort in both directions. A read that fails, a
+# write that fails, a bucket that does not exist, or no boto3 in a local
+# install all fall through to the upstream fetch this module always did: a
+# caching layer must never turn a working page into an error. Staleness is
+# judged by the wall-clock time stored inside the object, never by this
+# container's monotonic clock, because another process wrote it.
+#
+# What this does not do: stop two containers that miss at the same instant
+# from both fetching. That costs one extra FIRMS transaction per simultaneous
+# cold miss, against a quota in the thousands per ten minutes; a lease in the
+# shared store would remove it at the price of a second round trip on every
+# miss and a stale-lease path to get right. Not worth it at this traffic.
 _cache: dict[str, Any] = {}
+
+SHARED_CACHE_KEY = "firms-live/current.json.gz"
+
+# S3 within the region answers in tens of milliseconds. Anything slower than
+# these is worth abandoning for a direct fetch: the whole route has to answer
+# inside the API Lambda's 29s, and boto3's defaults would wait a minute.
+SHARED_CACHE_CONNECT_TIMEOUT_SECONDS = 2
+SHARED_CACHE_READ_TIMEOUT_SECONDS = 5
 
 
 class FirmsUnavailable(RuntimeError):
     """The live layer cannot be served -- no key, or upstream did not answer."""
+
+
+class _S3SharedCache:
+    """One gzipped JSON object: `{"storedAt": <epoch seconds>, "payload": ...}`.
+
+    Gzipped not for the item cap (S3 has none) but because the object is read
+    on every cold start and ~850 KB of point features compress to ~100 KB.
+    """
+
+    def __init__(self, bucket: str) -> None:
+        import boto3  # Lambda supplies boto3; a local install needs it only with the bucket set.
+        from botocore.config import Config
+
+        self.bucket = bucket
+        self._client = boto3.client(
+            "s3",
+            config=Config(
+                connect_timeout=SHARED_CACHE_CONNECT_TIMEOUT_SECONDS,
+                read_timeout=SHARED_CACHE_READ_TIMEOUT_SECONDS,
+                retries={"max_attempts": 2},
+            ),
+        )
+
+    def read(self) -> dict[str, Any] | None:
+        from botocore.exceptions import ClientError
+
+        try:
+            response = self._client.get_object(Bucket=self.bucket, Key=SHARED_CACHE_KEY)
+        except ClientError as exc:
+            # No object yet is the ordinary state of a fresh bucket, not a
+            # failure; anything else is, and the caller decides what to do.
+            if exc.response.get("Error", {}).get("Code") in ("NoSuchKey", "404"):
+                return None
+            raise
+        return json.loads(gzip.decompress(response["Body"].read()).decode("utf-8"))
+
+    def write(self, entry: dict[str, Any]) -> None:
+        self._client.put_object(
+            Bucket=self.bucket,
+            Key=SHARED_CACHE_KEY,
+            Body=gzip.compress(json.dumps(entry, separators=(",", ":")).encode("utf-8")),
+            ContentType="application/json",
+            ContentEncoding="gzip",
+        )
+
+
+_shared: _S3SharedCache | None = None
+_shared_lock = threading.Lock()
+
+
+def _shared_cache() -> _S3SharedCache | None:
+    """The shared level, built once per container, or None when not configured."""
+    global _shared
+    bucket = os.environ.get("LIVE_CACHE_BUCKET", "").strip()
+    if not bucket:
+        return None
+    with _shared_lock:
+        if _shared is None or _shared.bucket != bucket:
+            _shared = _S3SharedCache(bucket)
+        return _shared
+
+
+def _read_shared() -> dict[str, Any] | None:
+    """The shared entry if one exists and is well-formed, else None. Never raises."""
+    try:
+        shared = _shared_cache()
+        if shared is None:
+            return None
+        entry = shared.read()
+    except Exception:
+        # Deliberately broad: a missing bucket, a denied read, a timeout and a
+        # missing boto3 all have the same right answer here, which is to fetch
+        # upstream as if there were no shared level. Logged so a persistently
+        # failing store is visible in CloudWatch rather than only as slower
+        # cold starts.
+        logger.warning("Shared live FIRMS cache could not be read; fetching upstream", exc_info=True)
+        return None
+    if (
+        not isinstance(entry, dict)
+        or "payload" not in entry
+        or isinstance(entry.get("storedAt"), bool)
+        or not isinstance(entry.get("storedAt"), (int, float))
+    ):
+        return None
+    return entry
+
+
+def _write_shared(entry: dict[str, Any]) -> None:
+    """Publish a fresh fetch for other containers. Never raises."""
+    try:
+        shared = _shared_cache()
+        if shared is not None:
+            shared.write(entry)
+    except Exception:
+        # Same reasoning as `_read_shared`: the visitor already has their
+        # payload, and a failed publish costs the next cold container one
+        # upstream fetch, not this visitor anything.
+        logger.warning("Shared live FIRMS cache could not be written", exc_info=True)
 
 
 def _fetch_csv(map_key: str) -> str:
@@ -201,6 +344,21 @@ def live_detections(*, now: float | None = None) -> dict[str, Any]:
     if cached is not None and clock - _cache["at"] < CACHE_SECONDS:
         return cached
 
+    entry = _read_shared()
+    if entry is not None:
+        # Age by the writer's wall clock, clamped so a container whose clock
+        # runs a second behind the writer's does not read a fresh entry as
+        # being from the future and refetch for nothing.
+        age = max(0.0, time.time() - float(entry["storedAt"]))
+        if age < CACHE_SECONDS:
+            payload = entry["payload"]
+            # The local copy expires when the shared one would, not fifteen
+            # minutes from now: otherwise a container that read a
+            # fourteen-minute-old entry would serve it as current for
+            # twenty-nine, and the layer would no longer be what it claims.
+            _cache.update(payload=payload, at=clock - age)
+            return payload
+
     fetched_at = datetime.now(UTC)
     features = _within_window(
         _to_features(_fetch_csv(map_key), map_key=map_key), as_of=fetched_at
@@ -213,4 +371,7 @@ def live_detections(*, now: float | None = None) -> dict[str, Any]:
         "detections": {"type": "FeatureCollection", "features": features},
     }
     _cache.update(payload=payload, at=clock)
+    # Only a successful fetch is published. An upstream failure raised above,
+    # so a stale or error payload can never be what other containers read.
+    _write_shared({"storedAt": fetched_at.timestamp(), "payload": payload})
     return payload
