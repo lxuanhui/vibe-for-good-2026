@@ -11,6 +11,7 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 
 const GRAPH_LINE_COLOR = '#f97316'
 const OBSERVATION_COLOR = '#fbbf24'
+const SCOPED_MAP_RELATIONSHIP_DISTANCE_KM = 10
 
 // The correlation graph is one rolled-together view now, not two flows that
 // silently replace each other: `origin` distinguishes an edge that touches
@@ -64,7 +65,7 @@ function graphEdges(graphNodes: InvestigationMapNode[], edges: TaggedGraphEdge[]
       const from = nodeById[edge.sourceEventId]
       const to = nodeById[edge.targetEventId]
       return from && to
-        ? [{ type: 'Feature' as const, geometry: { type: 'LineString' as const, coordinates: [[from.centroid.lon, from.centroid.lat], [to.centroid.lon, to.centroid.lat]] }, properties: { origin: edge.origin } }]
+        ? [{ type: 'Feature' as const, geometry: { type: 'LineString' as const, coordinates: [[from.centroid.lon, from.centroid.lat], [to.centroid.lon, to.centroid.lat]] }, properties: { origin: edge.origin, state: edge.state } }]
         : []
     }),
   }
@@ -211,7 +212,7 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
       ...(selectionGraph?.edges ?? [])
         .filter((edge) => !focusKeys.has(edgeKey(edge)))
         .map((edge) => ({ ...edge, origin: 'selection' as const })),
-    ]
+    ].filter((edge) => edge.distanceKm <= SCOPED_MAP_RELATIONSHIP_DISTANCE_KM)
   }, [selectionGraph, focusGraph])
 
   useEffect(() => {
@@ -335,7 +336,15 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
           {buffer && <Source id="audit-context-buffer" type="geojson" data={buffer}><Layer id="audit-context-buffer-line" type="line" paint={{ 'line-color': AUDIT_SCOPE_BUFFER_COLOR, 'line-width': 1.5, 'line-dasharray': [2, 2], 'line-opacity': 0.9 }} /></Source>}
           {boundary && <Source id="audit-scope-boundary" type="geojson" data={boundary}><Layer id="audit-scope-fill" type="fill" paint={{ 'fill-color': AUDIT_SCOPE_BOUNDARY_COLOR, 'fill-opacity': 0.08 }} /><Layer id="audit-scope-line" type="line" paint={{ 'line-color': AUDIT_SCOPE_BOUNDARY_COLOR, 'line-width': 2 }} /></Source>}
           {showPeatland && <Source id="peatland-context" type="geojson" data="/peatland-indonesia.geojson"><Layer id="peatland-context-fill" type="fill" paint={{ 'fill-color': '#a855f7', 'fill-opacity': 0.22 }} /><Layer id="peatland-context-line" type="line" paint={{ 'line-color': '#c084fc', 'line-width': 0.7, 'line-opacity': 0.7 }} /></Source>}
-          {edges.features.length > 0 && <Source id="fireevent-graph" type="geojson" data={edges}><Layer id="fireevent-graph-line" type="line" paint={{ 'line-color': GRAPH_LINE_COLOR, 'line-width': ['match', ['get', 'origin'], 'focus', 2, 1.2], 'line-opacity': ['match', ['get', 'origin'], 'focus', 0.9, 0.4], 'line-dasharray': [1, 1] }} layout={{ 'line-cap': 'round' }} /></Source>}
+          {edges.features.length > 0 && <Source id="fireevent-graph" type="geojson" data={edges}><Layer id="fireevent-graph-line" type="line" paint={{
+            'line-color': GRAPH_LINE_COLOR,
+            // Use the deterministic relationship state already supplied by
+            // FireEventGraph. Compatibility is more legible; weaker or
+            // unresolved candidates recede without inventing a UI score.
+            'line-width': ['match', ['get', 'state'], 'PROPAGATION_COMPATIBLE', 2.2, 'PROPAGATION_WEAK', 1.5, ['match', ['get', 'origin'], 'focus', 1.5, 1]],
+            'line-opacity': ['match', ['get', 'state'], 'PROPAGATION_COMPATIBLE', ['match', ['get', 'origin'], 'focus', 0.9, 0.65], 'PROPAGATION_WEAK', ['match', ['get', 'origin'], 'focus', 0.55, 0.35], 0.25],
+            'line-dasharray': [1, 1],
+          }} layout={{ 'line-cap': 'round' }} /></Source>}
           {/* A focused event's graph can carry a dozen-plus candidate edges at
               once (see MAX_ENVELOPE_REACH_KM in enrich_fire_spread_audit_events.py);
               translucent fills from that many overlapping polygons compound
@@ -369,7 +378,7 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
           <p className="mt-2 text-xs leading-5 text-text-muted">Review scoped FireEvents and optional peat context.</p>
           <div className="mt-3 rounded border border-border bg-bg p-2 text-xs"><div className="text-text-faint">EVENTS SHOWN</div><div className="mt-1 text-lg font-semibold text-accent">{loading ? '…' : events.length.toLocaleString()}</div></div>
           <p className="mt-3 text-[10px] leading-4 text-text-faint">Peat is environmental context, not cause. Compare it with selected-event evidence and candidate links.</p>
-          {taggedEdges.length > 0 && <p className="mt-2 text-[10px] leading-4 text-text-faint"><span className="text-accent">Bright lines</span> are the open FireEvent's own candidates; <span className="opacity-60">faint lines</span> belong to other FireEvents selected in the Fire Register.</p>}
+          {taggedEdges.length > 0 && <p className="mt-2 text-[10px] leading-4 text-text-faint">Relationship lines are limited to {SCOPED_MAP_RELATIONSHIP_DISTANCE_KM} km for local map readability. <span className="text-accent">Bright lines</span> are the open FireEvent's stronger candidates; weaker or unresolved links are deliberately subdued. <span className="opacity-60">Fainter lines</span> belong to other FireEvents selected in the Fire Register.</p>}
           {envelopes.features.length > 0 && <p className="mt-2 text-[10px] leading-4 text-text-faint">Dashed outline: a first-order wind-oriented surface-spread compatibility estimate for a candidate FireEvent pair -- not a validated fire-behaviour forecast, and not a claim about what happened.</p>}
           {error && <div role="alert" className="mt-3 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-xs text-red-200">{error}</div>}
           {selectionGraphError && <div role="alert" className="mt-3 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-xs text-red-200">{selectionGraphError}</div>}
