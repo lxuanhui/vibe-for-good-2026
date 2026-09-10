@@ -31,7 +31,7 @@ apply an older decision without checking the entries above it.
 
 ## 2026-09-10 - Sentinel context images are rendered once by the CDSE Process API and served as static files
 
-**Status:** done · PR #TBD · Closes #191 · Refs #171
+**Status:** done · PR #192 · Closes #191 · Refs #171
 
 **Decision.** The evidence drawer's satellite pictures come from
 `data_pipeline/generate_processed_imagery.py`, run once by hand. For each of
