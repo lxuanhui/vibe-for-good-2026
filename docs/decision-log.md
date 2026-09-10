@@ -31,7 +31,7 @@ apply an older decision without checking the entries above it.
 
 ## 2026-09-10 - The Amplify SPA rewrite is the documented regex 200 rule, because 404-200 on `/<*>` never rewrote the status
 
-**Status:** done · PR #TBD · Closes #115
+**Status:** done · PR #218 · Closes #115
 
 **Decision.** `infra/console.tf` carries AWS's documented single-page-app
 rule: a regex source that matches any path without a dot, or with an
