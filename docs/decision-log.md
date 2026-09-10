@@ -30,6 +30,54 @@ apply an older decision without checking the entries above it.
 
 ---
 
+## 2026-09-10 - The shared evidence prefix is sent behind a Bedrock cache point; round 1 stays parallel, so the saving is two reads, not three
+
+**Status:** done, measurement pending · PRs #245, #247 · Refs #147
+
+**Decision.** `AgentInput.to_dict()` serializes the fields all four provider
+calls share (event id, evidence pack, evidence IDs, hypotheses) before the
+fields that vary per role and per round, and `analysis_provider` sends the
+Converse message as three blocks: the shared text, a `cachePoint`, and the
+per-call text. Joined, the two texts are byte-for-byte the single string the
+adapter sent before; a test pins that, so caching changed the request's
+shape and not what the model reads. A provider that rejects the cache point
+is retried once without it, a prefix under the model's minimum is ignored by
+Bedrock without error, and `BEDROCK_PROMPT_CACHE=0` restores the old shape
+for a like-for-like measurement. Each call logs its usage, including cache
+read and write tokens, at INFO, and the Lambda entrypoint raises the `app`
+logger to INFO so the line is visible.
+
+**Why.** The ~19k-token prefix was sent fresh four times per assessment at
+$1.00/1M when a cached read bills at $0.10/1M. It is the only line in
+`docs/infra.md` where one auditor click costs real money, and it needed no
+change to the model, the prompt wording, or what the agents see.
+
+**Why the saving is smaller than #147 estimated.** The issue's ~$0.09
+assumes one write and three reads. Both roles of a round run in parallel,
+and a cache entry becomes readable only after the response that wrote it
+has begun, so the two round-1 calls both write (1.25x) and the two round-2
+calls both read (0.1x). Per assessment that is roughly $0.13 against $0.15,
+with the ~3.5k output tokens per call now the larger share.
+
+**Rejected: running round 1 sequentially.** Investigator first, then
+Skeptic reading the Investigator's cache write, reaches ~$0.10. It costs
+~9s more wall time on a job the auditor already waits ~51s for, and #198 is
+open because that wait already lacks a visible sign of progress. A one-line
+change in `run_structured_analysis` if $0.03 per assessment ever matters
+more than 9s; recorded here so the trade is made deliberately.
+
+**Rejected: caching in one PR with the reorder.** #147 asked for a prompt
+reorder to be its own PR with the evidence-framing rules re-checked, because
+it changes the text the model receives. #245 is that PR: key order only, no
+wording, no field added or removed.
+
+**Open.** The measured before/after `usage` figures. They need a deployed
+run: one assessment with the default and one with `BEDROCK_PROMPT_CACHE=0`
+on the worker, four `Bedrock usage` lines each in the worker's log group.
+`docs/infra.md` carries the estimate until then, and #147 stays open.
+
+---
+
 ## 2026-09-10 - The served scope names the population behind each review-queue figure, and the two are never divided into each other
 
 **Status:** done · PR #244 · Closes #187
