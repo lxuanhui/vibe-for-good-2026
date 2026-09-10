@@ -165,6 +165,22 @@ data "aws_iam_policy_document" "github_actions" {
     resources = ["arn:${data.aws_partition.current.partition}:dynamodb:*:${data.aws_caller_identity.current.account_id}:table/${var.project}-*"]
   }
 
+  # api.tf's aws_s3_bucket.cache, the shared live-layer cache (#186). The
+  # pattern requires `-cache-` in the name so the state bucket above, which
+  # also matches `${var.project}-*`, keeps its narrower object-only grant
+  # rather than gaining DeleteBucket by accident. `s3:*` on the pattern is
+  # the same service-scoped looseness as the Lambda and Amplify statements,
+  # for the same reason: the provider reads a dozen bucket sub-resources on
+  # every refresh and enumerating them is a list that goes stale.
+  #
+  # A change here is applied by hand (this stack keeps local state), so a
+  # main-stack PR that adds a bucket cannot merge until this has been.
+  statement {
+    sid       = "LiveCacheBucket"
+    actions   = ["s3:*"]
+    resources = ["arn:${data.aws_partition.current.partition}:s3:::${var.project}-*-cache-*"]
+  }
+
   statement {
     sid = "Logs"
     actions = [

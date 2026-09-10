@@ -155,8 +155,11 @@ the bucket name is a literal here and in `bootstrap/variables.tf` — change
 both together.
 
 **The CI role is service-scoped, not action-scoped.** It can manage Lambda,
-API Gateway, logs, and IAM roles whose names start with `vibe-for-good-2026`,
-plus the state bucket. That is deliberately looser than least privilege:
+API Gateway, logs, DynamoDB tables, and IAM roles whose names start with
+`vibe-for-good-2026`, S3 buckets named `vibe-for-good-2026-*-cache-*`, plus
+the state bucket. A main-stack change that needs a grant this role does not
+have (a new service, a bucket outside that pattern) is a `bootstrap/` change
+first, applied by hand, and only then a main-stack PR. That is deliberately looser than least privilege:
 tightening it to individual actions is worth doing before this account holds
 anything else, and splitting it into a read-only plan role and a write apply
 role would be the next step after that.

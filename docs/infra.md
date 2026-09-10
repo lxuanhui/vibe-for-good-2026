@@ -27,6 +27,7 @@ bucket and the CI role).
 | **Amplify Hosting** | `console` app + PR previews | The frontend, and a preview per pull request | **$0.02** |
 | **CloudWatch Logs** | 3 groups, 14-day retention, ~11 KB stored | Both Lambdas and API Gateway. Retention is explicit so the groups die with the stack | **$0.00** |
 | **S3** | `vibe-for-good-2026-tfstate-apse1` — versioned, encrypted, lifecycle-expired | Terraform state. Not application storage | **$0.01** |
+| **S3** | `vibe-for-good-2026-dev-cache-<account>` — encrypted, public access blocked, objects expire after a day | The shared copy of `GET /api/firms/live`'s 15-minute cache, so a cold Lambda container reads ~100 KB from S3 instead of refetching from NASA. One object, overwritten every refresh; the spec's disposable-cache role | not yet billed (created 2026-09-10); est. **< $0.01**: one PUT per refresh and one GET per cold start at $0.005 and $0.0004 per thousand, ~0.1 MB stored |
 | **IAM** | 3 roles + inline policies, 1 OIDC provider | CI authenticates over OIDC; there are no access keys in this repo by design | free |
 
 **Total for this project: about $0.03/month**, and most of that is Amplify
