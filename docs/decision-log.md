@@ -30,6 +30,61 @@ apply an older decision without checking the entries above it.
 
 ---
 
+## 2026-09-10 - An analysis job is claimed inside the store's compare-and-set, and every claim carries a job id its worker must present to write
+
+**Status:** done · PR #252 · Closes #189 · Refs #146, #143
+
+**Decision.** `analysis_jobs.dispatch` no longer reads the job row and then
+calls `start`. It calls `claim`, whose mutation runs inside
+`audit_store.update`: it sees the row as it was just read, gives up without
+writing if that row is a live `RUNNING` job, and otherwise writes the
+`RUNNING` transition with a fresh `jobId`. Because `update` re-reads and
+re-runs the mutation when it loses the revision check, the loser of a race
+sees the winner's row on its second pass and returns it. Two requests that
+arrive together get two responses describing one job, and one worker
+invocation. The worker is handed the `jobId` in its payload and presents it
+on every write: a stage note or a terminal outcome whose id no longer
+matches the row raises `JobSuperseded` and is dropped with a warning,
+rather than landing on a job that was re-dispatched after the old one went
+stale.
+
+**Why.** The old guard was a read followed by a write with nothing between
+them, so two presses that both read `NOT_RUN` both invoked the worker and
+billed the same two Bedrock rounds twice, about $0.20 at the measured pack
+size (#147). The revision check from #146 did not close this: it stops a
+write from being *lost*, and here neither write was lost, both landed. The
+job id exists because the revision check has the same blind spot on the
+other side: a re-claimed stale row has a new revision, but `update` retries
+the dead worker's `COMPLETE` against it, so without an identity to compare
+the late outcome would overwrite the live job. The test that proves the
+race parks both requests on a barrier between the evidence check and the
+claim and counts worker invocations: two against the read-then-act, one
+after.
+
+**Rejected: a lock around dispatch.** Serialises every request through one
+Lambda container, and there is more than one container, so it only works
+locally, which is where the race matters least.
+
+**Rejected: a `PutItem` with `attribute_not_exists` as the claim.** It is
+the natural DynamoDB idiom and it cannot express "or the existing job is
+stale", which the endpoint needs so a dead worker does not wedge it
+(2026-09-10, async job). The `update` loop already gives the conditional
+transition with the stale rule inside it, in both backends, without a
+second write path in the store.
+
+**Rejected: treating a late write from a superseded worker as an error.**
+The assessment it computed is already on the session, persisted by
+`analyse_event` before the job row is touched, so nothing is lost by
+dropping the row write. Raising would fail a worker invocation that did its
+work, for a Lambda with no caller to tell.
+
+**Open.** An invocation queued before this change carries no `jobId` and
+writes unconditionally, which is the old behaviour for the length of one
+deploy. Nothing to do; noted so the `None` branch in `run` is not tidied
+away.
+
+---
+
 ## 2026-09-10 - The thermal-lobe radius is the clustering module's 1 km and is refused at or above the clustering radius; no served artifact carried the metric
 
 **Status:** done · PR #254 · Closes #213 · Refs #86, #214
@@ -1225,6 +1280,11 @@ job rows were separated; it no longer describes a live hazard.
 it records an outcome would otherwise leave a job running forever, which the
 console cannot tell from slow work and which blocks every retry. A job whose
 `startedAt` is older than Lambda's 900s ceiling is treated as startable.
+
+> **Tightened 2026-09-10 by PR #252 (#189).** The stale rule now runs
+> inside the store's compare-and-set rather than before a separate write,
+> and a re-claimed job gets a new `jobId` that the dead worker's late writes
+> cannot match. Same behaviour for the auditor; the race is gone.
 
 **Local development runs the job inline.** With `ANALYSIS_WORKER_FUNCTION`
 unset there is no second function to invoke and no 30s cap to fit under, so

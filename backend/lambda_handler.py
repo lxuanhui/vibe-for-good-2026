@@ -53,4 +53,4 @@ def analysis_worker(event, context):
         # Raising is right here: Lambda records the failure and the payload,
         # and there is no job row to mark failed -- nothing valid was named.
         raise ValueError("analysis worker payload requires auditId and eventId")
-    return analysis_jobs.run(audit_id, event_id)
+    return analysis_jobs.run(audit_id, event_id, job_id=event.get("jobId"))
