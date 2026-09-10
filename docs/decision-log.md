@@ -34,7 +34,7 @@ apply an older decision without checking the entries above it.
 
 **Status:** done · PR #246 · Refs #186
 
-> **Measured 2026-09-10 by PR #PRNUM: the cache works, the cold start did
+> **Measured 2026-09-10 by PR #250: the cache works, the cold start did
 > not move.** After the apply, a cold container serves the route from the
 > shared object with no warning logged, in 2,455 to 2,686 ms of handler time
 > plus 556 to 737 ms of init; observed time-to-first-byte 3.2 to 3.9 s,
@@ -44,7 +44,7 @@ apply an older decision without checking the entries above it.
 > unchanged. So #186's acceptance criterion is not met and the issue stays
 > open; the saving is FIRMS transactions and duplicate fetches, not the
 > cold wait, and the remaining cost sits inside the Lambda, not the
-> network. Attribution and candidate fixes are in #ISSUENUM.
+> network. Attribution and candidate fixes are in #251.
 
 **Decision.** `GET /api/firms/live` keeps its process-local 15-minute cache as
 a first level and adds a second: one gzipped JSON object,
@@ -101,16 +101,16 @@ file: a PR merged to `main` can widen CI's own permissions, in the open,
 with a plan comment. Bootstrap now holds only what CI cannot give itself.
 
 **Open.** The cold-start time-to-first-byte is quoted above and is not
-materially below the pre-change figure. #186 stays open, and #ISSUENUM
+materially below the pre-change figure. #186 stays open, and #251
 carries the next step: where the ~2.5 s goes inside a cold handler that no
 longer waits on FIRMS.
 ---
 
 ## 2026-09-10 - The shared evidence prefix is sent behind a Bedrock cache point; round 1 stays parallel, so the saving is two reads, not three
 
-**Status:** done · PRs #245, #247, measured by PR #PRNUM · Closes #147
+**Status:** done · PRs #245, #247, measured by PR #250 · Closes #147
 
-> **Measured 2026-09-10 by PR #PRNUM.** Through the production adapter with
+> **Measured 2026-09-10 by PR #250.** Through the production adapter with
 > the real 128-object pack (Haiku 4.5, four calls): uncached 152,422 fresh
 > input tokens, ~$0.20; first cached assessment 7,526 fresh + 72,488 written
 > + 72,488 read, ~$0.15; a second assessment inside the 5-minute TTL 7,446
