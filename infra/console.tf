@@ -118,14 +118,21 @@ resource "aws_amplify_app" "console" {
   YAML
 
   # The console is a single-page app: every route is served by index.html and
-  # resolved client-side. 404-200 rewrites a miss instead of redirecting it, so
-  # a deep link keeps its URL. The negative lookahead excludes real asset
-  # extensions, otherwise a missing image would return the HTML document and
-  # surface as a confusing parse error rather than a 404.
+  # resolved client-side. This is the rule AWS documents for SPAs, and it has
+  # to be this shape (#115): a plain `/<*>` with status 404-200 only fires
+  # after Amplify's clean-URL handling has already 301'd `/route` to
+  # `/route/` and failed to find `/route/index.html`, so a deep link came
+  # back as a 301 then a 404 with the app shell as the body. A 200 rewrite on
+  # a regex matches before any of that, so the URL is kept and the status is
+  # honest. The negative lookahead excludes real asset extensions, otherwise
+  # a missing image would return the HTML document and surface as a parse
+  # error rather than a 404. Every extension the console serves from
+  # `public/` or `dist/` must be in the list; `geojson` is not `json` to this
+  # regex, which is why it is spelled out.
   custom_rule {
-    source = "/<*>"
+    source = "</^[^.]+$|\\.(?!(css|gif|ico|jpg|jpeg|js|json|geojson|map|png|svg|txt|webp|woff|woff2|ttf)$)([^.]+$)/>"
     target = "/index.html"
-    status = "404-200"
+    status = "200"
   }
 
   environment_variables = {
