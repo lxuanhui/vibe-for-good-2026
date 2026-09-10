@@ -29,6 +29,43 @@ apply an older decision without checking the entries above it.
 
 ---
 
+## 2026-09-10 - A scope can be a point and radius or the server-owned demo area, and the session records which
+
+**Status:** done · PR #TBD · Refs #87 (backend half; the console half is open)
+
+**Decision.** Two more ways to set an audit scope, both server-side:
+`POST /api/audits/{id}/scope/point` takes latitude, longitude and a radius
+in km and stores a 64-vertex circle polygon; `POST /api/audits/{id}/scope/demo`
+stores the predefined demo study area with a label that says it is a demo
+and not a company boundary. Both go through the same `_set_scope` path as
+an upload (same validation, centroid, context buffer, `SCOPE_READY`), so
+scope relations and the register are computed identically whichever way
+the scope arrived. Every session now carries `scope_source` (`upload`,
+`point_radius` or `demo`) and `scope_label`, so no later surface can
+present a predefined area as something the auditor supplied.
+
+**Why.** #87: an evaluator should reach Build Fire History without
+preparing GeoJSON. The console already fell back to a hard-coded
+rectangle when no file was chosen, posted through `/scope/upload`, which
+left the session unable to tell a demo area from an upload. Moving the
+constant server-side and naming the source fixes that at the contract,
+where both halves of the team can see it.
+
+**Rejected: storing the circle as centre plus radius with its own relation
+check.** It would be a second scope model; #87 says the fallback must use
+the same downstream pipeline and relation logic. A polygon costs nothing
+extra and the equirectangular error at 250 km is under a detection pixel.
+
+**Rejected: a demo-scope constant that lives only in the console.** The
+backend would keep serving `scope_source: upload` for it, which is the
+silent-default problem the issue names.
+
+**Open.** The console still posts its own copy of the rectangle. Until it
+calls `/scope/demo` the two constants must match, and the button copy and
+lat/lon form are #87's frontend half.
+
+---
+
 ## 2026-09-10 - Clustering thresholds are an explicit, validated value recorded in the artifact; diagnostics are a developer command, not an API field
 
 **Status:** done · PR #215 · Closes #86

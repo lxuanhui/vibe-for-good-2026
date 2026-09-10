@@ -4,7 +4,14 @@ from time import perf_counter
 from flask import Blueprint, current_app, jsonify, request
 
 from app import analysis_jobs, audit_events, firms_live
-from app.audits import AuditValidationError, build_history, create_audit, upload_scope
+from app.audits import (
+    AuditValidationError,
+    build_history,
+    create_audit,
+    set_demo_scope,
+    set_point_scope,
+    upload_scope,
+)
 from app.events import (
     FilterError,
     filter_events,
@@ -43,6 +50,29 @@ def upload_audit_scope(audit_id: str):
             return jsonify(error=f"No audit with id {audit_id}"), 404
     except AuditValidationError as exc:
         return jsonify(error=str(exc)), 400
+    return jsonify(session)
+
+
+@api.post("/audits/<audit_id>/scope/point")
+def set_audit_point_scope(audit_id: str):
+    """Scope from latitude, longitude and a radius in km, for an evaluator
+    with no boundary file to hand (#87). Same session contract as an upload."""
+    try:
+        session = set_point_scope(audit_id, request.get_json(silent=True))
+    except AuditValidationError as exc:
+        return jsonify(error=str(exc)), 400
+    if session is None:
+        return jsonify(error=f"No audit with id {audit_id}"), 404
+    return jsonify(session)
+
+
+@api.post("/audits/<audit_id>/scope/demo")
+def set_audit_demo_scope(audit_id: str):
+    """The predefined, clearly labelled demo study area. Server-owned so the
+    session records it as a demo scope, never as something the auditor uploaded."""
+    session = set_demo_scope(audit_id)
+    if session is None:
+        return jsonify(error=f"No audit with id {audit_id}"), 404
     return jsonify(session)
 
 
