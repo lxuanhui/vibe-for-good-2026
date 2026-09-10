@@ -603,8 +603,14 @@ def parse_timestamp(raw: str | None, field: str) -> datetime | None:
         raise FilterError(f"{field} must be an ISO 8601 date or timestamp") from None
     # FIRMS acquisition times are UTC and the stored events are tz-aware, so a
     # bare `?since=2019-09-02` has to be read as UTC rather than compared naive
-    # -- an unattached tzinfo raises TypeError deep inside the filter.
-    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+    # -- an unattached tzinfo raises TypeError deep inside the filter. A bare
+    # end date is an auditor-facing inclusive date, so extend `until` through
+    # the end of that UTC day rather than excluding its later observations.
+    if not parsed.tzinfo:
+        parsed = parsed.replace(tzinfo=UTC)
+    if field == "until" and "T" not in raw and "t" not in raw:
+        parsed = parsed.replace(hour=23, minute=59, second=59, microsecond=999999)
+    return parsed
 
 
 def parse_state(raw: str | None) -> str | None:

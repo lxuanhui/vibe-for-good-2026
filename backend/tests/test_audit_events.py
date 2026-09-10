@@ -212,6 +212,14 @@ def test_since_matches_events_overlapping_the_window(client):
     assert any(e["firstDetection"] < "2019-09-03" for e in body["events"])
 
 
+def test_until_bare_date_includes_late_same_day_fire_event(client):
+    """The scoped map's inclusive review end must retain late-day events."""
+    body = client.get(f"{BASE}?since=2019-09-01&until=2019-09-05&limit=2000&offset=3000").get_json()
+
+    event = next(e for e in body["events"] if e["eventId"] == "FE-20190905-f47a306aba")
+    assert event["firstDetection"] == "2019-09-05T18:03:00+00:00"
+
+
 @pytest.mark.parametrize(
     "query",
     ["bbox=1,2,3", "bbox=a,b,c,d", "bbox=10,0,5,1", "since=yesterday", "state=GUILTY", "limit=0"],
