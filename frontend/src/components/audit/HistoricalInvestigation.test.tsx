@@ -177,62 +177,61 @@ const summaryProgression: AuditProgression = {
   },
 }
 
-test('reports human-review routing for the current register population', () => {
+test('renders the compact methodology chain from current register counts', () => {
   render(<RegisterSummary progression={summaryProgression} />)
 
-  expect(screen.getByRole('heading', { name: 'Observation derivation' })).toBeTruthy()
+
   expect(screen.getByText('20,471')).toBeTruthy()
   expect(screen.getAllByText('3,610').length).toBeGreaterThan(0)
-  expect(screen.queryByText('5.7 observations per FireEvent on average. This is clustering, not a review queue.')).toBeNull()
-  expect(screen.getByText('Count includes the configured context buffer: 16 of 3,610 FireEvents.')).toBeTruthy()
-  expect(screen.getByRole('heading', { name: 'Scoped routing diagnostic' })).toBeTruthy()
-  expect(screen.getByText('ROUTED TO HUMAN REVIEW IN CURRENT REGISTER')).toBeTruthy()
-  expect(screen.getByText('11.0% of 3,610 FireEvents in this register.')).toBeTruthy()
-  expect(screen.queryByText(/Global routing diagnostics/)).toBeNull()
+  expect(screen.getByText('396')).toBeTruthy()
+  expect(screen.getByText('fire observations')).toBeTruthy()
+  expect(screen.getByText('clusters')).toBeTruthy()
+  expect(screen.getByText('Human Review recommended')).toBeTruthy()
+  expect(screen.queryByText('IN SCOPE')).toBeNull()
+  expect(screen.queryByText(/% of/)).toBeNull()
   expect(screen.queryByText('observations → FireEvents → in scope + buffer → human review')).toBeNull()
 })
 
-test('presents derivation, scope, and routing as one connected flow', () => {
+test('presents one compact methodology flow with one help icon', () => {
   render(<RegisterSummary progression={summaryProgression} />)
 
   const summary = screen.getByRole('region', { name: 'Historical register population summary' })
   expect(summary.querySelector('[aria-label="Register processing flow"]')).toBeTruthy()
   expect(summary.querySelectorAll('[data-flow-stage]')).toHaveLength(3)
   expect(summary.querySelectorAll('[data-flow-arrow]')).toHaveLength(2)
+  expect(summary.querySelectorAll('button[aria-label^="About "]')).toHaveLength(1)
   expect(summary.className).not.toContain('bg-border')
-  expect(summary.querySelector('[data-flow-stage="current-audit-scope"]')?.textContent).toContain('16')
-  expect(summary.querySelector('[data-flow-stage="scoped-routing"]')?.textContent).toContain('396')
+  expect(summary.querySelector('[data-flow-stage="observations"]')?.textContent).toContain('20,471')
+  expect(summary.querySelector('[data-flow-stage="clusters"]')?.textContent).toContain('3,610')
+  expect(summary.querySelector('[data-flow-stage="human-review"]')?.textContent).toContain('396')
 })
 
-test('shows zero scoped routing without falling back to global numbers', () => {
+test('shows zero human review recommendations without falling back to global numbers', () => {
   render(<RegisterSummary progression={{ ...summaryProgression, fireEvents: 0, requiringHumanReview: 0, routingDiagnostics: { ...summaryProgression.routingDiagnostics, humanReviewCount: 0, humanReviewPercentage: 0 } }} />)
 
-  expect(screen.getByText('0.0% of 0 FireEvents in this register.')).toBeTruthy()
+  expect(screen.getByText('0', { selector: '[data-flow-stage="human-review"] span' })).toBeTruthy()
   expect(screen.queryByText(/3,610 FireEvents in this register/)).toBeNull()
 })
 
-test('provides contextual help for clustering and routing dimensions', () => {
+test('provides one concise methodology explanation', () => {
   render(<RegisterSummary progression={summaryProgression} />)
 
   const helpButtons = screen.getAllByText('?')
+  expect(helpButtons).toHaveLength(1)
   fireEvent.click(helpButtons[0])
-  fireEvent.click(helpButtons[1])
 
   expect(screen.getByText(/deterministically clustered into FireEvents/)).toBeTruthy()
-  expect(screen.getByText(/Stage 1 classification indicates fire support and is separate from evidence sufficiency/)).toBeTruthy()
-  expect(screen.getByText(/Priority is a review-routing aid, separate from workflow status/)).toBeTruthy()
-  expect(screen.getByText(/not proof of causality or responsibility/)).toBeTruthy()
-  expect(screen.getByText(/you control filtering/)).toBeTruthy()
+  expect(screen.getByText(/deterministic recommendation for human review/)).toBeTruthy()
 })
 
-test('keeps observation derivation help inside the viewport near the bottom-right edge', () => {
+test('keeps methodology help inside the viewport near the bottom-right edge', () => {
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 })
   Object.defineProperty(window, 'innerHeight', { configurable: true, value: 768 })
   Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { configurable: true, value: 256 })
   Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, value: 120 })
 
   render(<RegisterSummary progression={summaryProgression} />)
-  const helpButton = screen.getByRole('button', { name: 'About observation derivation' })
+  const helpButton = screen.getByRole('button', { name: 'About methodology chain' })
   vi.spyOn(helpButton, 'getBoundingClientRect').mockReturnValue({
     x: 980, y: 740, top: 740, right: 996, bottom: 756, left: 980, width: 16, height: 16,
     toJSON: () => ({}),
@@ -247,7 +246,7 @@ test('keeps observation derivation help inside the viewport near the bottom-righ
 
 test('dismisses contextual help with Escape and returns focus to its trigger', () => {
   render(<RegisterSummary progression={summaryProgression} />)
-  const helpButton = screen.getByRole('button', { name: 'About observation derivation' })
+  const helpButton = screen.getByRole('button', { name: 'About methodology chain' })
 
   fireEvent.click(helpButton)
   expect(screen.getByRole('note')).toBeTruthy()
@@ -257,12 +256,12 @@ test('dismisses contextual help with Escape and returns focus to its trigger', (
   expect(document.activeElement).toBe(helpButton)
 })
 
-test('keeps routing explanation out of the normal register layout', () => {
+test('keeps the methodology explanation out of the normal register layout', () => {
   render(<RegisterSummary progression={summaryProgression} />)
 
   expect(screen.queryByRole('heading', { name: 'How to read routing' })).toBeNull()
   expect(screen.queryByRole('region', { name: 'Decision-oriented routing summary' })).toBeNull()
-  expect(screen.getByRole('heading', { name: 'Scoped routing diagnostic' })).toBeTruthy()
+  expect(screen.queryByText('Scoped routing diagnostic')).toBeNull()
 })
 
 test('offers a direct action to edit the audit scope', async () => {
