@@ -162,15 +162,25 @@ const summaryProgression: AuditProgression = {
   },
 }
 
-test('keeps scope selection and global routing populations separate', () => {
+test('reports human-review routing for the current register population', () => {
   render(<RegisterSummary progression={summaryProgression} />)
 
   expect(screen.getByRole('heading', { name: 'Observation derivation' })).toBeTruthy()
   expect(screen.getByText('20,471')).toBeTruthy()
   expect(screen.getAllByText('3,610').length).toBeGreaterThan(0)
   expect(screen.getByText('Count includes the configured context buffer: 16 of 3,610 FireEvents.')).toBeTruthy()
-  expect(screen.getByText('11.0% of 3,610 FireEvents; this is not a subset count of the In Scope figure.')).toBeTruthy()
+  expect(screen.getByRole('heading', { name: 'Scoped routing diagnostic' })).toBeTruthy()
+  expect(screen.getByText('ROUTED TO HUMAN REVIEW IN CURRENT REGISTER')).toBeTruthy()
+  expect(screen.getByText('11.0% of 3,610 FireEvents in this register.')).toBeTruthy()
+  expect(screen.queryByText(/Global routing diagnostics/)).toBeNull()
   expect(screen.queryByText('observations → FireEvents → in scope + buffer → human review')).toBeNull()
+})
+
+test('shows zero scoped routing without falling back to global numbers', () => {
+  render(<RegisterSummary progression={{ ...summaryProgression, fireEvents: 0, requiringHumanReview: 0, routingDiagnostics: { ...summaryProgression.routingDiagnostics, humanReviewCount: 0, humanReviewPercentage: 0 } }} />)
+
+  expect(screen.getByText('0.0% of 0 FireEvents in this register.')).toBeTruthy()
+  expect(screen.queryByText(/3,610 FireEvents in this register/)).toBeNull()
 })
 
 test('provides contextual help for clustering and routing dimensions', () => {

@@ -96,10 +96,10 @@ export function RegisterSummary({ progression }: { progression: AuditProgression
         <p className="mt-2 text-[10px] text-text-muted">{progression.scopeBoundaryAvailable ? `Count includes the configured context buffer: ${progression.inScopeAndBuffer?.toLocaleString() ?? '—'} of ${eventDenominator} FireEvents.` : 'No private audit boundary supplied; scope count is unavailable.'}</p>
       </section>
       <section aria-labelledby="routing-summary" className="bg-panel px-4 py-3">
-        <div className="mb-2 flex items-center gap-2"><h2 id="routing-summary" className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-faint">Global routing diagnostics</h2><SummaryHelp label="routing dimensions">Priority, evidence sufficiency, and workflow are separate dimensions. They are diagnostics over the event population, not sequential funnel stages.</SummaryHelp></div>
+        <div className="mb-2 flex items-center gap-2"><h2 id="routing-summary" className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-faint">Scoped routing diagnostic</h2><SummaryHelp label="routing dimensions">Priority, evidence sufficiency, and workflow are separate dimensions. They are diagnostics over the current register population, not sequential funnel stages.</SummaryHelp></div>
         <div className="font-semibold text-accent">{progression.requiringHumanReview.toLocaleString()}</div>
-        <div className="text-[10px] text-text-faint">ROUTED TO HUMAN REVIEW</div>
-        <p className="mt-2 text-[10px] text-text-muted">{(progression.routingDiagnostics.humanReviewPercentage * 100).toFixed(1)}% of {eventDenominator} FireEvents; this is not a subset count of the In Scope figure.</p>
+        <div className="text-[10px] text-text-faint">ROUTED TO HUMAN REVIEW IN CURRENT REGISTER</div>
+        <p className="mt-2 text-[10px] text-text-muted">{(progression.routingDiagnostics.humanReviewPercentage * 100).toFixed(1)}% of {eventDenominator} FireEvents in this register.</p>
       </section>
     </div>
     </section>
