@@ -90,7 +90,7 @@ afterEach(() => {
   fetchAuditRegisterMock.mockReset()
 })
 
-test('the register shows the count the chosen period returned, not the dataset total', async () => {
+test('the register top bar shows only the active audit date range', async () => {
   fetchAuditRegisterMock.mockResolvedValue({
     events: [event('fe-1', '2019-09-02T03:00:00Z'), event('fe-2', '2019-09-03T10:00:00Z')],
     progression: progression(2),
@@ -98,13 +98,11 @@ test('the register shows the count the chosen period returned, not the dataset t
 
   render(<HistoricalInvestigation scope={scope('2019-09-02', '2019-09-03')} />)
 
-  // The count is deliberately not just /2 FireEvents/: the register summary
-  // (#178) repeats that phrase in its own routing/scope breakdowns, so a loose
-  // match is ambiguous once both render together. This pins it to the header.
-  expect(await screen.findByText(/2 FireEvents · 2019-09-02 → 2019-09-03/)).toBeTruthy()
+  expect(await screen.findByText('2019-09-02 → 2019-09-03')).toBeTruthy()
   expect(screen.getByText('fe-1')).toBeTruthy()
   expect(screen.getByText('fe-2')).toBeTruthy()
-  expect(screen.getByText(/2019-09-02 → 2019-09-03/)).toBeTruthy()
+  expect(screen.queryByText(/2 FireEvents ·/)).toBeNull()
+  expect(screen.queryByText(/25 km context buffer/)).toBeNull()
 })
 
 test('keeps scope editing beside the scoped-map navigation in one register control area', async () => {
