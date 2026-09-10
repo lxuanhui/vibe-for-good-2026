@@ -85,7 +85,7 @@ export function RegisterSummary({ progression }: { progression: AuditProgression
 // ScopedMapLanding instead -- one map surface, not two -- so
 // "INVESTIGATE ON MAP" just hands the current selection off through the
 // store and switches to it, the same way "VIEW SCOPED MAP" does.
-export function HistoricalInvestigation({ scope, onOpenScopedMap }: { scope: AuditScope; onOpenScopedMap?: () => void }) {
+export function HistoricalInvestigation({ scope, onOpenScopedMap, onOpenScope }: { scope: AuditScope; onOpenScopedMap?: () => void; onOpenScope?: () => void }) {
   const selection = useAppStore((s) => s.registerSelection)
   const toggleSelection = useAppStore((s) => s.toggleRegisterSelection)
   const [events, setEvents] = useState<AuditEventSummary[]>([])
@@ -147,6 +147,7 @@ export function HistoricalInvestigation({ scope, onOpenScopedMap }: { scope: Aud
   })
 
   return <div className="flex h-full flex-col bg-bg text-text">
+    {onOpenScope && <div className="flex shrink-0 items-center justify-end border-b border-border bg-panel px-5 py-2"><Button onClick={onOpenScope}>EDIT AUDIT SCOPE</Button></div>}
     <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border-strong bg-panel px-5 py-3"><div><div className="text-sm font-semibold">Historical Fire Register</div><div className="text-xs text-text-muted">{progression ? `${progression.fireEvents.toLocaleString()} FireEvents` : 'FireEvents'} · {scope.review_start} → {scope.review_end} · {scope.context_buffer_km} km context buffer</div></div><div className="flex items-center gap-2">{onOpenScopedMap && <Button onClick={onOpenScopedMap}>VIEW SCOPED MAP</Button>}<Button variant="primary" disabled={!selection.length || !onOpenScopedMap} onClick={onOpenScopedMap}>{`INVESTIGATE ON MAP (${selection.length})`}</Button></div></div>
     {progression && <RegisterSummary progression={progression} />}
     <section aria-label="Register filters" className="shrink-0 border-b border-border bg-panel px-5 py-3">

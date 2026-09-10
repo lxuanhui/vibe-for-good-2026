@@ -16,6 +16,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, expect, test, vi } from 'vitest'
 import { AuditStart } from './AuditStart'
 import { createAuditReview, fetchDemoDatasetSummary } from '../../api/client'
+import type { AuditScope } from '../../api/types'
 
 vi.mock('../../api/client', () => ({
   fetchDemoDatasetSummary: vi.fn(),
@@ -138,4 +139,28 @@ test('does not render the redundant scope-first control', () => {
 
   expect(screen.queryByText('Scope first')).toBeNull()
   expect(screen.getByRole('button', { name: 'CLOSE' })).toBeTruthy()
+})
+
+test('preserves the active scope inputs when reopened for editing', () => {
+  fetchDemoDatasetSummaryMock.mockRejectedValue(new Error('the API did not answer'))
+  const existingScope: AuditScope = {
+    audit_id: 'audit-1',
+    scope_id: 'scope-1',
+    review_start: '2019-09-02',
+    review_end: '2019-09-04',
+    context_buffer_km: 40,
+    status: 'HISTORY_BUILD_READY',
+    bbox: null,
+    centroid: null,
+    buffer_bbox: null,
+    buffer_geometry: null,
+    geometry: { type: 'Polygon', coordinates: [[[100, 1], [101, 1], [101, 2], [100, 1]]] },
+  }
+
+  render(<AuditStart onReady={vi.fn()} initialScope={existingScope} />)
+
+  expect(screen.getByLabelText('Review start')).toHaveProperty('value', '2019-09-02')
+  expect(screen.getByLabelText('Review end')).toHaveProperty('value', '2019-09-04')
+  expect(screen.getByDisplayValue('40')).toBeTruthy()
+  expect(screen.getByText(/Existing dates, buffer, and boundary are preserved/)).toBeTruthy()
 })

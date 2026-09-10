@@ -34,6 +34,16 @@ export default function App() {
   const setViewMode = useAppStore((state) => state.setViewMode)
   const contextPanel = useConsoleContextPanel()
 
+  function handleScopeReady(next: AuditScope) {
+    // A rebuilt scope is a new audit session. Reset the register selection as
+    // well as the view so FireEvents from the previous geometry cannot appear
+    // selected while the replacement register loads.
+    setAuditSession(next.audit_id)
+    setScope(next)
+    setViewMode('table')
+    setScopePanelOpen(false)
+  }
+
   useEffect(() => {
     if (scope) setAuditSession(scope.audit_id)
   }, [scope, setAuditSession])
@@ -44,7 +54,7 @@ export default function App() {
       {scopePanelOpen && (
         <div className="absolute inset-3 z-30">
           <AuditStart
-            onReady={(next) => { setScope(next); setViewMode('table'); setScopePanelOpen(false) }}
+            onReady={handleScopeReady}
             overlay
             onClose={() => setScopePanelOpen(false)}
           />
@@ -75,11 +85,12 @@ export default function App() {
             onOpenRegister={() => setViewMode('table')}
             onViewReport={() => setViewMode('report')}
           />
-        : <HistoricalInvestigation scope={scope} onOpenScopedMap={() => setViewMode('scoped-map')} />}
+        : <HistoricalInvestigation scope={scope} onOpenScope={() => setScopePanelOpen(true)} onOpenScopedMap={() => setViewMode('scoped-map')} />}
       {scopePanelOpen && (
         <div className="absolute inset-3 z-30">
           <AuditStart
-            onReady={(next) => { setScope(next); setViewMode('table'); setScopePanelOpen(false) }}
+            onReady={handleScopeReady}
+            initialScope={scope}
             overlay
             onClose={() => setScopePanelOpen(false)}
           />
