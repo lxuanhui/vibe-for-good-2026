@@ -8,4 +8,4 @@ retry-requests>=2.0
 python-dotenv>=1.2.3
 truststore>=0.10.4
 Pillow>=12.3.0
-h5py>=3.14.0
+h5py>=3.16.0
