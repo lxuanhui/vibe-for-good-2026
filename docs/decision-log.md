@@ -30,6 +30,46 @@ apply an older decision without checking the entries above it.
 
 ---
 
+## 2026-09-10 - The demo runs on a guided path over the real console, with the analysis generated before the presenter walks on
+
+**Status:** done · PR #276 · Refs #274
+
+**Decision.** `/demo` renders the console's own screens in a fixed
+seven-step order with a presenter bar, driven through the zustand store and
+the screens' existing props. It creates one real audit review with the
+server-owned demo scope, stores it per browser, and reuses it. On first load
+it starts the Investigator/Skeptic analysis for the focus event in the
+background; the presenter opens the page a few minutes early, and the
+analysis step shows the completed assessment with the time it was generated
+written in the bar. No data lives under `src/demo/`.
+
+**Why.** Two minutes of demo between two 75-second slide halves. Walked by
+hand, the console needs a dozen clicks in the right places and then ~51 s of
+Bedrock time with nothing on screen but a stage label. A path with the cue
+for each step removes the hunting; a pre-generated analysis removes the
+wait. Saying on stage when it was generated is what keeps that honest: the
+console must never blur which parts are live (`CLAUDE.md`).
+
+**Rejected: a fixture demo.** A canned walkthrough would have been the
+second fixture path the "State of things" section warns against, and it
+would have shown a demo the deployed console cannot reproduce.
+
+**Rejected: pressing Generate live.** Real-time proof, but 50 dead seconds
+out of 120. The drawer's Generate button still works on the demo path if the
+pre-generated job did not complete, and the bar says which case it is.
+
+**Rejected: a router.** One extra path does not justify a dependency; the
+choice is a pathname test in `main.tsx`, where it keeps `App`'s hooks
+unconditional.
+
+**Chosen events.** Three of the sixteen enriched events with real edges 3 to
+4 km apart, so the relationship graph draws; the focus event has a
+propagation-compatible edge, an unresolved edge, and rendered Sentinel
+scenes. The event used for the cost measurements (#147) has no edges and
+was rejected for the map step.
+
+---
+
 ## 2026-09-10 - The live FIRMS cache is shared across Lambda containers as one S3 object, filling the disposable-cache role
 
 **Status:** done · PR #246 · Refs #186

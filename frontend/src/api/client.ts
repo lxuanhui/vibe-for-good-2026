@@ -86,6 +86,12 @@ export async function uploadAuditScopeGeometry(auditId: string, geometry: unknow
   return apiPost<AuditScope>(`/audits/${encodeURIComponent(auditId)}/scope/upload`, JSON.stringify(geometry), { 'Content-Type': 'application/json' })
 }
 
+// The server-owned demo study area (#216). The session records it as a demo
+// scope with its own label, so it can never be presented as an upload.
+export async function setAuditDemoScope(auditId: string): Promise<AuditScope> {
+  return apiPost<AuditScope>(`/audits/${encodeURIComponent(auditId)}/scope/demo`, null)
+}
+
 export async function buildFireHistory(auditId: string): Promise<{ audit_id: string; scope_id: string; status: 'HISTORY_BUILD_READY'; duration_ms: number; dataset_mode: string }> {
   return apiPost(`/audits/${encodeURIComponent(auditId)}/history/build`, null)
 }
@@ -159,6 +165,19 @@ export function fetchProcessedImageryManifest(): Promise<ProcessedImageryManifes
 // (#143). The seam keeps the old promise contract -- callers still await one
 // analysis or one error -- rather than pushing job state into every caller.
 const ANALYSIS_POLL_DEADLINE_MS = 5 * 60 * 1000
+
+// The two halves of the job endpoint on their own, for a caller that wants
+// to start work now and read it later rather than block on it: the guided
+// demo primes the focus event's analysis on page load and checks back.
+// POST is idempotent while a job is RUNNING and returns the stored outcome
+// once it is COMPLETE; GET only reads and never spends tokens.
+export async function startInvestigationAnalysis(auditId: string, eventId: string): Promise<AnalysisJob> {
+  return apiPost<AnalysisJob>(`/audits/${encodeURIComponent(auditId)}/events/${encodeURIComponent(eventId)}/analyse`, '')
+}
+
+export async function readInvestigationAnalysis(auditId: string, eventId: string): Promise<AnalysisJob> {
+  return apiGet<AnalysisJob>(`/audits/${encodeURIComponent(auditId)}/events/${encodeURIComponent(eventId)}/analyse`)
+}
 
 export async function generateInvestigationAnalysis(auditId: string, eventId: string): Promise<StructuredAnalysis> {
   const path = `/audits/${encodeURIComponent(auditId)}/events/${encodeURIComponent(eventId)}/analyse`
