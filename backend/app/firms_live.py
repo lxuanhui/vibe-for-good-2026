@@ -150,6 +150,11 @@ class _S3SharedCache:
         from botocore.config import Config
 
         self.bucket = bucket
+        # Stage durations in milliseconds, for the one INFO line `_read_shared`
+        # logs: this is how #251's "where do 2.5 s of cold handler go" gets
+        # answered on the deployed function rather than guessed at.
+        self.stages: dict[str, float] = {}
+        started = time.perf_counter()
         self._client = boto3.client(
             "s3",
             config=Config(
@@ -158,19 +163,49 @@ class _S3SharedCache:
                 retries={"max_attempts": 2},
             ),
         )
+        self.stages["client_ms"] = _elapsed_ms(started)
+
+    def warm(self) -> None:
+        """Open the connection now so the first read does not pay for it.
+
+        A HEAD of the cache key resolves credentials, performs the TLS
+        handshake and leaves a keep-alive connection in botocore's pool, all
+        of which the first GET would otherwise do inside the request. Called
+        from `create_app()`, which on Lambda runs in the init phase, where
+        the container has a full CPU; the handler phase at 512 MB does not.
+        A missing object is not a failure here: the connection is what is
+        wanted, and the object will be read, or found absent, by `read()`.
+        """
+        from botocore.exceptions import ClientError
+
+        started = time.perf_counter()
+        try:
+            self._client.head_object(Bucket=self.bucket, Key=SHARED_CACHE_KEY)
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") not in ("NoSuchKey", "404"):
+                raise
+        finally:
+            self.stages["warm_ms"] = _elapsed_ms(started)
 
     def read(self) -> dict[str, Any] | None:
         from botocore.exceptions import ClientError
 
+        started = time.perf_counter()
         try:
             response = self._client.get_object(Bucket=self.bucket, Key=SHARED_CACHE_KEY)
+            body = response["Body"].read()
         except ClientError as exc:
             # No object yet is the ordinary state of a fresh bucket, not a
             # failure; anything else is, and the caller decides what to do.
             if exc.response.get("Error", {}).get("Code") in ("NoSuchKey", "404"):
                 return None
             raise
-        return json.loads(gzip.decompress(response["Body"].read()).decode("utf-8"))
+        self.stages["get_ms"] = _elapsed_ms(started)
+        self.stages["get_bytes"] = len(body)
+        started = time.perf_counter()
+        entry = json.loads(gzip.decompress(body).decode("utf-8"))
+        self.stages["decode_ms"] = _elapsed_ms(started)
+        return entry
 
     def write(self, entry: dict[str, Any]) -> None:
         self._client.put_object(
@@ -186,6 +221,10 @@ _shared: _S3SharedCache | None = None
 _shared_lock = threading.Lock()
 
 
+def _elapsed_ms(started: float) -> float:
+    return round((time.perf_counter() - started) * 1000, 1)
+
+
 def _shared_cache() -> _S3SharedCache | None:
     """The shared level, built once per container, or None when not configured."""
     global _shared
@@ -198,13 +237,42 @@ def _shared_cache() -> _S3SharedCache | None:
         return _shared
 
 
+def warm_shared_cache() -> None:
+    """Build the shared level and open its connection ahead of the first request.
+
+    Before this, the S3 client was first built inside the first cold request,
+    which on the deployed function cost ~2.5 s of handler time with FIRMS
+    already out of the path (#251): botocore loads the S3 service model on
+    first construction, then the first request adds credential resolution and
+    a TLS handshake, on the handler phase's fraction of a vCPU. `create_app()`
+    calls this, so on Lambda it runs during init, and in tests and local runs
+    without `LIVE_CACHE_BUCKET` it is a no-op. Never raises: a store that
+    cannot be warmed is the same store that `_read_shared` falls through on.
+    """
+    try:
+        shared = _shared_cache()
+        if shared is not None:
+            shared.warm()
+    except Exception:
+        logger.warning("Shared live FIRMS cache could not be warmed at start-up", exc_info=True)
+
+
 def _read_shared() -> dict[str, Any] | None:
     """The shared entry if one exists and is well-formed, else None. Never raises."""
     try:
         shared = _shared_cache()
         if shared is None:
             return None
+        started = time.perf_counter()
         entry = shared.read()
+        # One line per cold read, INFO so it reaches CloudWatch (the handler
+        # raises `app.*` to INFO). The stage split is what #251 asked for.
+        stages = dict(getattr(shared, "stages", {}))
+        stages["read_ms"] = _elapsed_ms(started)
+        logger.info(
+            "Shared live FIRMS cache read: %s",
+            " ".join(f"{name}={value}" for name, value in sorted(stages.items())),
+        )
     except Exception:
         # Deliberately broad: a missing bucket, a denied read, a timeout and a
         # missing boto3 all have the same right answer here, which is to fetch

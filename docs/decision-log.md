@@ -93,6 +93,26 @@ treating a lobe as an event. The count is all it needs.
 > cold wait, and the remaining cost sits inside the Lambda, not the
 > network. Attribution and candidate fixes are in #251.
 
+> **Attributed 2026-09-10 by PR #256 (#251): the cost is the first S3
+> connection, not the decode or the encode.** Staged on a laptop through
+> the same code against the real bucket, profile `kino`: `import boto3`
+> 129 ms, client construction 84 to 86 ms, the first `get_object` of the
+> 75 KB object 5,308 ms against 996 ms for the second, gunzip 1 ms,
+> `json.loads` of the 1.1 MB payload 24 ms, `jsonify` 12 to 17 ms. Every
+> CPU stage together is under 150 ms; the first request carries the
+> credential resolution and TLS handshake, and on a 512 MB handler that
+> work runs on a fraction of a vCPU. The fix is the issue's first
+> candidate, taken alone: `create_app()` now builds the S3 client and
+> opens its connection with a HEAD of the cache key, which on Lambda is
+> the init phase. Measured locally, the warm-up absorbs 3,530 ms and the
+> first request then takes 325 ms end to end (GET 292 ms, decode 14 ms,
+> encode 17 ms). The read logs one INFO line with those stages, so the
+> deployed split is read from CloudWatch rather than inferred. The cold
+> TTFB after the deploy is not quoted here yet: this PR is the deploy, so
+> the figure is taken after the merge, on #251, with the burst in that
+> issue. `lambda_memory_mb` stays at 512 until that figure says the
+> handler is still CPU-bound.
+
 **Decision.** `GET /api/firms/live` keeps its process-local 15-minute cache as
 a first level and adds a second: one gzipped JSON object,
 `firms-live/current.json.gz`, in a new bucket `aws_s3_bucket.cache`. A cold
