@@ -30,7 +30,7 @@ apply an older decision without checking the entries above it.
 
 ## 2026-09-10 - The review period is bounded by the dataset, because it is printed as fact
 
-**Status:** done · PR #<PR> · Closes #95
+**Status:** done · PR #162 · Closes #95
 
 #95 asked for a datepicker on the date inputs. Both inputs were already
 `type="date"`, so a native picker and a date-typed value were there; the
