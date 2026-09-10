@@ -454,8 +454,11 @@ def source_provenance() -> dict[str, Any]:
     return _load_events()["source"]
 
 
-def progression(audit_id: str) -> dict[str, Any] | None:
-    """Return artifact-derived clustering and boundary-aware review counts."""
+def progression(
+    audit_id: str,
+    register_events: list[dict[str, Any]] | None = None,
+) -> dict[str, Any] | None:
+    """Return clustering and routing counts for the represented register."""
     audit = get_audit(audit_id)
     if audit is None:
         return None
@@ -467,28 +470,41 @@ def progression(audit_id: str) -> dict[str, Any] | None:
     if private_geometry is not None:
         scope_context["geometry"] = private_geometry
     boundary_available = private_geometry is not None
-    in_scope = sum(_in_scope_or_buffer(event, scope_context) for event in audit["events"]) if boundary_available else None
+    events = audit["events"] if register_events is None else register_events
+    in_scope = sum(_in_scope_or_buffer(event, scope_context) for event in events) if boundary_available else None
     # Prefer the scope's own counts. They are recomputed from the review
     # window in get_audit, and the artifact's dataset-wide totals divided by a
     # filtered event count would report an observations-to-events compression
     # nothing measured -- an efficiency figure manufactured by narrowing the
     # period. The artifact path leaves both keys at the dataset totals, so the
     # unfiltered demo scope is unchanged.
-    qualified = scope.get("qualifiedObservations")
+    qualified = (
+        scope.get("qualifiedObservations")
+        if register_events is None
+        else sum(event["observationCount"] for event in events)
+    )
     if qualified is None:
         qualified = source.get("qualifiedObservations", source.get("observationsUsed"))
-    fire_events = len(audit["events"])
+    fire_events = len(events)
     observations_to_events = round(qualified / fire_events, 2) if fire_events else None
     scope_compression = round(fire_events / in_scope, 2) if in_scope else None
     pack = audit_store.pack(audit_id) if get_audit_session(audit_id) else AUDIT_PACKS.get(audit_id, {})
-    route_summary = routing_diagnostics(audit["events"])
+    route_summary = routing_diagnostics(events)
     return {
         # None when a narrowed window makes the pre-clustering raw count
         # unknowable; see get_audit. Only the artifact's own coverage can
         # answer it, so do not fall back to the dataset total here.
-        "rawObservations": scope["rawObservations"]
-        if "rawObservations" in scope
-        else source.get("rawObservations", source.get("observationsUsed")),
+        # A bbox/state query is a further register scope. The artifact's raw
+        # detection total cannot be apportioned to that subset honestly.
+        "rawObservations": (
+            (
+                scope["rawObservations"]
+                if "rawObservations" in scope
+                else source.get("rawObservations", source.get("observationsUsed"))
+            )
+            if register_events is None
+            else None
+        ),
         "qualifiedObservations": qualified,
         "fireEvents": fire_events,
         "requiringHumanReview": route_summary["humanReviewCount"],

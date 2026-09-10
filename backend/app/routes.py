@@ -149,11 +149,17 @@ def list_audit_events(audit_id: str):
     matched = audit_events.filter_events(
         audit["events"], bbox=bbox, since=since, until=until, state=state
     )
+    has_register_filter = any(value is not None for value in (bbox, since, until, state))
+    matched_routing = audit_events.routing_diagnostics(matched)
+    register_progression = audit_events.progression(
+        audit_id,
+        matched if has_register_filter else None,
+    )
     return jsonify(
         auditId=audit_id,
-        scope=audit["scope"],
+        scope={**audit["scope"], "reviewQueueCount": matched_routing["humanReviewCount"]},
         source=audit_events.source_provenance(),
-        progression=audit_events.progression(audit_id),
+        progression=register_progression,
         total=len(matched),
         limit=limit,
         offset=offset,

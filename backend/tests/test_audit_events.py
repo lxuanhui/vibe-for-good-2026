@@ -176,6 +176,28 @@ def test_bbox_filters_on_centroid(client):
         assert -4 <= event["centroid"]["lat"] <= -3
 
 
+def test_progression_uses_the_current_scoped_register(client):
+    full = client.get(f"{BASE}?limit=2000").get_json()
+    body = client.get(f"{BASE}?bbox=116,-4,117,-3&limit=2000").get_json()
+    events = body["events"]
+    expected_count = sum(event["reviewState"] == "HUMAN_REVIEW" for event in events)
+
+    assert body["total"] == len(events)
+    assert body["progression"]["fireEvents"] < full["progression"]["fireEvents"]
+    assert body["progression"]["requiringHumanReview"] != full["progression"]["requiringHumanReview"]
+    assert body["scope"]["reviewQueueCount"] == expected_count
+    assert body["progression"]["fireEvents"] == len(events)
+    assert body["progression"]["requiringHumanReview"] == expected_count
+    assert body["progression"]["routingDiagnostics"]["humanReviewCount"] == expected_count
+    assert body["progression"]["routingDiagnostics"]["reviewStateDistribution"]["HUMAN_REVIEW"] == {
+        "count": expected_count,
+        "percentage": round(expected_count / len(events), 4),
+    }
+    assert body["progression"]["routingDiagnostics"]["humanReviewPercentage"] == round(
+        expected_count / len(events), 4
+    )
+
+
 def test_bare_date_is_read_as_utc_not_naive(client):
     """A naive `since` compared against tz-aware detections used to raise."""
     body = client.get(f"{BASE}?since=2019-09-03").get_json()
