@@ -135,6 +135,17 @@ it('keeps scope editing and register navigation in the same map header', async (
   expect(onOpenRegister).toHaveBeenCalledOnce()
 })
 
+it('shows only the active review date range in the map header subtitle', async () => {
+  fetchAuditRegisterMock.mockResolvedValue({ events: [], progression: { selectedEventIds: [] } as unknown as AuditProgression })
+
+  render(<ScopedMapLanding scope={{ ...scope, review_end: '2019-09-05' }} onOpenScope={() => undefined} onOpenRegister={() => undefined} onViewReport={() => undefined} />)
+
+  await screen.findByRole('list', { name: 'Available observation dates' })
+  const header = screen.getByRole('button', { name: 'EDIT SCOPE' }).closest('header') as HTMLElement
+  expect(header.textContent).toContain('2019-09-01 → 2019-09-05')
+  expect(header.textContent).not.toContain('Scoped FireEvent review')
+})
+
 const edge = (sourceEventId: string, ownerEventId: string) => ({
   sourceEventId,
   targetEventId: 'FE-TARGET',
