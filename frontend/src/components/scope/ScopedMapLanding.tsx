@@ -451,7 +451,6 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
         <div className="border-b border-border-strong p-4">
           <div className="text-sm uppercase tracking-[0.16em] text-accent">Audit scope map</div>
           <p className="mt-3 text-xs text-text-muted">Events shown <span className="font-semibold text-accent">{loading ? '…' : visibleEvents.length.toLocaleString()}</span></p>
-          <p className="mt-3 text-xs leading-5 text-text-faint">Peat is environmental context, not cause; compare it with event evidence.</p>
           {taggedEdges.length > 0 && <p className="mt-2 text-xs leading-5 text-text-faint">Lines are limited to {SCOPED_MAP_RELATIONSHIP_DISTANCE_KM} km. <span className="text-accent">Bright</span> lines are stronger candidates for the open FireEvent; weaker or unresolved links recede. <span className="opacity-60">Faint</span> lines belong to other FireEvents selected in the Fire Register.</p>}
           {envelopes.features.length > 0 && <p className="mt-2 text-xs leading-5 text-text-faint">Dashed outline: first-order wind-oriented surface-spread compatibility estimate. This is not a validated forecast or claim about what happened.</p>}
           {error && <div role="alert" className="mt-3 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-sm text-red-200">{error}</div>}
