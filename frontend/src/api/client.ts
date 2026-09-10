@@ -1,5 +1,5 @@
 import type { FeatureCollection } from './geojson'
-import type { AnalysisJob, AuditEventSummary, AuditPackReview, AuditProgression, AuditReport, AuditScope, BBox, DemoDatasetSummary, EventEvidenceResponse, EventStatus, FireEvent, InvestigationBundle, InvestigationMap, InvestigationReport, LiveFirmsDetections, OverlayLayerId, StructuredAnalysis } from './types'
+import type { AnalysisJob, AuditEventSummary, AuditPackReview, AuditProgression, AuditReport, AuditScope, BBox, DemoDatasetSummary, EventEvidenceResponse, EventStatus, FireEvent, InvestigationBundle, InvestigationMap, InvestigationReport, LiveFirmsDetections, OverlayLayerId, ProcessedImageryManifest, StructuredAnalysis } from './types'
 import { getOverlay, isLayerAvailable } from './fixtures/overlays'
 import { REPORTS } from './fixtures/reports'
 
@@ -138,6 +138,20 @@ export async function fetchAuditEventEvidence(auditId: string, eventId: string):
 
 export async function fetchInvestigationBundle(auditId: string, eventId: string): Promise<InvestigationBundle> {
   return apiGet<InvestigationBundle>(`/audits/${encodeURIComponent(auditId)}/events/${encodeURIComponent(eventId)}/investigation`)
+}
+
+// Processed imagery is static pipeline output, not an API response. Keep the
+// manifest lookup in this seam so the drawer joins it to the API's existing
+// scene EvidenceObjects by source evidence ID rather than duplicating scene
+// selection or treating a catalogue thumbnail as investigation imagery.
+let processedImageryManifest: Promise<ProcessedImageryManifest> | undefined
+
+export function fetchProcessedImageryManifest(): Promise<ProcessedImageryManifest> {
+  processedImageryManifest ??= fetch('/imagery/manifest.json').then(async (response) => {
+    if (!response.ok) throw new Error(`GET /imagery/manifest.json failed with ${response.status}`)
+    return (await response.json()) as ProcessedImageryManifest
+  })
+  return processedImageryManifest
 }
 
 // A two-round Investigator/Skeptic assessment measures ~51s, past API

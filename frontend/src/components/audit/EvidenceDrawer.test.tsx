@@ -1,5 +1,5 @@
-import { cleanup, render, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { EventEvidenceResponse } from '../../api/types'
 import { EvidenceDrawer } from './EvidenceDrawer'
 
@@ -34,7 +34,10 @@ const evidence = {
   provenance: { source: { provider: 'FIRMS' }, algorithmVersions: ['triage-v1'] },
 } satisfies EventEvidenceResponse
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
 
 describe('EvidenceDrawer sidebar hierarchy', () => {
   it('puts availability near the summary and omits sidebar provenance and surface sections', () => {
@@ -63,22 +66,24 @@ describe('EvidenceDrawer sidebar hierarchy', () => {
     expect(headings).not.toContain('Provenance')
   })
 
-  it('prefers a processed imagery artifact and renders it at drawer width', () => {
+  it('joins a manifest asset by source evidence ID and renders it at drawer width', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ events: { 'FE-1': { assets: [{ asset_id: 'asset-1', event_id: 'FE-1', source_evidence_id: 'ENV-IMG', sensor: 'Sentinel-2', position: 'post_event', label: 'Optical context', path: '/imagery/FE-1/s2-post.jpg', format: 'image/jpeg', width: 1024, height: 1024 }] } } }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
     const imagery = {
       ...evidence,
       derivedEvidence: [{
         evidence_id: 'ENV-IMG', category: 'imagery', type: 'imagery-scene', observation: 'scene', source: 'pipeline', time_window: '2019-09-01',
-        value: { sensor: 'Sentinel-2', position: 'post_event', thumbnail_url: '/legacy-small.jpg', processed_image_url: '/processed-large.png', width: 2048, height: 1536 },
+        value: { sensor: 'Sentinel-2', position: 'post_event', thumbnail_url: '/legacy-small.jpg' },
       }],
     } satisfies EventEvidenceResponse
     render(<EvidenceDrawer {...{ eventId: 'FE-1', loading: false, data: imagery, showObservations: false, onToggleObservations: () => undefined, onClose: () => undefined, onRetry: () => undefined, analysisLoading: false, onGenerateAnalysis: () => undefined }} />)
+    await waitFor(() => expect(screen.getByAltText('Sentinel-2 post-event processed imagery')).toBeTruthy())
     const image = screen.getByAltText('Sentinel-2 post-event processed imagery')
-    expect(image.getAttribute('src')).toBe('/processed-large.png')
+    expect(image.getAttribute('src')).toBe('/imagery/FE-1/s2-post.jpg')
     expect(image.className).toContain('w-full')
     expect(screen.queryByAltText('Sentinel-2 post-event quicklook')).toBeNull()
   })
 
-  it('states that processed imagery is unavailable without showing a legacy thumbnail', () => {
+  it('states that processed imagery is unavailable without showing a legacy thumbnail', async () => {
     const imagery = {
       ...evidence,
       derivedEvidence: [{
@@ -86,8 +91,8 @@ describe('EvidenceDrawer sidebar hierarchy', () => {
         value: { sensor: 'Sentinel-1', position: 'pre_event', thumbnail_url: '/legacy-small.jpg' },
       }],
     } satisfies EventEvidenceResponse
-    render(<EvidenceDrawer {...{ eventId: 'FE-1', loading: false, data: imagery, showObservations: false, onToggleObservations: () => undefined, onClose: () => undefined, onRetry: () => undefined, analysisLoading: false, onGenerateAnalysis: () => undefined }} />)
-    expect(screen.getByText(/Processed imagery unavailable for this scene/)).toBeTruthy()
+    render(<EvidenceDrawer {...{ eventId: 'FE-2', loading: false, data: imagery, showObservations: false, onToggleObservations: () => undefined, onClose: () => undefined, onRetry: () => undefined, analysisLoading: false, onGenerateAnalysis: () => undefined }} />)
+    await waitFor(() => expect(screen.getByText(/Processed imagery unavailable for this scene/)).toBeTruthy())
     expect(screen.queryByRole('img')).toBeNull()
   })
 })
