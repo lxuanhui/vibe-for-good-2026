@@ -360,6 +360,7 @@ export function EvidenceDrawer({
   analysisError?: string
   onGenerateAnalysis: () => void
 }) {
+  const [showQualityHelp, setShowQualityHelp] = useState(false)
   const grouped = useMemo(() => {
     const items = data?.derivedEvidence ?? []
     const categories = ['peat', 'weather', 'surface', 'propagation', 'imagery']
@@ -399,7 +400,21 @@ export function EvidenceDrawer({
         <div className="grid grid-cols-2 gap-2 text-xs"><div><span className="text-text-muted">Scope relation</span><div>{data.scopeRelation}</div></div><div><span className="text-text-muted">Sufficiency</span><div>{data.evidenceSufficiency.value}</div></div><div><span className="text-text-muted">Investigation priority</span><div>{data.investigationPriority}</div></div><div><span className="text-text-muted">Human workflow</span><div>{data.reviewState}</div></div><div><span className="text-text-muted">Chronology</span><div>{data.event.firstDetection.slice(0, 16)} → {data.event.lastDetection.slice(0, 16)}</div></div><div><span className="text-text-muted">Observations</span><div>{data.event.observationCount} · max FRP {data.event.maxFrp?.toFixed(2) ?? 'n/a'} MW</div></div></div>
         <DetectionWindow firstDetection={data.event.firstDetection} lastDetection={data.event.lastDetection} reviewStart={reviewStart} reviewEnd={reviewEnd} />
         <p className="mt-2 text-[10px] text-text-muted">{data.evidenceSufficiency.reason}</p>
-        <p className="mt-1 text-[10px] text-text-muted">Sourced from NASA FIRMS, quality {((data.observedEvidence[0]?.quality ?? 0.82) * 100).toFixed(0)}%. Full observed-evidence provenance is in the exported PDF.</p>
+        <div className="relative mt-1 flex items-start gap-1 text-[10px] text-text-muted">
+          <span>Sourced from NASA FIRMS, quality {data.observedEvidence[0]?.quality == null ? 'n/a' : `${(data.observedEvidence[0].quality * 100).toFixed(0)}%`}</span>
+          <button
+            type="button"
+            className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border border-text-faint text-[9px] font-semibold leading-none text-text-muted hover:border-accent hover:text-accent"
+            aria-label="Explain FIRMS quality"
+            aria-expanded={showQualityHelp}
+            onClick={() => setShowQualityHelp((open) => !open)}
+          >
+            ?
+          </button>
+          {showQualityHelp && <div role="note" className="absolute top-5 left-0 z-10 max-w-xs rounded border border-border-strong bg-panel p-2 text-[10px] leading-4 text-text-muted shadow-lg">
+            Quality is the evidence-quality value attached to the NASA FIRMS EvidenceObject. The backend assigns 0.82 (82%) to these observed FIRMS records. It is not a fire probability or burned-area estimate.
+          </div>}
+        </div>
         <div className="mt-3 print:hidden">
           <Toggle
             checked={showObservations}

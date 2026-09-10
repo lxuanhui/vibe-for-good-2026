@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { EventEvidenceResponse } from '../../api/types'
 import { EvidenceDrawer } from './EvidenceDrawer'
@@ -24,7 +24,7 @@ const evidence = {
     reviewRouting: { priorityScore: 1, escalationReasonCodes: [], components: [] },
   },
   scopeRelation: 'INSIDE_SCOPE' as const,
-  observedEvidence: [],
+  observedEvidence: [{ evidence_id: 'OBS-FIRMS', category: 'thermal', type: 'chronology', observation: 'FIRMS observations', source: 'NASA FIRMS', quality: 0.82 }],
   derivedEvidence: [{ evidence_id: 'ENV-SURFACE', category: 'surface', type: 'surface_compatibility', observation: 'compatibility', source: 'model', time_window: 'event', value: 'COMPATIBLE' }],
   availability: [{ kind: 'imagery' as const, status: 'no_suitable_pass' as const, reason: 'No suitable pass.' }],
   evidenceSufficiency: { value: 'PARTIAL' as const, reason: 'Partial evidence.', algorithmVersion: 'triage-v1' },
@@ -40,6 +40,19 @@ afterEach(() => {
 })
 
 describe('EvidenceDrawer sidebar hierarchy', () => {
+  it('explains the FIRMS quality value and omits the redundant PDF provenance sentence', () => {
+    render(<EvidenceDrawer {...{ eventId: 'FE-1', loading: false, data: evidence, showObservations: false, onToggleObservations: () => undefined, onClose: () => undefined, onRetry: () => undefined, analysisLoading: false, onGenerateAnalysis: () => undefined }} />)
+
+    expect(screen.getByText('Sourced from NASA FIRMS, quality 82%')).toBeTruthy()
+    expect(screen.queryByText('Full observed-evidence provenance is in the exported PDF.')).toBeNull()
+    expect(screen.queryByRole('note')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Explain FIRMS quality' }))
+
+    expect(screen.getByRole('note').textContent).toContain('The backend assigns 0.82 (82%) to these observed FIRMS records.')
+    expect(screen.getByRole('note').textContent).toContain('It is not a fire probability or burned-area estimate.')
+  })
+
   it('shows an animated, time-aware analysis status while generation is running', () => {
     render(<EvidenceDrawer {...{ eventId: 'FE-1', loading: false, data: evidence, showObservations: false, onToggleObservations: () => undefined, onClose: () => undefined, onRetry: () => undefined, analysisLoading: true, analysisStartedAt: new Date().toISOString(), analysisStage: 'Round 1 of 2: independent assessment', onGenerateAnalysis: () => undefined }} />)
 
