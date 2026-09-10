@@ -3,6 +3,7 @@
 import pytest
 
 from app import create_app
+from app.audit_events import scoped_register_events
 from app.review_routing import route_event
 
 AUDIT = "demo-2019-haze"
@@ -140,6 +141,30 @@ def test_state_filter_selects_only_that_state(client):
 
     assert body["total"] > 0
     assert {e["triage"]["state"] for e in body["events"]} == {"LIKELY_FIRE"}
+
+
+def test_register_population_keeps_likely_non_fire_events_until_filtered_explicitly():
+    events = [
+        {
+            "eventId": "FE-FIRE",
+            "firstDetection": "2019-09-02T00:00:00+00:00",
+            "lastDetection": "2019-09-02T01:00:00+00:00",
+            "centroid": {"lon": 102.0, "lat": -1.0},
+            "triage": {"state": "LIKELY_FIRE"},
+        },
+        {
+            "eventId": "FE-NON-FIRE",
+            "firstDetection": "2019-09-02T02:00:00+00:00",
+            "lastDetection": "2019-09-02T03:00:00+00:00",
+            "centroid": {"lon": 102.0, "lat": -1.0},
+            "triage": {"state": "LIKELY_NON_FIRE"},
+        },
+    ]
+
+    assert [event["eventId"] for event in scoped_register_events(events)] == [
+        "FE-FIRE",
+        "FE-NON-FIRE",
+    ]
 
 
 def test_bbox_filters_on_centroid(client):
