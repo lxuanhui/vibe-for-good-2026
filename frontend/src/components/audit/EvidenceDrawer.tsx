@@ -369,14 +369,13 @@ export function EvidenceDrawer({
           />
         </div>
       </Section>
+      <Section title="Availability / limitations"><div className="space-y-2">{data.availability.map((item) => <div key={item.kind} className="rounded border border-border bg-bg/60 p-2 text-[11px] print:border-black/20 print:bg-transparent"><div className="flex justify-between"><span className="capitalize">{item.kind}</span><span className="text-status-moderate">{item.status}</span></div><p className="mt-1 text-text-muted">{item.reason}</p></div>)}</div></Section>
       <RelatedFireEvents graph={graph} error={graphError} eventId={eventId} />
       <DerivedSummary complexity={grouped.complexity} priority={grouped.priority} />
       <StructuredAnalysisSection analysis={analysis} loading={analysisLoading} error={analysisError} onGenerate={onGenerateAnalysis} />
       <MetricSection title="Peat / event-buffer intersection" note="The drawer shows the event footprint or buffer intersection only when a peat EvidenceObject is available. Peat overlap is environmental context and does not establish an underground path, cause, or responsibility." items={grouped.peat} />
       <Section title="Weather time window"><p className="mb-2 text-[11px] leading-4 text-text-muted">Every Open-Meteo/ERA5 hourly variable, during the event and the 7 days before it. Historical values, not a forecast; missing weather is not negative evidence.</p><WeatherSummary items={grouped.weather} /></Section>
-      <MetricSection title="Surface compatibility" note="Any ellipse/envelope comparison is first-order surface-fire compatibility only; it does not model underground peat propagation." items={grouped.surface} />
       <Section title="Imagery acquisition metadata"><p className="mb-2 text-[11px] leading-4 text-text-muted">Closest usable Sentinel-1 (SAR) and Sentinel-2 (optical) scenes before and after the event. Quicklooks are display previews, not analytical imagery; their source product and deterministic display processing are retained with the scene metadata.</p><ImagerySummary items={grouped.imagery} /></Section>
-      <Section title="Availability / limitations"><div className="space-y-2">{data.availability.map((item) => <div key={item.kind} className="rounded border border-border bg-bg/60 p-2 text-[11px] print:border-black/20 print:bg-transparent"><div className="flex justify-between"><span className="capitalize">{item.kind}</span><span className="text-status-moderate">{item.status}</span></div><p className="mt-1 text-text-muted">{item.reason}</p></div>)}</div></Section>
 
       {/* Print-only: the full log "EXPORT TO PDF" produces -- every observed-
           evidence item and every complexity/priority component, including
@@ -397,7 +396,6 @@ export function EvidenceDrawer({
         </Section>}
         {grouped.other.length > 0 && <Section title="Other deterministic evidence"><EvidenceList items={grouped.other} /></Section>}
       </div>
-      <Section title="Provenance"><div className="text-[10px] text-text-muted">Algorithms: {data.provenance.algorithmVersions.join(' · ')}</div><p className="mt-1 text-[10px] text-text-faint">Expand any metric to inspect its Evidence ID, source, time window, value, quality, raw reference and limitations. EXPORT TO PDF prints the full evidence log, including components not evaluated in this artifact.</p></Section>
     </>}
   </aside>
 }
