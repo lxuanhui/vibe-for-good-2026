@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import type { EventEvidenceResponse, EvidenceObject, InvestigationMap, StructuredAnalysis, StructuredAnalysisAssessment } from '../../api/types'
+import { fetchProcessedImageryManifest } from '../../api/client'
+import type { EventEvidenceResponse, EvidenceObject, InvestigationMap, ProcessedImageryAsset, StructuredAnalysis, StructuredAnalysisAssessment } from '../../api/types'
 import { Button } from '../ui/Button'
 import { Toggle } from '../ui/Toggle'
 
@@ -147,13 +148,10 @@ function ImageLightbox({ url, caption, onClose }: { url: string; caption: string
     >
       <button type="button" className="absolute top-4 right-4 text-sm text-white/80 hover:text-white" onClick={onClose}>CLOSE ✕</button>
       <figure className="max-h-full max-w-full" onClick={(event) => event.stopPropagation()}>
-        {/* Still the catalogue's own quicklook JPEG, just shown at its full
-            size instead of the ~56px list thumbnail -- there is no
-            higher-resolution asset behind it without CDSE product download
-            auth, so this is "as large as this evidence gets", not a zoom
-            into more detail than the source has. */}
+        {/* The committed Process API render is shown at its native size in the
+            lightbox; it remains a display product, not analytical imagery. */}
         <img src={url} alt={caption} className="max-h-[85vh] max-w-full rounded object-contain" />
-        <figcaption className="mt-2 text-center text-xs text-white/70">{caption} · catalogue quicklook, not the full-resolution product</figcaption>
+        <figcaption className="mt-2 text-center text-xs text-white/70">{caption} · processed display product, not analytical imagery</figcaption>
       </figure>
     </div>,
     document.body,
@@ -161,52 +159,54 @@ function ImageLightbox({ url, caption, onClose }: { url: string; caption: string
 }
 
 // Four scenes is not a reason to make the actual imagery tiny. Processed
-// artifacts use the drawer width; catalogue quicklooks remain metadata-only
-// until a processed artifact is supplied.
-type ProcessedImagery = { url: string; width?: number; height?: number; processing?: string }
-
-function processedImagery(value: Record<string, unknown>): ProcessedImagery | null {
-  const descriptor = ['processed_image', 'processed_visualization', 'processed_artifact', 'processed_display', 'processed']
-    .map((key) => value[key])
-    .find((candidate) => candidate != null)
-  const source = typeof descriptor === 'string' ? { url: descriptor } : descriptor && typeof descriptor === 'object' ? descriptor as Record<string, unknown> : value
-  const url = ['processed_image_url', 'processed_visualization_url', 'processed_url', 'display_url', 'image_url', 'url', 'href', 'uri']
-    .map((key) => source[key])
-    .find((candidate): candidate is string => typeof candidate === 'string' && candidate.length > 0)
-  if (!url) return null
-  return { url, width: typeof source.width === 'number' ? source.width : undefined, height: typeof source.height === 'number' ? source.height : undefined, processing: typeof source.processing === 'string' ? source.processing : undefined }
-}
-
-function ImagerySummary({ items }: { items: EvidenceObject[] }) {
+// artifacts use the drawer width; catalogue quicklooks remain metadata-only.
+function ImagerySummary({ eventId, items }: { eventId: string; items: EvidenceObject[] }) {
   const [lightbox, setLightbox] = useState<{ url: string; caption: string } | null>(null)
+  const [assets, setAssets] = useState<ProcessedImageryAsset[]>([])
+  const [manifestError, setManifestError] = useState(false)
+  const [failedPaths, setFailedPaths] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    let active = true
+    setAssets([])
+    setManifestError(false)
+    setFailedPaths(new Set())
+    if (!items.length) return () => { active = false }
+    fetchProcessedImageryManifest()
+      .then((manifest) => { if (active) setAssets(manifest.events[eventId]?.assets ?? []) })
+      .catch(() => { if (active) setManifestError(true) })
+    return () => { active = false }
+  }, [eventId, items.length])
+
   if (!items.length) return <p className="text-[11px] text-text-faint">Processed imagery unavailable; no imagery EvidenceObjects are present in the current audit artifact.</p>
   return <div className="space-y-1.5">{items.map((item) => {
     const v = (item.value ?? {}) as Record<string, unknown>
     const sensor = typeof v.sensor === 'string' ? v.sensor : item.type
     const position = typeof v.position === 'string' ? v.position.replace('_', '-') : ''
     const cloud = v.cloud_cover
-    const processed = processedImagery(v)
+    const asset = assets.find((candidate) => candidate.source_evidence_id === (item.evidence_id ?? item.evidenceId))
+    const processed = asset && !failedPaths.has(asset.path) ? asset : null
     const caption = `${sensor} ${position}`.trim()
     const processing = typeof v.display_processing === 'string' ? v.display_processing : undefined
     const product = typeof v.product === 'string' ? v.product : undefined
     return <div key={item.evidence_id ?? item.evidenceId ?? `${sensor}-${position}`} className="rounded border border-border bg-bg/60 p-2 text-[11px] print:border-black/20 print:bg-transparent">
       {processed && <button
         type="button"
-        onClick={() => setLightbox({ url: processed.url, caption })}
+        onClick={() => setLightbox({ url: processed.path, caption })}
         className="mb-2 block w-full print:pointer-events-none"
         aria-label={`Enlarge ${caption} processed imagery`}
       >
         <img
-          src={processed.url}
+          src={processed.path}
           alt={`${caption} processed imagery`}
           loading="lazy"
           width={processed.width}
           height={processed.height}
           className="max-h-[420px] w-full cursor-zoom-in rounded border border-border object-contain object-center hover:border-accent"
-          onError={(event) => { event.currentTarget.style.display = 'none' }}
+          onError={() => setFailedPaths((paths) => new Set(paths).add(processed.path))}
         />
       </button>}
-      {!processed && <p className="mb-2 rounded border border-status-moderate/30 bg-status-moderate/5 p-2 text-text-faint">Processed imagery unavailable for this scene. Catalogue quicklook metadata is retained, but no small legacy preview is displayed as investigation evidence.</p>}
+      {!processed && <p className="mb-2 rounded border border-status-moderate/30 bg-status-moderate/5 p-2 text-text-faint">{manifestError ? 'Processed imagery manifest unavailable for this event.' : 'Processed imagery unavailable for this scene. Catalogue quicklook metadata is retained, but no small legacy preview is displayed as investigation evidence.'}</p>}
       <div className="min-w-0">
         <div className="flex items-center justify-between gap-2"><span className="font-mono text-accent print:text-black">{sensor} {position}</span>{typeof cloud === 'number' && <span className="text-text-muted">{cloud.toFixed(0)}% cloud</span>}</div>
         <div className="mt-0.5 text-text-muted">{item.time_window}</div>
@@ -387,7 +387,7 @@ export function EvidenceDrawer({
       <StructuredAnalysisSection analysis={analysis} loading={analysisLoading} error={analysisError} onGenerate={onGenerateAnalysis} />
       <MetricSection title="Peat / event-buffer intersection" note="The drawer shows the event footprint or buffer intersection only when a peat EvidenceObject is available. Peat overlap is environmental context and does not establish an underground path, cause, or responsibility." items={grouped.peat} />
       <Section title="Weather time window"><p className="mb-2 text-[11px] leading-4 text-text-muted">Every Open-Meteo/ERA5 hourly variable, during the event and the 7 days before it. Historical values, not a forecast; missing weather is not negative evidence.</p><WeatherSummary items={grouped.weather} /></Section>
-      <Section title="Imagery acquisition metadata"><p className="mb-2 text-[11px] leading-4 text-text-muted">Closest usable Sentinel-1 (SAR) and Sentinel-2 (optical) scenes before and after the event. Quicklooks are display previews, not analytical imagery; their source product and deterministic display processing are retained with the scene metadata.</p><ImagerySummary items={grouped.imagery} /></Section>
+      <Section title="Imagery acquisition metadata"><p className="mb-2 text-[11px] leading-4 text-text-muted">Closest usable Sentinel-1 (SAR) and Sentinel-2 (optical) scenes before and after the event. Processed display assets are loaded from the committed imagery manifest; catalogue quicklooks are metadata only.</p><ImagerySummary eventId={eventId} items={grouped.imagery} /></Section>
 
       {/* Print-only: the full log "EXPORT TO PDF" produces -- every observed-
           evidence item and every complexity/priority component, including
