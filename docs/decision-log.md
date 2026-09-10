@@ -108,6 +108,14 @@ variable, not a secret, because it is public by design and masking it would
 only hide it from us. The general rule: an Amplify environment variable that
 is not in `console.tf` does not exist past the next infra merge.
 
+**The published key is reused through the 2026-09-11 demo and rotated after
+it** (owner's call, 2026-09-10; tracked in #152). Recorded because a leaked
+credential left in place looks like an oversight six commits later. The
+reasoning: a FIRMS MAP_KEY carries a transaction quota and nothing else, so
+the whole downside is the landing layer answering 503 if someone else spends
+it, and this change is what stops the key being re-published on every
+subsequent build. Rotation is a secret swap with no code change.
+
 ---
 
 ## 2026-09-10 - Analysis runs as an async job on a second Lambda
