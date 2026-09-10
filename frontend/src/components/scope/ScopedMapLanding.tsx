@@ -3,12 +3,13 @@ import { Layer, Map, Source, type MapLayerMouseEvent } from 'react-map-gl/maplib
 import type { Feature, FeatureCollection, Geometry, LineString, Point } from 'geojson'
 import type { AuditEventSummary, AuditScope, EventEvidenceResponse, InvestigationMap, InvestigationMapNode, StructuredAnalysis } from '../../api/types'
 import { addToAuditPack, fetchAuditRegister, fetchInvestigationBundle, fetchInvestigationMap, generateInvestigationAnalysis } from '../../api/client'
-import { AUDIT_EVENT_COLORS, AUDIT_SCOPE_BOUNDARY_COLOR, AUDIT_SCOPE_BUFFER_COLOR, SURFACE_FIRE_ENVELOPE_COLOR } from '../../lib/layerColors'
+import { AUDIT_EVENT_COLORS, AUDIT_SCOPE_BOUNDARY_COLOR, AUDIT_SCOPE_BUFFER_COLOR, SOLAR_NIGHT_COLOR, SURFACE_FIRE_ENVELOPE_COLOR } from '../../lib/layerColors'
 import { useAppStore } from '../../store/useAppStore'
 import { Button } from '../ui/Button'
 import { EvidenceDrawer } from '../audit/EvidenceDrawer'
 import { envelopePolygons } from './propagationEnvelopes'
 import { eventOverlapsDay, observationDays, observationsForDay, type ScopedMapDay } from './temporalScrubber'
+import { illuminationReference, nightCoverage } from '../../lib/illumination'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
 const GRAPH_LINE_COLOR = '#f97316'
@@ -16,13 +17,6 @@ const OBSERVATION_COLOR = '#fbbf24'
 const SCOPED_MAP_RELATIONSHIP_DISTANCE_KM = 10
 const CLOCK_REFRESH_MS = 60 * 1000
 const TIMELINE_STEP_MS = 750
-
-function southeastAsiaLight(date: Date) {
-  // UTC+8 is a useful regional midpoint. This is visual orientation only.
-  const localHour = (date.getUTCHours() + date.getUTCMinutes() / 60 + 8) % 24
-  const daylight = Math.max(0, Math.sin(((localHour - 6) / 12) * Math.PI))
-  return { daylight, label: daylight > 0.15 ? 'DAYLIGHT' : 'NIGHT' }
-}
 
 // The correlation graph is one rolled-together view now, not two flows that
 // silently replace each other: `origin` distinguishes an edge that touches
@@ -285,8 +279,10 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
   const edges = useMemo(() => graphEdges(visibleGraphNodes, taggedEdges), [visibleGraphNodes, taggedEdges])
   const envelopes = useMemo(() => envelopePolygons(taggedEdges, registerSelection), [taggedEdges, registerSelection])
   const [showSpreadEnvelopes, setShowSpreadEnvelopes] = useState(true)
+  const [showNightShade, setShowNightShade] = useState(true)
   const center = useMemo<[number, number]>(() => scope.centroid ?? [116.25, -3.8], [scope.centroid])
-  const light = southeastAsiaLight(clock)
+  const illuminationDate = useMemo(() => illuminationReference(activeDay, clock), [activeDay, clock])
+  const night = useMemo(() => nightCoverage(illuminationDate), [illuminationDate])
 
   useEffect(() => {
     const refresh = window.setInterval(() => setClock(new Date()), CLOCK_REFRESH_MS)
@@ -395,6 +391,7 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
             event.target.jumpTo({ center, zoom: initialViewState.zoom })
           }}
         >
+          {showNightShade && <Source id="solar-night-coverage" type="geojson" data={night}><Layer id="solar-night-coverage-fill" type="fill" paint={{ 'fill-color': SOLAR_NIGHT_COLOR, 'fill-opacity': 0.3 }} /></Source>}
           {buffer && <Source id="audit-context-buffer" type="geojson" data={buffer}><Layer id="audit-context-buffer-line" type="line" paint={{ 'line-color': AUDIT_SCOPE_BUFFER_COLOR, 'line-width': 1.5, 'line-dasharray': [2, 2], 'line-opacity': 0.9 }} /></Source>}
           {boundary && <Source id="audit-scope-boundary" type="geojson" data={boundary}><Layer id="audit-scope-fill" type="fill" paint={{ 'fill-color': AUDIT_SCOPE_BOUNDARY_COLOR, 'fill-opacity': 0.08 }} /><Layer id="audit-scope-line" type="line" paint={{ 'line-color': AUDIT_SCOPE_BOUNDARY_COLOR, 'line-width': 2 }} /></Source>}
           {showPeatland && <Source id="peatland-context" type="geojson" data="/peatland-indonesia.geojson"><Layer id="peatland-context-fill" type="fill" paint={{ 'fill-color': '#a855f7', 'fill-opacity': 0.22 }} /><Layer id="peatland-context-line" type="line" paint={{ 'line-color': '#c084fc', 'line-width': 0.7, 'line-opacity': 0.7 }} /></Source>}
@@ -432,11 +429,6 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
             />
           </Source>
         </Map>
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 z-[1] mix-blend-screen transition-opacity duration-[60000ms]"
-          style={{ background: 'radial-gradient(ellipse at 14% 6%, rgba(111, 179, 166, 0.26), transparent 43%), radial-gradient(ellipse at 86% 84%, rgba(255, 166, 52, 0.18), transparent 45%), radial-gradient(ellipse at 45% 20%, transparent 18%, rgba(1, 13, 30, 0.72) 100%)', opacity: 0.82 - light.daylight * 0.6 }}
-        />
       </div>
       <aside className="scoped-map-print-hide flex w-80 shrink-0 flex-col overflow-y-auto border-l border-border-strong bg-panel">
         <div className="border-b border-border-strong p-4">
@@ -451,6 +443,8 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
           {!loading && !error && events.length === 0 && <div className="mt-3 text-sm text-text-muted">No events intersect this audit scope and buffer.</div>}
           <Button variant="primary" className="mt-4 w-full" onClick={onOpenRegister}>OPEN FIRE REGISTER</Button>
           <Button className="mt-2 w-full" onClick={() => setShowPeatland((shown) => !shown)}>{showPeatland ? 'HIDE PEATLAND' : 'SHOW PEATLAND'}</Button>
+          <Button className="mt-2 w-full" onClick={() => setShowNightShade((shown) => !shown)}>{showNightShade ? 'HIDE NIGHT SHADE' : 'SHOW NIGHT SHADE'}</Button>
+          <p className="mt-2 text-[11px] leading-4 text-text-faint">Night shade shows the estimated sunlit side for the selected date or current time. It is visual orientation only, not fire evidence.</p>
           {envelopes.features.length > 0 && <Button className="mt-2 w-full" onClick={() => setShowSpreadEnvelopes((shown) => !shown)}>{showSpreadEnvelopes ? 'HIDE SPREAD ENVELOPES' : 'SHOW SPREAD ENVELOPES'}</Button>}
         </div>
         <div className="p-4">

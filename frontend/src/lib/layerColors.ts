@@ -35,6 +35,7 @@ export const INDONESIA_FILL_COLOR = '#364527'
 
 export const AUDIT_SCOPE_BOUNDARY_COLOR = '#6fb3a6'
 export const AUDIT_SCOPE_BUFFER_COLOR = '#eab308'
+export const SOLAR_NIGHT_COLOR = '#08152b'
 
 export const AUDIT_EVENT_COLORS = {
   LIKELY_FIRE: '#22c55e',
