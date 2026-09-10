@@ -30,6 +30,53 @@ apply an older decision without checking the entries above it.
 
 ---
 
+## 2026-09-10 - The thermal-lobe radius is the clustering module's 1 km and is refused at or above the clustering radius; no served artifact carried the metric
+
+**Status:** done · PR #254 · Closes #213 · Refs #86, #214
+
+**Decision.** `complexity/fire_complexity.py` no longer has a lobe radius of
+its own. It imports `DEFAULT_LOBE_DISTANCE_KM` (1 km) from
+`clustering/firms_clustering.py`, the same value `event_lobes` and the
+diagnostics CLI use, and `compute_fire_complexity()` raises if the lobe
+radius it is given is not strictly below the spatial threshold of the
+`ClusteringParameters` it is given (the defaults when none are). The field's
+`details` record both radii, so a value is self-describing.
+
+**Why.** Every pair the clustering linked is within the clustering radius,
+so a spatial-only connectivity pass at that same radius returns one
+component for every event, whatever the event looks like. With the module's
+old 2 km default `distinct_thermal_lobes` was 1 for all 1,842
+multi-observation events in the 2019 window, and the priority normaliser
+(`min(max(value - 1, 0) / 4, 1)`) turned that into a feature that
+contributed exactly 0 to every score. At 1 km the five largest events
+resolve into 6, 2, 10, 2 and 3 lobes (`python -m
+data_pipeline.clustering.diagnostics --start 2019-09-01 --end 2019-09-05`,
+before and after: the diagnostics already used 1 km, so its output is the
+same; the complexity module now agrees with it). Run through
+`compute_fire_complexity()` itself over the same window, 562 of the 1,842
+multi-observation events now have more than one lobe, against 0 before.
+
+**Finding: nothing needed regenerating.** #213 asked for the detail
+artifact to be regenerated because the served field changes. It does not
+exist to change: neither `audit_events.json.gz` nor
+`audit_triage_detail.json.gz` carries any complexity field, and
+`backend/app/audit_events.py` emits every one of the thirteen as a
+"not evaluated" placeholder with `value: null`. Running the complexity
+module over the artifact and serving its output is #214's work, and this
+fix is what makes that output worth serving.
+
+**Rejected: bumping the algorithm version to v2.** The version string is
+also the one the API's placeholders cite, no artifact holds a v1 value that
+a v2 could be confused with, and the field records its own radius. Bump it
+when #214 first writes real values.
+
+**Rejected: replacing `_spatial_components` with `event_lobes`.** Same
+computation, but `event_lobes` returns lobes as `FireEvent`s with derived
+ids, which the complexity module has no use for and which would invite
+treating a lobe as an event. The count is all it needs.
+
+---
+
 ## 2026-09-10 - The live FIRMS cache is shared across Lambda containers as one S3 object, filling the disposable-cache role
 
 **Status:** done · PR #246 · Refs #186
@@ -444,6 +491,12 @@ same radius the events were clustered at, so `distinct_thermal_lobes` is
 always 1 for every event in the artifact (0 of 1,842 multi-observation
 events have more). That is #213, not fixed here because it
 changes a served metric and so needs regeneration.
+
+> **Fixed 2026-09-10 by PR #254 (#213).** The complexity module now uses
+> the clustering module's 1 km lobe radius and refuses one at or above the
+> clustering radius. No regeneration was due: no committed artifact carries
+> the metric, and the API serves every complexity field as "not evaluated"
+> until #214. See the entry of that date.
 
 ---
 
