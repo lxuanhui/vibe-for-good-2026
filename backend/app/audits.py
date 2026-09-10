@@ -27,9 +27,26 @@ _EPSILON = 1e-12
 AUDIT_SESSIONS: dict[str, dict[str, Any]] = {}
 
 
-def _save(session: dict[str, Any]) -> None:
+def _create(session: dict[str, Any]) -> None:
     AUDIT_SESSIONS[session["audit_id"]] = session
-    audit_store.put(session)
+    audit_store.create(session)
+
+
+def _apply(audit_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
+    """Persist a scope change without overwriting what another writer added.
+
+    Scope setup used to write the whole session blob back unconditionally,
+    which was safe only because it always precedes pack selection and
+    analysis. It does not have to: an auditor who re-uploads a boundary while
+    an assessment is running would have dropped that assessment's result
+    (#146). These updates are a fixed dict computed before the call, so
+    re-applying them to whatever the store now holds is the right answer on a
+    retry rather than a merge to reason about.
+    """
+    session = audit_store.update(audit_id, lambda stored: stored.update(updates))
+    if session is not None:
+        AUDIT_SESSIONS[audit_id] = session
+    return session
 
 
 def _load(audit_id: str) -> dict[str, Any] | None:
@@ -110,7 +127,7 @@ def create_audit(payload: Any) -> dict[str, Any]:
         "buffer_geometry": None,
         "_geometry": None,
     }
-    _save(session)
+    _create(session)
     return _public_session(session)
 
 
@@ -252,7 +269,8 @@ def upload_scope(audit_id: str, geojson: Any) -> dict[str, Any] | None:
     centroid = [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2]
     buffer_bbox, buffer_geometry = _buffer_geometry(bbox, session["context_buffer_km"])
 
-    session.update(
+    session = _apply(
+        audit_id,
         {
             "status": "SCOPE_READY",
             "bbox": _bbox_dict(bbox),
@@ -260,9 +278,10 @@ def upload_scope(audit_id: str, geojson: Any) -> dict[str, Any] | None:
             "buffer_bbox": _bbox_dict(buffer_bbox),
             "buffer_geometry": buffer_geometry,
             "_geometry": original,
-        }
+        },
     )
-    _save(session)
+    if session is None:
+        return None
     return _public_session(session) | {"geometry": original}
 
 
@@ -272,6 +291,7 @@ def build_history(audit_id: str) -> dict[str, Any] | None:
         return None
     if session["status"] != "SCOPE_READY":
         raise AuditValidationError("upload a valid management-unit GeoJSON before building history")
-    session["status"] = "HISTORY_BUILD_READY"
-    _save(session)
+    session = _apply(audit_id, {"status": "HISTORY_BUILD_READY"})
+    if session is None:
+        return None
     return {"audit_id": audit_id, "scope_id": session["scope_id"], "status": session["status"]}

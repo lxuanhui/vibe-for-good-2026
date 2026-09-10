@@ -60,16 +60,27 @@ def _envelope(record: dict[str, Any]) -> dict[str, Any]:
 
 
 def _write(audit_id: str, event_id: str, **fields: Any) -> dict[str, Any]:
-    """Replace the job row, keeping the fields an earlier transition set."""
+    """Replace the job row, keeping the fields an earlier transition set.
+
+    Conditional, like every other write to this store (#146). The API
+    function writes RUNNING here and the worker writes the terminal status,
+    and while the normal order is sequential, a re-dispatched stale job puts
+    two writers on one row -- so a read/modify/write that ignored the
+    revision could drop a recorded outcome.
+    """
     key = job_key(audit_id, event_id)
-    record = {
-        **(audit_store.get(key) or {}),
-        "audit_id": key,
-        "auditId": audit_id,
-        "eventId": event_id,
-        **fields,
-    }
-    audit_store.put(record)
+
+    def mutate(record: dict[str, Any]) -> None:
+        record.update({"audit_id": key, "auditId": audit_id, "eventId": event_id, **fields})
+
+    record = audit_store.update(key, mutate, create_if_missing=True)
+    if record is None:
+        # Unreachable: `create_if_missing` returns None only for an absent
+        # item, which it has just created. Stated as a raise rather than an
+        # `assert` because asserts are stripped under -O, and this narrows the
+        # type for the line below -- silently passing None on would surface as
+        # a confusing envelope failure instead of the invariant that broke.
+        raise RuntimeError(f"Audit store returned no row for job {key}")
     return _envelope(record)
 
 
