@@ -1,43 +1,43 @@
 {
-  "asset_id": "IMG_FE-20190904-7d0ad45635_s1-vvvh-db-composite-v1_post_event",
-  "event_id": "FE-20190904-7d0ad45635",
-  "source_evidence_id": "ENV_IMAGERY_FE-20190904-7d0ad45635_Sentinel-1_post_event",
+  "asset_id": "IMG_FE-20190904-f9e5a502d6_s1-vvvh-db-composite-v1_pre_event",
+  "event_id": "FE-20190904-f9e5a502d6",
+  "source_evidence_id": "ENV_IMAGERY_FE-20190904-f9e5a502d6_Sentinel-1_pre_event",
   "sensor": "Sentinel-1",
-  "position": "post_event",
+  "position": "pre_event",
   "label": "Radar context",
-  "path": "/imagery/FE-20190904-7d0ad45635/s1-post.jpg",
+  "path": "/imagery/FE-20190904-f9e5a502d6/s1-pre.jpg",
   "format": "image/jpeg",
   "width": 1024,
   "height": 1024,
-  "bytes": 188512,
-  "coverage_fraction": 0.4458,
+  "bytes": 408088,
+  "coverage_fraction": 0.9999,
   "aoi": {
     "bbox": [
-      116.246471,
-      -3.920356,
-      116.336509,
-      -3.830524
+      116.024243,
+      -3.492956,
+      116.114237,
+      -3.403124
     ],
     "crs": "EPSG:4326",
     "half_size_km": 5.0
   },
   "acquisition": {
     "collection": "sentinel-1-grd",
-    "product_id": "S1A_IW_GRDH_1SDV_20190904T215955_20190904T220020_028877_0345E3_7233_COG",
-    "acquisition_time": "2019-09-04T21:59:55.687449Z",
+    "product_id": "S1A_IW_GRDH_1SDV_20190823T215955_20190823T220020_028702_033FC1_E5AD_COG",
+    "acquisition_time": "2019-08-23T21:59:55.157483Z",
     "time_range": {
-      "from": "2019-09-04T00:00:00Z",
-      "to": "2019-09-04T23:59:59Z"
+      "from": "2019-08-23T00:00:00Z",
+      "to": "2019-08-23T23:59:59Z"
     },
     "orbit": {
-      "absolute": 28877,
-      "cycle": 179,
+      "absolute": 28702,
+      "cycle": 178,
       "relative": 105,
       "state": "descending"
     },
     "cloud_cover_pct": null,
-    "temporal_distance_hours": 16.348802,
-    "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-1-grd/items/S1A_IW_GRDH_1SDV_20190904T215955_20190904T220020_028877_0345E3_7233_COG"
+    "temporal_distance_hours": 271.651345,
+    "catalogue_reference": "https://stac.dataspace.copernicus.eu/v1/collections/sentinel-1-grd/items/S1A_IW_GRDH_1SDV_20190823T215955_20190823T220020_028702_033FC1_E5AD_COG"
   },
   "processing": {
     "recipe_id": "s1-vvvh-db-composite-v1",
@@ -45,8 +45,8 @@
     "evalscript_sha256": "c776fd06c79cc04c8200fee0876f93d6dcf98ab4376f099ecee5e795916a56c5",
     "data_filter": {
       "timeRange": {
-        "from": "2019-09-04T00:00:00Z",
-        "to": "2019-09-04T23:59:59Z"
+        "from": "2019-08-23T00:00:00Z",
+        "to": "2019-08-23T23:59:59Z"
       },
       "acquisitionMode": "IW",
       "polarization": "DV",
@@ -65,7 +65,7 @@
       "upsampling": "BILINEAR",
       "downsampling": "BILINEAR"
     },
-    "request_sha256": "5d631b337715f00588d41e5262ad13f071f600cceb6ef12a106ee5a868e571a6"
+    "request_sha256": "56262e89249d82e2ecb2ba4fa61986a30f99e0f3dda2a15064a831fa2e8000bf"
   },
   "limitations": [
     "Radar backscatter is surface and structural context, cloud-independent; it does not observe sub-surface peat combustion, and a backscatter change is not a burn map.",
