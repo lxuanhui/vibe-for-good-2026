@@ -86,6 +86,21 @@ export async function uploadAuditScopeGeometry(auditId: string, geometry: unknow
   return apiPost<AuditScope>(`/audits/${encodeURIComponent(auditId)}/scope/upload`, JSON.stringify(geometry), { 'Content-Type': 'application/json' })
 }
 
+// The two no-file scope paths from #87. Both are server-owned: the API builds
+// the circle and records `scope_source`, so the console never has to post a
+// polygon it made up and call it the auditor's.
+export async function setAuditScopePoint(auditId: string, point: { latitude: number; longitude: number; radiusKm: number }): Promise<AuditScope> {
+  return apiPost<AuditScope>(
+    `/audits/${encodeURIComponent(auditId)}/scope/point`,
+    JSON.stringify({ latitude: point.latitude, longitude: point.longitude, radius_km: point.radiusKm }),
+    { 'Content-Type': 'application/json' },
+  )
+}
+
+export async function setAuditScopeDemo(auditId: string): Promise<AuditScope> {
+  return apiPost<AuditScope>(`/audits/${encodeURIComponent(auditId)}/scope/demo`, null)
+}
+
 export async function buildFireHistory(auditId: string): Promise<{ audit_id: string; scope_id: string; status: 'HISTORY_BUILD_READY'; duration_ms: number; dataset_mode: string }> {
   return apiPost(`/audits/${encodeURIComponent(auditId)}/history/build`, null)
 }

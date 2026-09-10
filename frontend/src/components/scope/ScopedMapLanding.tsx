@@ -4,6 +4,7 @@ import type { Feature, FeatureCollection, Geometry, LineString, Point } from 'ge
 import type { AnalysisJob, AuditEventSummary, AuditScope, EventEvidenceResponse, InvestigationMap, InvestigationMapNode, StructuredAnalysis } from '../../api/types'
 import { addToAuditPack, fetchAuditRegister, fetchInvestigationBundle, fetchInvestigationMap, generateInvestigationAnalysis } from '../../api/client'
 import { AUDIT_SCOPE_BOUNDARY_COLOR, AUDIT_SCOPE_BUFFER_COLOR, FIRE_EVENT_COLORS, FIRMS_HOTSPOT_COLORS, HYDROLOGY_RAMP_COLORS, LAYER_COLORS, SOLAR_NIGHT_COLOR, SURFACE_FIRE_ENVELOPE_COLOR } from '../../lib/layerColors'
+import { REGIONAL_MAP_BOUNDS } from '../../lib/regionalBounds'
 import { useAppStore } from '../../store/useAppStore'
 import { useScopedOverlay } from '../../api/hooks'
 import { Button } from '../ui/Button'
@@ -413,7 +414,13 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
           initialViewState={initialViewState}
           minZoom={5}
           maxZoom={15}
-          maxBounds={scope.buffer_bbox ? [scope.buffer_bbox.minLon, scope.buffer_bbox.minLat, scope.buffer_bbox.maxLon, scope.buffer_bbox.maxLat] : undefined}
+          // Regional guard rails, not the buffer: pinning maxBounds to the
+          // buffer bbox made the map refuse to drag at all (#249). Dragging
+          // away shows basemap only, because the register is still fetched
+          // for scope plus buffer and nothing else (#127: no regional
+          // FireEvent browser). Changing the area of focus is the scope
+          // panel's job, not the camera's.
+          maxBounds={REGIONAL_MAP_BOUNDS}
           interactiveLayerIds={['audit-event-points', 'fireevent-observations-points']}
           onClick={handleMapClick}
           cursor="default"
@@ -493,6 +500,7 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
       <aside className="scoped-map-print-hide flex w-80 shrink-0 flex-col overflow-y-auto border-l border-border-strong bg-panel">
         <div className="border-b border-border-strong p-4">
           <div className="text-sm uppercase tracking-[0.16em] text-accent">Audit scope map</div>
+          {scope.scope_label && <p className="mt-2 text-[11px] leading-4 text-text-faint">Boundary: {scope.scope_label}</p>}
           <p className="mt-3 text-xs text-text-muted">Events shown <span className="font-semibold text-accent">{loading ? '…' : visibleEvents.length.toLocaleString()}</span></p>
           <p className="mt-2 text-[11px] leading-4 text-text-faint">Large circles are FireEvents. Smaller amber points are selected-event FIRMS observations.</p>
           {taggedEdges.length > 0 && <p className="mt-2 text-xs leading-5 text-text-faint">Lines are limited to {SCOPED_MAP_RELATIONSHIP_DISTANCE_KM} km. <span className="text-accent">Bright</span> lines are stronger candidates for the open FireEvent; weaker or unresolved links recede. <span className="opacity-60">Faint</span> lines belong to other FireEvents selected in the Fire Register.</p>}

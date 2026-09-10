@@ -9,7 +9,7 @@ when changing that subsystem.
 | Area | Current decision | Detail |
 |---|---|---|
 | Product boundary | Evidence supports human review; it never establishes blame, intent, or legal responsibility. | Standing constraints |
-| Audit flow | Scope-first: create an audit from uploaded GeoJSON before rendering FireEvents. The regional landing may show labelled FIRMS context only. | 2026-09-09, audit session / landing |
+| Audit flow | Scope-first: create an audit from a chosen boundary (labelled demo area, point and radius, or uploaded GeoJSON) before rendering FireEvents. The regional landing may show labelled FIRMS context only; the scoped map pans freely but the register stays cut to scope plus buffer. | 2026-09-10, scoped map pans freely; 2026-09-09, audit session / landing |
 | API state | Audit IDs and scope state persist in DynamoDB in deployed environments; in-memory state is local development only. Every write is revision-checked — there is no unconditional write path — and both backends implement the same compare-and-set. | 2026-09-09, audit session / landing; 2026-09-10, conditional writes |
 | Derived data | Clustered events, weather, imagery selection, peat context, and prepared graph data are offline artifacts, not request-time Lambda work. | 2026-09-09, graph; weather and imagery; 2026-09-08, clustering |
 | Investigation | Scores, review routing, graph edges, and propagation are separate deterministic evidence outputs; none establishes causation. | 2026-09-09, graph; review routing; 2026-09-08, triage / graph / surface growth |
@@ -27,6 +27,50 @@ when changing that subsystem.
 **Use this log:** entries retain the original diagnosis, rejected alternatives,
 and historical context. A later entry can supersede an earlier one; do not
 apply an older decision without checking the entries above it.
+
+---
+
+## 2026-09-10 - The scoped map pans freely inside regional guard rails, and the boundary is chosen in the scope panel, never defaulted
+
+**Status:** done · PR #267 · Closes #249 · Refs #87 (console half), #127
+
+**Decision.** `ScopedMapLanding` no longer pins MapLibre's `maxBounds` to
+the audit's context-buffer bbox. Both console maps share one set of wide
+regional guard rails (`lib/regionalBounds.ts`, roughly Indian Ocean to
+Papua). The register request is unchanged: it is still fetched for scope
+plus buffer only, so dragging away from the audit shows basemap, not more
+FireEvents. The area of focus is changed in the scope panel, which now
+offers the three boundary sources the API records as `scope_source`:
+the server-owned demo study area (the default, labelled as a demo), a
+point and radius (centre typed or placed by clicking the preview map,
+radius in km, mirrored client-side as the same 64-vertex circle the API
+stores), and a GeoJSON upload. The upload path refuses to build without a
+file rather than substituting an area the auditor never chose.
+
+**Why.** #249: the scoped map could not be dragged at all, because
+MapLibre clamps the camera to `maxBounds` and the buffer bbox was smaller
+than the viewport, and the only no-file path was a rectangle hard-coded in
+the console and posted through `/scope/upload` as if it were the auditor's.
+The backend half of #87 (PR #216) had already added the point and demo
+endpoints; nothing in the console called them.
+
+**Rejected: make the register follow the viewport.** Dragging the map to
+a new area and having events appear there is the Indonesia-wide fire
+browser #127 rejected on purpose. The camera is for looking; the scope
+panel is for choosing, and the session records what was chosen.
+
+**Rejected: change the default geometry to a circle.** The imagery and
+wind-oriented spread edges are precomputed for the 16 events inside the
+demo rectangle plus buffer. A circle of similar size would shift the
+in-scope set at the corners the night before the demo, for no gain. The
+demo area stays the same rectangle, now set through `/scope/demo` so the
+session says so.
+
+**Open.** A moved scope gets a register and triage anywhere in the archive
+(Sumatra and Kalimantan, 2019 haze window) but no imagery and only
+distance-only graph edges outside the enriched 16; the evidence drawer
+already says imagery is unavailable. Drawing a polygon on the map (#87's
+optional path) is not built; upload covers it.
 
 ---
 
@@ -516,6 +560,8 @@ behaviour; no console route is shaped that way.
 ## 2026-09-10 - A scope can be a point and radius or the server-owned demo area, and the session records which
 
 **Status:** done · PR #216 · Refs #87 (backend half; the console half is open)
+
+> **Console half landed 2026-09-10 by PR #267 (#249).** The scope panel now offers all three sources and calls these endpoints; see the entry of that date.
 
 **Decision.** Two more ways to set an audit scope, both server-side:
 `POST /api/audits/{id}/scope/point` takes latitude, longitude and a radius

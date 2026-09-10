@@ -6,11 +6,11 @@ import { FIRMS_HOTSPOT_COLORS } from '../../lib/layerColors'
 import { Button } from '../ui/Button'
 import { illuminationReference, nightCoverage } from '../../lib/illumination'
 import { SOLAR_NIGHT_COLOR } from '../../lib/layerColors'
+import { REGIONAL_MAP_BOUNDS } from '../../lib/regionalBounds'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
 type FirmsProperties = { confidence: string; frp: number; ageHours: number }
 
-const SEA_BOUNDS: [number, number, number, number] = [90, -12, 145, 25]
 const FIRMS_REFRESH_MS = 15 * 60 * 1000
 const CLOCK_REFRESH_MS = 60 * 1000
 
@@ -124,7 +124,7 @@ export function AuditLanding({ onStartAudit, onOpenContext }: { onStartAudit: ()
           mapStyle="/scoped-map-style.json"
           transformRequest={transformRequest}
           initialViewState={{ longitude: 117.5, latitude: 6.5, zoom: 3 }}
-          maxBounds={SEA_BOUNDS}
+          maxBounds={REGIONAL_MAP_BOUNDS}
           minZoom={3}
           maxZoom={10}
           attributionControl={false}
@@ -167,7 +167,7 @@ export function AuditLanding({ onStartAudit, onOpenContext }: { onStartAudit: ()
         </div>
         <div className="mt-3 text-right text-[10px] uppercase tracking-[0.14em] text-text-faint">NIGHT SHADE: CURRENT SUN</div>
         <Button variant="primary" className="mt-5 w-full py-3 uppercase tracking-[0.14em]" onClick={onStartAudit}>START AUDIT</Button>
-        <p className="mt-3 text-[11px] leading-4 text-text-faint">Upload GeoJSON → validate scope → build the cached historical register → inspect selected FireEvents.</p>
+        <p className="mt-3 text-[11px] leading-4 text-text-faint">Choose a boundary (demo area, point and radius, or GeoJSON) → validate scope → build the cached historical register → inspect selected FireEvents.</p>
         <button
           type="button"
           onClick={onOpenContext}

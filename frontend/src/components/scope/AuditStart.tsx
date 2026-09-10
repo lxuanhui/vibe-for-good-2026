@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import type { AuditScope } from '../../api/types'
-import { buildFireHistory, createAuditReview, fetchDemoDatasetSummary, uploadAuditScope, uploadAuditScopeGeometry } from '../../api/client'
-import { buildScopePreview, DEFAULT_MANAGEMENT_UNIT_GEOMETRY } from '../../lib/scope'
+import { buildFireHistory, createAuditReview, fetchDemoDatasetSummary, setAuditScopeDemo, setAuditScopePoint, uploadAuditScope, uploadAuditScopeGeometry } from '../../api/client'
+import { buildScopePreview, circlePolygon, DEFAULT_MANAGEMENT_UNIT_GEOMETRY, DEFAULT_SCOPE_POINT, POINT_SCOPE_LIMITS } from '../../lib/scope'
 import { INDONESIA_FILL_COLOR } from '../../lib/layerColors'
 import { Button } from '../ui/Button'
 import { ScopePreviewMap } from './ScopePreviewMap'
@@ -15,6 +15,40 @@ function errorMessage(error: unknown): string {
 // still lands on a register with real FireEvents, not an empty one.
 const DEFAULT_REVIEW_START = '2019-09-01'
 const DEFAULT_REVIEW_END = '2019-09-05'
+
+// The three ways the API accepts a boundary (#87), mirrored one to one so the
+// session's `scope_source` is always something the user chose here, never a
+// fallback applied behind their back.
+type ScopeSource = 'demo' | 'point_radius' | 'upload'
+
+const SCOPE_SOURCES: { value: ScopeSource; label: string; hint: string }[] = [
+  { value: 'demo', label: 'Demo study area', hint: 'The predefined 2019 Kalimantan area. Labelled as a demo, not a company boundary.' },
+  { value: 'point_radius', label: 'Point and radius', hint: 'Click the preview map to place the centre, or type the coordinates.' },
+  { value: 'upload', label: 'GeoJSON upload', hint: 'The private management-unit boundary authorised for this engagement.' },
+]
+
+function pointFromScope(scope: AuditScope | undefined) {
+  const point = scope?.scope_point
+  return point
+    ? { latitude: String(point.latitude), longitude: String(point.longitude), radiusKm: String(point.radius_km) }
+    : { latitude: String(DEFAULT_SCOPE_POINT.latitude), longitude: String(DEFAULT_SCOPE_POINT.longitude), radiusKm: String(DEFAULT_SCOPE_POINT.radiusKm) }
+}
+
+function parsePoint(fields: { latitude: string; longitude: string; radiusKm: string }): { latitude: number; longitude: number; radiusKm: number } {
+  const latitude = Number(fields.latitude)
+  const longitude = Number(fields.longitude)
+  const radiusKm = Number(fields.radiusKm)
+  if (fields.latitude.trim() === '' || !Number.isFinite(latitude) || Math.abs(latitude) > POINT_SCOPE_LIMITS.maxLatitude) {
+    throw new Error(`Latitude must be between -${POINT_SCOPE_LIMITS.maxLatitude} and ${POINT_SCOPE_LIMITS.maxLatitude}.`)
+  }
+  if (fields.longitude.trim() === '' || !Number.isFinite(longitude) || Math.abs(longitude) > 180) {
+    throw new Error('Longitude must be between -180 and 180.')
+  }
+  if (fields.radiusKm.trim() === '' || !Number.isFinite(radiusKm) || radiusKm < POINT_SCOPE_LIMITS.minRadiusKm || radiusKm > POINT_SCOPE_LIMITS.maxRadiusKm) {
+    throw new Error(`Radius must be between ${POINT_SCOPE_LIMITS.minRadiusKm} and ${POINT_SCOPE_LIMITS.maxRadiusKm} km.`)
+  }
+  return { latitude, longitude, radiusKm }
+}
 
 /** The artifact states its own coverage as "YYYY-MM-DD..YYYY-MM-DD".
 
@@ -31,8 +65,16 @@ export function AuditStart({ onReady, overlay = false, fullScreen = false, onClo
   const [reviewStart, setReviewStart] = useState(initialScope?.review_start ?? DEFAULT_REVIEW_START)
   const [reviewEnd, setReviewEnd] = useState(initialScope?.review_end ?? DEFAULT_REVIEW_END)
   const [contextBuffer, setContextBuffer] = useState(String(initialScope?.context_buffer_km ?? 25))
+  // An existing scope reopens on the source it was built from. A session
+  // created before `scope_source` existed reopens as an upload, which is what
+  // the old form always sent.
+  const [source, setSource] = useState<ScopeSource>(initialScope ? initialScope.scope_source ?? 'upload' : 'demo')
+  const [point, setPoint] = useState(() => pointFromScope(initialScope))
   const [file, setFile] = useState<File | null>(null)
-  const [geometry, setGeometry] = useState<unknown>(initialScope?.geometry ?? DEFAULT_MANAGEMENT_UNIT_GEOMETRY)
+  // Only an uploaded boundary lives here. The demo area and the circle are
+  // derived at render time from their source, so there is no stale copy of
+  // either to submit by mistake.
+  const [uploadedGeometry, setUploadedGeometry] = useState<unknown>(initialScope?.scope_source === 'upload' || (initialScope && !initialScope.scope_source) ? initialScope.geometry ?? null : null)
   const [fileError, setFileError] = useState('')
   const [submitError, setSubmitError] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -54,6 +96,23 @@ export function AuditStart({ onReady, overlay = false, fullScreen = false, onClo
     return () => { live = false }
   }, [])
 
+  const pointError = useMemo(() => {
+    try {
+      parsePoint(point)
+      return ''
+    } catch (error) {
+      return errorMessage(error)
+    }
+  }, [point])
+
+  const geometry = useMemo(() => {
+    if (source === 'demo') return DEFAULT_MANAGEMENT_UNIT_GEOMETRY
+    if (source === 'upload') return uploadedGeometry
+    if (pointError) return null
+    const parsed = parsePoint(point)
+    return circlePolygon(parsed.latitude, parsed.longitude, parsed.radiusKm)
+  }, [point, pointError, source, uploadedGeometry])
+
   const preview = useMemo(() => {
     if (!geometry) return null
     try {
@@ -63,6 +122,10 @@ export function AuditStart({ onReady, overlay = false, fullScreen = false, onClo
     }
   }, [contextBuffer, geometry])
 
+  function handlePick([longitude, latitude]: [number, number]) {
+    setPoint((current) => ({ ...current, latitude: latitude.toFixed(4), longitude: longitude.toFixed(4) }))
+  }
+
   async function handleFileChange(nextFile: File | null) {
     setFile(nextFile)
     setFileError('')
@@ -70,15 +133,15 @@ export function AuditStart({ onReady, overlay = false, fullScreen = false, onClo
       // Clearing the picker does not reset an existing scope. A replacement
       // can be selected explicitly, while navigating back keeps the current
       // private geometry available for another history build.
-      if (!initialScope) setGeometry(DEFAULT_MANAGEMENT_UNIT_GEOMETRY)
+      if (!initialScope) setUploadedGeometry(null)
       return
     }
     try {
       const parsed: unknown = JSON.parse(await nextFile.text())
       buildScopePreview(parsed, Number(contextBuffer))
-      setGeometry(parsed)
+      setUploadedGeometry(parsed)
     } catch (error) {
-      setGeometry(null)
+      setUploadedGeometry(null)
       setFileError(errorMessage(error))
     }
   }
@@ -102,8 +165,14 @@ export function AuditStart({ onReady, overlay = false, fullScreen = false, onClo
       setSubmitError(`This build holds real FireEvents for ${coverage.start} to ${coverage.end} only. Choose a review period inside it.`)
       return
     }
-    if (file && !preview) {
-      setSubmitError(fileError || 'Upload a valid GeoJSON management-unit polygon.')
+    if (source === 'point_radius' && pointError) {
+      setSubmitError(pointError)
+      return
+    }
+    if (source === 'upload' && (file ? !preview : !uploadedGeometry)) {
+      // No silent default here: a user on the upload path who has not
+      // supplied a boundary gets told, rather than an area they never chose.
+      setSubmitError(fileError || (file ? 'Upload a valid GeoJSON management-unit polygon.' : 'Choose a GeoJSON file, or pick another boundary source.'))
       return
     }
 
@@ -114,11 +183,18 @@ export function AuditStart({ onReady, overlay = false, fullScreen = false, onClo
         reviewEnd,
         contextBufferKm: Number(contextBuffer),
       })
-      const uploaded = file
-        ? await uploadAuditScope(created.audit_id, file)
-        : await uploadAuditScopeGeometry(created.audit_id, geometry ?? DEFAULT_MANAGEMENT_UNIT_GEOMETRY)
-      const handoff = await buildFireHistory(uploaded.audit_id)
-      onReady({ ...uploaded, status: handoff.status, historyBuild: handoff })
+      let scoped: AuditScope
+      if (source === 'demo') {
+        scoped = await setAuditScopeDemo(created.audit_id)
+      } else if (source === 'point_radius') {
+        scoped = await setAuditScopePoint(created.audit_id, parsePoint(point))
+      } else {
+        scoped = file
+          ? await uploadAuditScope(created.audit_id, file)
+          : await uploadAuditScopeGeometry(created.audit_id, uploadedGeometry)
+      }
+      const handoff = await buildFireHistory(scoped.audit_id)
+      onReady({ ...scoped, status: handoff.status, historyBuild: handoff })
     } catch (error) {
       setSubmitError(errorMessage(error))
     } finally {
@@ -141,9 +217,9 @@ export function AuditStart({ onReady, overlay = false, fullScreen = false, onClo
           <p className="mb-2 text-xs uppercase tracking-[0.2em] text-accent">01 Audit scope</p>
           <h1 className="text-2xl font-semibold tracking-tight">Start with the management unit.</h1>
           <p className="mt-3 text-sm leading-6 text-text-muted">
-            Set the review period and upload the private boundary authorised for this engagement. No company identity or public concession lookup is required.
+            Set the review period and the boundary for this engagement: the demo area, a point and radius, or the private management-unit boundary you are authorised to use. No company identity or public concession lookup is required.
           </p>
-          {initialScope && <p className="mt-3 rounded border border-accent/30 bg-accent/10 px-3 py-2 text-xs leading-5 text-text-muted">Existing dates, buffer, and boundary are preserved. Choose a new GeoJSON file to replace the boundary and rebuild Fire History.</p>}
+          {initialScope && <p className="mt-3 rounded border border-accent/30 bg-accent/10 px-3 py-2 text-xs leading-5 text-text-muted">Existing dates, buffer, and boundary are preserved. Change any of them and rebuild Fire History to replace the register.</p>}
 
           <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
             <div className="space-y-2">
@@ -193,21 +269,87 @@ export function AuditStart({ onReady, overlay = false, fullScreen = false, onClo
               <span className="block text-[11px] text-text-faint">Default 25 km. External context is kept distinct from the audit boundary.</span>
             </label>
 
-            <label className="block space-y-2 text-xs text-text-muted">
-              <span className="block uppercase tracking-wider">Management-unit GeoJSON (optional)</span>
-              <input
-                type="file"
-                accept=".geojson,.json,application/geo+json,application/json"
-                onChange={(event) => void handleFileChange(event.target.files?.[0] ?? null)}
-                className="block w-full cursor-pointer rounded border border-border-strong bg-bg px-3 py-2 text-xs text-text file:mr-3 file:rounded file:border-0 file:bg-panel-raised file:px-2 file:py-1 file:text-xs file:text-text"
-              />
-              <ul className="list-disc space-y-1 pl-4 text-[11px] text-text-faint">
-                <li>Accepts Polygon, MultiPolygon, Feature, or FeatureCollection GeoJSON.</li>
-                <li>Leave empty to use the default area; invalid or unsupported geometry is rejected.</li>
-              </ul>
-            </label>
+            <fieldset className="space-y-2 text-xs text-text-muted">
+              <legend className="block uppercase tracking-wider">Boundary source</legend>
+              <div className="grid grid-cols-3 gap-2">
+                {SCOPE_SOURCES.map((option) => (
+                  <label key={option.value} className={`cursor-pointer rounded border px-3 py-2 text-center text-xs ${source === option.value ? 'border-accent bg-accent/10 text-text' : 'border-border-strong bg-bg text-text-muted'}`}>
+                    <input
+                      type="radio"
+                      name="scope-source"
+                      value={option.value}
+                      checked={source === option.value}
+                      onChange={() => setSource(option.value)}
+                      className="sr-only"
+                    />
+                    {option.label}
+                  </label>
+                ))}
+              </div>
+              <span className="block text-[11px] text-text-faint">{SCOPE_SOURCES.find((option) => option.value === source)?.hint}</span>
+            </fieldset>
 
-            {(fileError || submitError) && <p className="rounded border border-status-urgent/40 bg-status-urgent/10 px-3 py-2 text-xs leading-5 text-red-200" role="alert">{fileError || submitError}</p>}
+            {source === 'point_radius' && (
+              <div className="grid grid-cols-3 gap-3">
+                <label className="space-y-2 text-xs text-text-muted">
+                  <span className="block uppercase tracking-wider">Latitude</span>
+                  <input
+                    required
+                    type="number"
+                    step="0.0001"
+                    min={-POINT_SCOPE_LIMITS.maxLatitude}
+                    max={POINT_SCOPE_LIMITS.maxLatitude}
+                    value={point.latitude}
+                    onChange={(event) => setPoint({ ...point, latitude: event.target.value })}
+                    className="w-full rounded border border-border-strong bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent"
+                  />
+                </label>
+                <label className="space-y-2 text-xs text-text-muted">
+                  <span className="block uppercase tracking-wider">Longitude</span>
+                  <input
+                    required
+                    type="number"
+                    step="0.0001"
+                    min="-180"
+                    max="180"
+                    value={point.longitude}
+                    onChange={(event) => setPoint({ ...point, longitude: event.target.value })}
+                    className="w-full rounded border border-border-strong bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent"
+                  />
+                </label>
+                <label className="space-y-2 text-xs text-text-muted">
+                  <span className="block uppercase tracking-wider">Radius (km)</span>
+                  <input
+                    required
+                    type="number"
+                    step="0.1"
+                    min={POINT_SCOPE_LIMITS.minRadiusKm}
+                    max={POINT_SCOPE_LIMITS.maxRadiusKm}
+                    value={point.radiusKm}
+                    onChange={(event) => setPoint({ ...point, radiusKm: event.target.value })}
+                    className="w-full rounded border border-border-strong bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent"
+                  />
+                </label>
+              </div>
+            )}
+
+            {source === 'upload' && (
+              <label className="block space-y-2 text-xs text-text-muted">
+                <span className="block uppercase tracking-wider">Management-unit GeoJSON</span>
+                <input
+                  type="file"
+                  accept=".geojson,.json,application/geo+json,application/json"
+                  onChange={(event) => void handleFileChange(event.target.files?.[0] ?? null)}
+                  className="block w-full cursor-pointer rounded border border-border-strong bg-bg px-3 py-2 text-xs text-text file:mr-3 file:rounded file:border-0 file:bg-panel-raised file:px-2 file:py-1 file:text-xs file:text-text"
+                />
+                <ul className="list-disc space-y-1 pl-4 text-[11px] text-text-faint">
+                  <li>Accepts Polygon, MultiPolygon, Feature, or FeatureCollection GeoJSON.</li>
+                  <li>Invalid or unsupported geometry is rejected. Nothing is substituted for it.</li>
+                </ul>
+              </label>
+            )}
+
+            {(fileError || submitError || (source === 'point_radius' && pointError)) && <p className="rounded border border-status-urgent/40 bg-status-urgent/10 px-3 py-2 text-xs leading-5 text-red-200" role="alert">{fileError || submitError || pointError}</p>}
 
             <Button type="submit" variant="primary" disabled={submitting} className="w-full py-3 uppercase tracking-[0.16em]">
               {submitting ? 'Building cached fire history…' : 'BUILD FIRE HISTORY'}
@@ -230,10 +372,12 @@ export function AuditStart({ onReady, overlay = false, fullScreen = false, onClo
           {submitting && <div role="status" className="border-t border-border px-5 py-3 text-xs text-text-muted">Scope uploaded. Checking the cached real historical dataset and preparing the register…</div>}
           <div className="relative min-h-[360px] flex-1 bg-bg">
             {preview ? (
-              <ScopePreviewMap scope={preview} />
+              <ScopePreviewMap scope={preview} onPick={source === 'point_radius' ? handlePick : undefined} />
             ) : (
               <div className="flex h-full min-h-[360px] items-center justify-center px-10 text-center text-sm text-text-faint">
-                That file could not be previewed. Fix it and re-upload, or remove the file to use the default area.
+                {source === 'upload'
+                  ? (file ? 'That file could not be previewed. Fix it and re-upload, or pick another boundary source.' : 'Choose a GeoJSON file to preview its boundary and context buffer.')
+                  : 'Enter a latitude, longitude and radius to preview the scope.'}
               </div>
             )}
           </div>
@@ -244,6 +388,8 @@ export function AuditStart({ onReady, overlay = false, fullScreen = false, onClo
               <div><div className="text-text-faint">Buffer</div><div className="mt-1 font-mono text-text">{Number(contextBuffer).toFixed(0)} km</div></div>
             </div>
           )}
+          {preview && source === 'demo' && <p className="border-t border-border px-5 py-3 text-[11px] leading-4 text-text-faint">Demo study area, 2019 Kalimantan haze window. Not a company boundary.</p>}
+          {preview && source === 'point_radius' && <p className="border-t border-border px-5 py-3 text-[11px] leading-4 text-text-faint">Click anywhere on the map to move the centre. Drag to look around first if you need to.</p>}
         </section>
       </main>
     </div>

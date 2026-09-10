@@ -15,7 +15,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import { AuditStart } from './AuditStart'
-import { createAuditReview, fetchDemoDatasetSummary } from '../../api/client'
+import { buildFireHistory, createAuditReview, fetchDemoDatasetSummary, setAuditScopeDemo, setAuditScopePoint, uploadAuditScopeGeometry } from '../../api/client'
 import type { AuditScope } from '../../api/types'
 
 vi.mock('../../api/client', () => ({
@@ -23,16 +23,49 @@ vi.mock('../../api/client', () => ({
   createAuditReview: vi.fn(),
   uploadAuditScope: vi.fn(),
   uploadAuditScopeGeometry: vi.fn(),
+  setAuditScopePoint: vi.fn(),
+  setAuditScopeDemo: vi.fn(),
   buildFireHistory: vi.fn(),
 }))
 
-vi.mock('./ScopePreviewMap', () => ({ ScopePreviewMap: () => <div data-testid="scope-preview" /> }))
+// The preview map is a canvas jsdom cannot draw. The stand-in exposes the one
+// interaction the form depends on: a click that hands back a position.
+vi.mock('./ScopePreviewMap', () => ({
+  ScopePreviewMap: ({ onPick }: { onPick?: (position: [number, number]) => void }) => (
+    <button type="button" data-testid="scope-preview" data-pickable={Boolean(onPick)} onClick={() => onPick?.([110.51234, -1.25678])}>preview</button>
+  ),
+}))
 
 const COVERAGE_START = '2019-09-01'
 const COVERAGE_END = '2019-09-05'
 
 const fetchDemoDatasetSummaryMock = vi.mocked(fetchDemoDatasetSummary)
 const createAuditReviewMock = vi.mocked(createAuditReview)
+const setAuditScopeDemoMock = vi.mocked(setAuditScopeDemo)
+const setAuditScopePointMock = vi.mocked(setAuditScopePoint)
+const uploadAuditScopeGeometryMock = vi.mocked(uploadAuditScopeGeometry)
+const buildFireHistoryMock = vi.mocked(buildFireHistory)
+
+const created: AuditScope = {
+  audit_id: 'audit-9',
+  scope_id: 'scope-9',
+  review_start: '2019-09-01',
+  review_end: '2019-09-05',
+  context_buffer_km: 25,
+  status: 'AWAITING_SCOPE',
+  bbox: null,
+  centroid: null,
+  buffer_bbox: null,
+  buffer_geometry: null,
+}
+
+function stubHappyPath() {
+  createAuditReviewMock.mockResolvedValue(created)
+  setAuditScopeDemoMock.mockResolvedValue({ ...created, status: 'SCOPE_READY', scope_source: 'demo', scope_label: 'Demo study area' })
+  setAuditScopePointMock.mockResolvedValue({ ...created, status: 'SCOPE_READY', scope_source: 'point_radius' })
+  uploadAuditScopeGeometryMock.mockResolvedValue({ ...created, status: 'SCOPE_READY', scope_source: 'upload' })
+  buildFireHistoryMock.mockResolvedValue({ audit_id: 'audit-9', scope_id: 'scope-9', status: 'HISTORY_BUILD_READY', duration_ms: 1, dataset_mode: 'cached' })
+}
 
 function summary(window: string) {
   return {
@@ -43,7 +76,10 @@ function summary(window: string) {
   }
 }
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.clearAllMocks()
+})
 
 test('renders the audit scope step label without a slash', () => {
   fetchDemoDatasetSummaryMock.mockRejectedValue(new Error('the API did not answer'))
@@ -120,6 +156,7 @@ test('keeps upload guidance concise and validates unsupported geometry clearly',
   fetchDemoDatasetSummaryMock.mockRejectedValue(new Error('the API did not answer'))
   const { container } = render(<AuditStart onReady={vi.fn()} />)
 
+  fireEvent.click(screen.getByLabelText('GeoJSON upload'))
   expect(screen.getAllByRole('listitem')).toHaveLength(2)
   expect(screen.getByText('Accepts Polygon, MultiPolygon, Feature, or FeatureCollection GeoJSON.')).toBeTruthy()
   expect(screen.queryByText(/Showing the default demo area/)).toBeNull()
@@ -163,4 +200,101 @@ test('preserves the active scope inputs when reopened for editing', () => {
   expect(screen.getByLabelText('Review end')).toHaveProperty('value', '2019-09-04')
   expect(screen.getByDisplayValue('40')).toBeTruthy()
   expect(screen.getByText(/Existing dates, buffer, and boundary are preserved/)).toBeTruthy()
+})
+
+/** #249: the boundary is chosen, never defaulted behind the user's back (#87).
+
+  Three sources, one each for the API's scope endpoints. The demo area is the
+  default and goes through the server-owned demo route so the session records
+  it as a demo; a point and radius can be placed by clicking the preview map;
+  the upload path refuses to submit without a file rather than substituting an
+  area the auditor never chose. */
+test('the default boundary is the labelled demo area, set through the demo endpoint', async () => {
+  fetchDemoDatasetSummaryMock.mockRejectedValue(new Error('the API did not answer'))
+  stubHappyPath()
+  const onReady = vi.fn()
+  render(<AuditStart onReady={onReady} />)
+
+  expect((screen.getByLabelText('Demo study area') as HTMLInputElement).checked).toBe(true)
+  expect(screen.getByText('Demo study area, 2019 Kalimantan haze window. Not a company boundary.')).toBeTruthy()
+  expect(screen.getByTestId('scope-preview').getAttribute('data-pickable')).toBe('false')
+
+  fireEvent.click(screen.getByRole('button', { name: /BUILD FIRE HISTORY/i }))
+
+  await waitFor(() => expect(onReady).toHaveBeenCalled())
+  expect(setAuditScopeDemoMock).toHaveBeenCalledWith('audit-9')
+  expect(uploadAuditScopeGeometryMock).not.toHaveBeenCalled()
+  expect(setAuditScopePointMock).not.toHaveBeenCalled()
+  expect(onReady.mock.calls[0][0]).toMatchObject({ audit_id: 'audit-9', scope_source: 'demo', status: 'HISTORY_BUILD_READY' })
+})
+
+test('a point-and-radius scope can be placed by clicking the preview map', async () => {
+  fetchDemoDatasetSummaryMock.mockRejectedValue(new Error('the API did not answer'))
+  stubHappyPath()
+  const onReady = vi.fn()
+  render(<AuditStart onReady={onReady} />)
+
+  fireEvent.click(screen.getByLabelText('Point and radius'))
+  // Starts on the demo area's centre so the first circle lands on real events.
+  expect(screen.getByLabelText('Latitude')).toHaveProperty('value', '-3.8')
+  expect(screen.getByLabelText('Longitude')).toHaveProperty('value', '116.25')
+  expect(screen.getByLabelText('Radius (km)')).toHaveProperty('value', '25')
+  expect(screen.getByTestId('scope-preview').getAttribute('data-pickable')).toBe('true')
+
+  fireEvent.click(screen.getByTestId('scope-preview'))
+  expect(screen.getByLabelText('Latitude')).toHaveProperty('value', '-1.2568')
+  expect(screen.getByLabelText('Longitude')).toHaveProperty('value', '110.5123')
+
+  fireEvent.change(screen.getByLabelText('Radius (km)'), { target: { value: '40' } })
+  fireEvent.click(screen.getByRole('button', { name: /BUILD FIRE HISTORY/i }))
+
+  await waitFor(() => expect(onReady).toHaveBeenCalled())
+  expect(setAuditScopePointMock).toHaveBeenCalledWith('audit-9', { latitude: -1.2568, longitude: 110.5123, radiusKm: 40 })
+  expect(setAuditScopeDemoMock).not.toHaveBeenCalled()
+})
+
+test('a radius outside the API limits is refused before any audit is created', async () => {
+  fetchDemoDatasetSummaryMock.mockRejectedValue(new Error('the API did not answer'))
+  stubHappyPath()
+  const { container } = render(<AuditStart onReady={vi.fn()} />)
+
+  fireEvent.click(screen.getByLabelText('Point and radius'))
+  fireEvent.change(screen.getByLabelText('Radius (km)'), { target: { value: '900' } })
+  expect((await screen.findByRole('alert')).textContent).toContain('between 0.1 and 250 km')
+
+  const form = container.querySelector('form')
+  if (!form) throw new Error('The scope panel has no form to submit.')
+  fireEvent.submit(form)
+  await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('between 0.1 and 250 km'))
+  expect(createAuditReviewMock).not.toHaveBeenCalled()
+})
+
+test('the upload path refuses to build without a file instead of substituting a default area', async () => {
+  fetchDemoDatasetSummaryMock.mockRejectedValue(new Error('the API did not answer'))
+  stubHappyPath()
+  render(<AuditStart onReady={vi.fn()} />)
+
+  fireEvent.click(screen.getByLabelText('GeoJSON upload'))
+  expect(screen.getByText('Choose a GeoJSON file to preview its boundary and context buffer.')).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: /BUILD FIRE HISTORY/i }))
+
+  expect((await screen.findByRole('alert')).textContent).toContain('Choose a GeoJSON file')
+  expect(createAuditReviewMock).not.toHaveBeenCalled()
+})
+
+test('reopening a point-and-radius scope restores its source and fields', () => {
+  fetchDemoDatasetSummaryMock.mockRejectedValue(new Error('the API did not answer'))
+  const existingScope: AuditScope = {
+    ...created,
+    status: 'HISTORY_BUILD_READY',
+    scope_source: 'point_radius',
+    scope_point: { latitude: -2.5, longitude: 111.75, radius_km: 60 },
+  }
+
+  render(<AuditStart onReady={vi.fn()} initialScope={existingScope} />)
+
+  expect((screen.getByLabelText('Point and radius') as HTMLInputElement).checked).toBe(true)
+  expect(screen.getByLabelText('Latitude')).toHaveProperty('value', '-2.5')
+  expect(screen.getByLabelText('Longitude')).toHaveProperty('value', '111.75')
+  expect(screen.getByLabelText('Radius (km)')).toHaveProperty('value', '60')
 })

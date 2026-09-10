@@ -12,7 +12,7 @@ import { ScopedMapLanding } from './ScopedMapLanding'
 import { eventOverlapsDay, investigationDays, observationDays, observationsForDay } from './temporalScrubber'
 
 vi.mock('react-map-gl/maplibre', () => ({
-  Map: forwardRef<HTMLDivElement, PropsWithChildren<{ children?: ReactNode }>>(({ children }, _ref) => <div data-testid="map">{children}</div>),
+  Map: forwardRef<HTMLDivElement, PropsWithChildren<{ children?: ReactNode; maxBounds?: unknown }>>(({ children, maxBounds }, _ref) => <div data-testid="map" data-max-bounds={JSON.stringify(maxBounds ?? null)}>{children}</div>),
   Source: ({ children, id }: PropsWithChildren<{ id: string }>) => <div data-source-id={id}>{children}</div>,
   Layer: () => <div />,
 }))
@@ -184,6 +184,41 @@ const edge = (sourceEventId: string, ownerEventId: string) => ({
 })
 
 const edgeWithState = (state: string) => ({ ...edge('FE-ONE', 'FE-ONE'), state })
+
+it('lets the camera leave the context buffer while the register stays cut to it (#249)', async () => {
+  const progression: AuditProgression = {
+    rawObservations: 1,
+    qualifiedObservations: 1,
+    fireEvents: 1,
+    requiringHumanReview: 1,
+    selected: 0,
+    selectedEventIds: [],
+    compression: null,
+    observationsToEventsCompression: null,
+    inScopeAndBuffer: 1,
+    scopeBoundaryAvailable: false,
+    scopeCompression: null,
+    routingDiagnostics: {
+      humanReviewCount: 1,
+      humanReviewPercentage: 100,
+      priorityDistribution: {},
+      reviewStateDistribution: {},
+      evidenceSufficiencyDistribution: {},
+      escalationReasonCodes: {},
+      componentContributionDistribution: {},
+    },
+  }
+  fetchAuditRegisterMock.mockResolvedValue({ events: [event], progression })
+
+  render(<ScopedMapLanding scope={scope} onOpenScope={() => undefined} onOpenRegister={() => undefined} onViewReport={() => undefined} />)
+
+  await screen.findByRole('list', { name: 'Available observation dates' })
+  // Regional guard rails rather than the buffer bbox: the old value made
+  // MapLibre refuse every drag. The register request is unchanged, so
+  // dragging away reveals basemap, not a national fire browser (#127).
+  expect(screen.getByTestId('map').getAttribute('data-max-bounds')).toBe('[90,-12,145,25]')
+  expect(fetchAuditRegisterMock).toHaveBeenCalledWith('audit-1', expect.objectContaining({ bbox: scope.buffer_bbox }))
+})
 
 describe('ScopedMapLanding propagation envelopes', () => {
   it('renders only envelopes owned by explicitly selected FireEvents', () => {

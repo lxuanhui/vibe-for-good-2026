@@ -201,6 +201,11 @@ export interface AuditScope {
   review_end: string
   context_buffer_km: number
   status: 'AWAITING_SCOPE' | 'SCOPE_READY' | 'HISTORY_BUILD_READY'
+  // How the boundary was supplied, recorded server-side so a predefined area
+  // can never be shown as something the auditor uploaded (#87).
+  scope_source?: 'upload' | 'point_radius' | 'demo' | null
+  scope_label?: string | null
+  scope_point?: { latitude: number; longitude: number; radius_km: number } | null
   bbox: BBox | null
   centroid: [number, number] | null
   buffer_bbox: BBox | null
