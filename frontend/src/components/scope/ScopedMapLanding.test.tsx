@@ -1,14 +1,14 @@
 import { forwardRef, type PropsWithChildren, type ReactNode } from 'react'
-import { render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { vi } from 'vitest'
 import type { EventEvidenceResponse } from '../../api/types'
 import type { AuditEventSummary, AuditProgression, AuditScope } from '../../api/types'
 import { fetchAuditRegister } from '../../api/client'
 import { envelopePolygons } from './propagationEnvelopes'
 import { ScopedMapLanding } from './ScopedMapLanding'
-import { eventOverlapsDay, investigationDays, observationsForDay } from './temporalScrubber'
+import { eventOverlapsDay, investigationDays, observationDays, observationsForDay } from './temporalScrubber'
 
 vi.mock('react-map-gl/maplibre', () => ({
   Map: forwardRef<HTMLDivElement, PropsWithChildren<{ children?: ReactNode }>>(({ children }, _ref) => <div data-testid="map">{children}</div>),
@@ -25,6 +25,11 @@ vi.mock('../../api/client', () => ({
 }))
 
 const fetchAuditRegisterMock = vi.mocked(fetchAuditRegister)
+
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+})
 
 const scope: AuditScope = {
   audit_id: 'audit-1',
@@ -85,8 +90,9 @@ it('selects candidates from the full keyboard-accessible row surface', async () 
 
   render(<ScopedMapLanding scope={scope} onOpenScope={() => undefined} onOpenRegister={() => undefined} onViewReport={() => undefined} />)
 
-  const list = await screen.findByRole('list')
+  await screen.findByRole('list', { name: 'Available observation dates' })
   const candidate = screen.getByRole('button', { name: 'Select FE-1 for audit report' })
+  const list = candidate.closest('ul') as HTMLElement
   const user = userEvent.setup()
   const eventCount = screen.getByText((_, element) => element?.tagName === 'P' && element.textContent?.replace(/\s+/g, ' ').trim() === 'Events shown 1')
   expect(screen.queryByRole('checkbox')).toBeNull()
@@ -150,6 +156,13 @@ describe('ScopedMapLanding temporal scrubber', () => {
     ])
   })
 
+  it('derives timeline dates from scoped event detection windows', () => {
+    expect(observationDays([
+      { firstDetection: '2019-09-02T03:00:00Z', lastDetection: '2019-09-03T04:00:00Z' },
+      { firstDetection: '2019-09-05T03:00:00Z', lastDetection: '2019-09-05T04:00:00Z' },
+    ], '2019-09-01', '2019-09-06')).toEqual(['2019-09-02', '2019-09-03', '2019-09-05'])
+  })
+
   it('filters constituent observations by their recorded acquisition date', () => {
     const evidence = { event: { triageDetail: { observations: [
       { lat: -3, lon: 116, acqDate: '2019-09-01', acqTime: 30, frp: 1, confidence: 'nominal' },
@@ -166,5 +179,40 @@ describe('ScopedMapLanding temporal scrubber', () => {
     expect(eventOverlapsDay(event, '2019-09-03')).toBe(true)
     expect(eventOverlapsDay(event, '2019-09-05')).toBe(false)
     expect(eventOverlapsDay(event, null)).toBe(true)
+  })
+})
+
+describe('ScopedMapLanding timeline controls', () => {
+  it('jumps to a date, pauses playback, and restores all days', async () => {
+    fetchAuditRegisterMock.mockResolvedValue({
+      events: [
+        { ...event, firstDetection: '2019-09-01T03:00:00Z', lastDetection: '2019-09-01T04:00:00Z' },
+        { ...event, eventId: 'FE-2', firstDetection: '2019-09-02T03:00:00Z', lastDetection: '2019-09-02T04:00:00Z' },
+      ],
+      progression: { selectedEventIds: [] } as unknown as AuditProgression,
+    })
+
+    render(<ScopedMapLanding scope={{ ...scope, review_end: '2019-09-02' }} onOpenScope={() => undefined} onOpenRegister={() => undefined} onViewReport={() => undefined} />)
+
+    await screen.findByRole('list', { name: 'Available observation dates' })
+    const day = screen.getByRole('button', { name: 'Show observations for 2019-09-02' })
+    fireEvent.click(day)
+    expect(day.getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByText('2019-09-02')).toBeTruthy()
+
+    vi.useFakeTimers()
+    fireEvent.click(screen.getByRole('button', { name: 'Play timeline' }))
+    expect(screen.getByRole('button', { name: 'Pause timeline' })).toBeTruthy()
+    await vi.advanceTimersByTimeAsync(1500)
+    expect(screen.getByRole('button', { name: 'Show observations for 2019-09-02' }).getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: 'Pause timeline' }))
+    expect(screen.getByRole('button', { name: 'Play timeline' })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play timeline' }))
+    expect(screen.getByRole('button', { name: 'Pause timeline' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'ALL DAYS' }))
+    expect(screen.getByRole('button', { name: 'ALL DAYS' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'ALL DAYS' }).getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByRole('button', { name: 'Play timeline' })).toBeTruthy()
   })
 })

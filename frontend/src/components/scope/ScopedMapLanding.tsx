@@ -8,13 +8,14 @@ import { useAppStore } from '../../store/useAppStore'
 import { Button } from '../ui/Button'
 import { EvidenceDrawer } from '../audit/EvidenceDrawer'
 import { envelopePolygons } from './propagationEnvelopes'
-import { eventOverlapsDay, investigationDays, observationsForDay, type ScopedMapDay } from './temporalScrubber'
+import { eventOverlapsDay, observationDays, observationsForDay, type ScopedMapDay } from './temporalScrubber'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
 const GRAPH_LINE_COLOR = '#f97316'
 const OBSERVATION_COLOR = '#fbbf24'
 const SCOPED_MAP_RELATIONSHIP_DISTANCE_KM = 10
 const CLOCK_REFRESH_MS = 60 * 1000
+const TIMELINE_STEP_MS = 750
 
 function southeastAsiaLight(date: Date) {
   // UTC+8 is a useful regional midpoint. This is visual orientation only.
@@ -146,11 +147,37 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
   const [focusGraphError, setFocusGraphError] = useState('')
   const [showObservations, setShowObservations] = useState(true)
   const [selectedDay, setSelectedDay] = useState<ScopedMapDay>(null)
-  const days = useMemo(() => investigationDays(scope.review_start, scope.review_end), [scope.review_start, scope.review_end])
+  const days = useMemo(() => observationDays(events, scope.review_start, scope.review_end), [events, scope.review_start, scope.review_end])
   const activeDay = selectedDay && days.includes(selectedDay) ? selectedDay : null
+  const [isPlaying, setIsPlaying] = useState(false)
   const [showPeatland, setShowPeatland] = useState(false)
   const [evidenceReloadToken, setEvidenceReloadToken] = useState(0)
   const [clock, setClock] = useState(() => new Date())
+  useEffect(() => {
+    if (!isPlaying || !days.length) return
+    const timer = window.setInterval(() => {
+      setSelectedDay((current) => {
+        const currentIndex = current ? days.indexOf(current) : -1
+        const nextIndex = currentIndex + 1
+        if (nextIndex >= days.length) {
+          setIsPlaying(false)
+          return days[days.length - 1]
+        }
+        return days[nextIndex]
+      })
+    }, TIMELINE_STEP_MS)
+    return () => window.clearInterval(timer)
+  }, [days, isPlaying])
+
+  useEffect(() => {
+    if (!days.length) {
+      setSelectedDay(null)
+      setIsPlaying(false)
+      return
+    }
+    if (selectedDay && !days.includes(selectedDay)) setSelectedDay(null)
+  }, [days, selectedDay])
+
   useEffect(() => {
     if (!drawerEventId) { setEvidence(undefined); setEvidenceError(''); setFocusGraph(undefined); setFocusGraphError(''); setAnalysis(undefined); setAnalysisError(''); return }
     setShowObservations(true)
@@ -301,11 +328,36 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
     setFocusedEventId(id)
   }
 
+  function selectTimelineDay(day: ScopedMapDay) {
+    setIsPlaying(false)
+    setSelectedDay(day)
+  }
+
+  function toggleTimelinePlayback() {
+    if (isPlaying) {
+      setIsPlaying(false)
+      return
+    }
+    if (!days.length) return
+    setSelectedDay(activeDay && days.indexOf(activeDay) < days.length - 1 ? activeDay : null)
+    setIsPlaying(true)
+  }
+
   return <div className="scoped-map-print-root relative flex h-full w-full flex-col bg-bg text-text">
     <header className="scoped-map-print-hide flex h-14 shrink-0 items-center justify-between border-b border-border-strong bg-panel px-5">
       <div><div className="text-sm font-semibold tracking-wide">Environmental Assurance Console</div><div className="text-[10px] uppercase tracking-[0.2em] text-text-faint">Scoped FireEvent review · {scope.review_start} → {scope.review_end}</div></div>
       <div className="flex items-center gap-2"><Button onClick={onOpenScope}>EDIT SCOPE</Button></div>
     </header>
+    <div className="scoped-map-print-hide border-b border-border-strong bg-panel px-5 py-2.5" aria-label="Observation timeline">
+      <div className="flex items-center gap-3">
+        <div className="min-w-28 text-[10px] uppercase tracking-[0.16em] text-text-faint">Observation date <span className="ml-1 text-accent">{activeDay ?? 'ALL DAYS'}</span></div>
+        <button type="button" aria-label={isPlaying ? 'Pause timeline' : 'Play timeline'} onClick={toggleTimelinePlayback} disabled={!days.length} className="rounded border border-accent px-2 py-1 text-xs font-semibold text-accent hover:bg-accent/15 disabled:cursor-not-allowed disabled:opacity-40">{isPlaying ? 'PAUSE' : 'PLAY'}</button>
+        <div className="flex min-w-0 flex-1 items-end gap-1" role="list" aria-label="Available observation dates">
+          {days.map((day) => <button key={day} type="button" aria-label={`Show observations for ${day}`} aria-pressed={activeDay === day} onClick={() => selectTimelineDay(day)} className={`group flex min-w-8 flex-1 flex-col items-center gap-1 text-[10px] text-text-faint ${activeDay === day ? 'text-accent' : 'hover:text-text-muted'}`}><span className={`h-2.5 w-px ${activeDay === day ? 'bg-accent' : 'bg-border-strong group-hover:bg-text-muted'}`} /><span>{day.slice(5)}</span></button>)}
+        </div>
+        <button type="button" aria-pressed={activeDay === null} onClick={() => selectTimelineDay(null)} className={`shrink-0 rounded border px-2 py-1 text-xs font-semibold ${activeDay === null ? 'border-accent bg-accent/15 text-accent' : 'border-border-strong text-text-muted'}`}>ALL DAYS</button>
+      </div>
+    </div>
     <div className="scoped-map-print-shell relative flex min-h-0 flex-1">
       <div className="scoped-map-print-hide relative min-w-0 flex-1">
         <Map
@@ -390,14 +442,6 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
         <div className="border-b border-border-strong p-4">
           <div className="text-sm uppercase tracking-[0.16em] text-accent">Audit scope map</div>
           <p className="mt-3 text-xs text-text-muted">Events shown <span className="font-semibold text-accent">{loading ? '…' : visibleEvents.length.toLocaleString()}</span></p>
-          <div className="mt-3 rounded border border-border bg-bg p-3" aria-label="Temporal observation scrubber">
-            <div className="flex items-center justify-between text-xs uppercase tracking-[0.12em] text-text-faint"><span>OBSERVATION DAY</span><span className="text-accent">{activeDay ?? 'ALL DAYS'}</span></div>
-            <div className="mt-2 grid grid-cols-3 gap-1.5">
-              <button type="button" aria-pressed={activeDay === null} onClick={() => setSelectedDay(null)} className={`rounded border px-2 py-1.5 text-xs font-semibold ${activeDay === null ? 'border-accent bg-accent/15 text-accent' : 'border-border-strong text-text-muted'}`}>ALL DAYS</button>
-              {days.map((day) => <button key={day} type="button" aria-label={`Show observations for ${day}`} aria-pressed={activeDay === day} onClick={() => setSelectedDay(day)} className={`rounded border px-2 py-1.5 text-xs font-semibold ${activeDay === day ? 'border-accent bg-accent/15 text-accent' : 'border-border-strong text-text-muted'}`}>{day.slice(8)}</button>)}
-            </div>
-            <p className="mt-2 text-xs leading-4 text-text-faint">FIRMS observations for the selected UTC day. Event points remain when their detection window overlaps.</p>
-          </div>
           <p className="mt-3 text-xs leading-5 text-text-faint">Peat is environmental context, not cause; compare it with event evidence.</p>
           {taggedEdges.length > 0 && <p className="mt-2 text-xs leading-5 text-text-faint">Lines are limited to {SCOPED_MAP_RELATIONSHIP_DISTANCE_KM} km. <span className="text-accent">Bright</span> lines are stronger candidates for the open FireEvent; weaker or unresolved links recede. <span className="opacity-60">Faint</span> lines belong to other FireEvents selected in the Fire Register.</p>}
           {envelopes.features.length > 0 && <p className="mt-2 text-xs leading-5 text-text-faint">Dashed outline: first-order wind-oriented surface-spread compatibility estimate — not a validated forecast or claim about what happened.</p>}
