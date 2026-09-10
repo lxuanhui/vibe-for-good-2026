@@ -73,14 +73,20 @@ list. The first is a new distribution for a cache the app can hold itself.
 The second is always-on, so it needs the standing justification, and it does
 not stop two warm containers duplicating the fetch anyway.
 
-**Consequence for CI.** The CI role had no S3 grant beyond the state bucket.
-`bootstrap/oidc.tf` now grants the bucket-lifecycle actions Terraform needs
-on buckets named `<project>-*-cache-*`, enumerated rather than `s3:*`
-because trivy flags the wildcard at HIGH (AWS-0345) and the S3 namespace
-holds object actions the CI role should not have. That stack is applied by
-hand, so a main-stack PR that adds such a bucket cannot merge until
-bootstrap has been applied. The pattern deliberately excludes the state
-bucket, which keeps its object-only grant.
+**Consequence for CI, and a rule.** The CI role had no S3 grant beyond the
+state bucket. The first cut put one in `bootstrap/oidc.tf`, which is applied
+by hand, so the PR could not merge until a laptop had run `terraform apply`.
+The owner rejected that: CI is where everything is applied, so nothing is
+applied from a laptop by accident. The grant now lives in `infra/ci_role.tf`
+as an inline policy the role puts on itself (it already held
+`iam:PutRolePolicy` on every project role), planned on its own PR and
+applied on merge ahead of the bucket so IAM propagation is settled. The
+actions are enumerated rather than `s3:*` because trivy flags the wildcard
+at HIGH (AWS-0345) and the S3 namespace holds object actions the CI role
+should not have; the pattern `<project>-*-cache-*` excludes the state
+bucket, which keeps its object-only grant. The trade is stated in that
+file: a PR merged to `main` can widen CI's own permissions, in the open,
+with a plan comment. Bootstrap now holds only what CI cannot give itself.
 
 **Open.** The post-deploy cold-start time-to-first-byte has not been measured
 yet; #186 stays open until it is quoted.
