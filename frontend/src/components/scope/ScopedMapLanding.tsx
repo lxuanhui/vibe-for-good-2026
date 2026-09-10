@@ -435,7 +435,7 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
         <div
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 z-[1] mix-blend-screen transition-opacity duration-[60000ms]"
-          style={{ background: 'radial-gradient(ellipse at 14% 6%, rgba(42, 200, 255, 0.33), transparent 43%), radial-gradient(ellipse at 86% 84%, rgba(255, 166, 52, 0.18), transparent 45%), radial-gradient(ellipse at 45% 20%, transparent 18%, rgba(1, 13, 30, 0.72) 100%)', opacity: 0.82 - light.daylight * 0.6 }}
+          style={{ background: 'radial-gradient(ellipse at 14% 6%, rgba(111, 179, 166, 0.26), transparent 43%), radial-gradient(ellipse at 86% 84%, rgba(255, 166, 52, 0.18), transparent 45%), radial-gradient(ellipse at 45% 20%, transparent 18%, rgba(1, 13, 30, 0.72) 100%)', opacity: 0.82 - light.daylight * 0.6 }}
         />
       </div>
       <aside className="scoped-map-print-hide flex w-80 shrink-0 flex-col overflow-y-auto border-l border-border-strong bg-panel">

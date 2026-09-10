@@ -7,7 +7,7 @@ import type { OverlayLayerId } from '../api/types'
 // doesn't specify exact colors.
 export const LAYER_COLORS: Record<OverlayLayerId, string> = {
   firms: '#ff5a4a',
-  'sar-backscatter': '#22d3ee',
+  'sar-backscatter': '#6fb3a6',
   khg: '#f97316',
   concessions: '#8b96a8',
   'fire-complex-links': '#ef4444',
@@ -33,7 +33,7 @@ export const SURFACE_FIRE_UNEVALUATED_COLOR = '#8b96a8'
 // see the note in ScopedMapLanding.tsx next to `mapStyle`.
 export const INDONESIA_FILL_COLOR = '#364527'
 
-export const AUDIT_SCOPE_BOUNDARY_COLOR = '#22d3ee'
+export const AUDIT_SCOPE_BOUNDARY_COLOR = '#6fb3a6'
 export const AUDIT_SCOPE_BUFFER_COLOR = '#eab308'
 
 export const AUDIT_EVENT_COLORS = {
