@@ -75,7 +75,7 @@ export default function App() {
             onOpenRegister={() => setViewMode('table')}
             onViewReport={() => setViewMode('report')}
           />
-        : <HistoricalInvestigation scope={scope} onOpenScopedMap={() => setViewMode('scoped-map')} />}
+        : <HistoricalInvestigation scope={scope} onOpenScope={() => setScopePanelOpen(true)} onOpenScopedMap={() => setViewMode('scoped-map')} />}
       {scopePanelOpen && (
         <div className="absolute inset-3 z-30">
           <AuditStart

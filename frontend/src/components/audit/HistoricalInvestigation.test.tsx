@@ -107,6 +107,21 @@ test('the register shows the count the chosen period returned, not the dataset t
   expect(screen.getByText(/2019-09-02 → 2019-09-03/)).toBeTruthy()
 })
 
+test('keeps scope editing beside the scoped-map navigation in one register control area', async () => {
+  fetchAuditRegisterMock.mockResolvedValue({ events: [], progression: progression(0) })
+  const onOpenScope = vi.fn()
+  const onOpenScopedMap = vi.fn()
+
+  render(<HistoricalInvestigation scope={scope('2019-09-02', '2019-09-03')} onOpenScope={onOpenScope} onOpenScopedMap={onOpenScopedMap} />)
+
+  const controls = screen.getByRole('button', { name: 'EDIT SCOPE' }).parentElement
+  expect(controls?.querySelectorAll('button')).toHaveLength(3)
+  fireEvent.click(screen.getByRole('button', { name: 'EDIT SCOPE' }))
+  fireEvent.click(screen.getByRole('button', { name: 'VIEW SCOPED MAP' }))
+  expect(onOpenScope).toHaveBeenCalledOnce()
+  expect(onOpenScopedMap).toHaveBeenCalledOnce()
+})
+
 test('the period is not re-sent as a query filter, so the closing day survives', async () => {
   fetchAuditRegisterMock.mockResolvedValue({ events: [event('fe-1', '2019-09-03T10:00:00Z')], progression: progression(1) })
 

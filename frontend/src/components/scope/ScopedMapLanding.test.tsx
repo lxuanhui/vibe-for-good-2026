@@ -118,6 +118,22 @@ it('selects candidates from the full keyboard-accessible row surface', async () 
   expect(list.closest('aside')?.className).toContain('overflow-y-auto')
 })
 
+it('keeps scope editing and register navigation in the same map header', async () => {
+  fetchAuditRegisterMock.mockResolvedValue({ events: [], progression: { selectedEventIds: [] } as unknown as AuditProgression })
+  const onOpenScope = vi.fn()
+  const onOpenRegister = vi.fn()
+
+  render(<ScopedMapLanding scope={scope} onOpenScope={onOpenScope} onOpenRegister={onOpenRegister} onViewReport={() => undefined} />)
+
+  await screen.findByRole('list', { name: 'Available observation dates' })
+  const header = screen.getByRole('button', { name: 'EDIT SCOPE' }).closest('header')
+  expect(header?.querySelectorAll('button')).toHaveLength(2)
+  fireEvent.click(screen.getByRole('button', { name: 'EDIT SCOPE' }))
+  fireEvent.click(header?.querySelectorAll('button')[1] as HTMLButtonElement)
+  expect(onOpenScope).toHaveBeenCalledOnce()
+  expect(onOpenRegister).toHaveBeenCalledOnce()
+})
+
 const edge = (sourceEventId: string, ownerEventId: string) => ({
   sourceEventId,
   targetEventId: 'FE-TARGET',

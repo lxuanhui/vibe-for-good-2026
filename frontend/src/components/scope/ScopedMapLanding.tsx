@@ -349,7 +349,7 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
   return <div className="scoped-map-print-root relative flex h-full w-full flex-col bg-bg text-text">
     <header className="scoped-map-print-hide flex h-14 shrink-0 items-center justify-between border-b border-border-strong bg-panel px-5">
       <div><div className="text-sm font-semibold tracking-wide">Environmental Assurance Console</div><div className="text-[10px] uppercase tracking-[0.2em] text-text-faint">Scoped FireEvent review · {scope.review_start} → {scope.review_end}</div></div>
-      <div className="flex items-center gap-2"><Button onClick={onOpenScope}>EDIT SCOPE</Button></div>
+      <div className="flex flex-wrap items-center gap-2"><Button onClick={onOpenScope}>EDIT SCOPE</Button><Button onClick={onOpenRegister}>OPEN FIRE REGISTER</Button></div>
     </header>
     <div className="scoped-map-print-hide border-b border-border-strong bg-panel px-5 py-2.5" aria-label="Observation timeline">
       <div className="flex items-center gap-3">
@@ -456,7 +456,6 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
           {selectionGraphError && <div role="alert" className="mt-3 rounded border border-status-urgent/40 bg-status-urgent/10 p-2 text-sm text-red-200">{selectionGraphError}</div>}
           {loading && <div role="status" className="mt-3 text-sm text-text-muted">Loading real audit FireEvents…</div>}
           {!loading && !error && events.length === 0 && <div className="mt-3 text-sm text-text-muted">No events intersect this audit scope and buffer.</div>}
-          <Button variant="primary" className="mt-4 w-full" onClick={onOpenRegister}>OPEN FIRE REGISTER</Button>
           <Button className="mt-2 w-full" onClick={() => setShowPeatland((shown) => !shown)}>{showPeatland ? 'HIDE PEATLAND' : 'SHOW PEATLAND'}</Button>
           {envelopes.features.length > 0 && <Button className="mt-2 w-full" onClick={() => setShowSpreadEnvelopes((shown) => !shown)}>{showSpreadEnvelopes ? 'HIDE SPREAD ENVELOPES' : 'SHOW SPREAD ENVELOPES'}</Button>}
         </div>
