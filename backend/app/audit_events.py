@@ -18,6 +18,7 @@ in rather than returning a bare 404.
 
 import gzip
 import json
+import math
 from datetime import UTC, datetime
 from functools import lru_cache
 from pathlib import Path
@@ -43,6 +44,7 @@ VALID_STATES = frozenset({"LIKELY_FIRE", "LIKELY_NON_FIRE", "AMBIGUOUS"})
 # caller pages or filters; `total` always reports the unpaged count so the UI
 # can say how many matched.
 DEFAULT_LIMIT = 500
+MAX_DISPLAY_ENVELOPE_REACH_KM = 5.0
 MAX_LIMIT = 2000
 
 # The pack is engagement-scoped and contains only event IDs plus human review
@@ -152,7 +154,41 @@ def _real_edges_by_pair(triage: dict[str, Any], visible: list[dict[str, Any]]) -
     return by_pair
 
 
-def _edge_from_real(real: dict[str, Any], subject_id: str, candidate_id: str) -> dict[str, Any]:
+def _cap_display_envelope(envelope: dict[str, Any], origin: dict[str, float]) -> dict[str, Any]:
+    """Keep committed and newly generated envelopes within the map's near-field limit.
+
+    The polygon and orientation come from the deterministic pipeline. This is
+    only a display bound for older cached artifacts whose envelope was capped
+    under the previous product limit; it does not change graph eligibility.
+    """
+
+    polygon = envelope.get("polygon")
+    if not isinstance(polygon, list) or not polygon:
+        return envelope
+    origin_lon, origin_lat = origin["lon"], origin["lat"]
+    max_reach = 0.0
+    for point in polygon:
+        if not isinstance(point, list) or len(point) != 2:
+            return envelope
+        east = (float(point[0]) - origin_lon) * 111.32 * math.cos(math.radians(origin_lat))
+        north = (float(point[1]) - origin_lat) * 111.32
+        max_reach = max(max_reach, math.hypot(east, north))
+    if max_reach <= MAX_DISPLAY_ENVELOPE_REACH_KM:
+        return envelope
+    scale = MAX_DISPLAY_ENVELOPE_REACH_KM / max_reach
+    return {
+        **envelope,
+        "polygon": [
+            [origin_lon + (float(point[0]) - origin_lon) * scale,
+             origin_lat + (float(point[1]) - origin_lat) * scale]
+            for point in polygon
+        ],
+        "semiMajorKm": envelope.get("semiMajorKm", 0.0) * scale,
+        "semiMinorKm": envelope.get("semiMinorKm", 0.0) * scale,
+    }
+
+
+def _edge_from_real(real: dict[str, Any], subject_id: str, candidate_id: str, source_centroid: dict[str, float]) -> dict[str, Any]:
     """Translate a precomputed `FireEventEdge.to_dict()` (snake_case,
     Python-side field names) into this API's existing edge shape, replacing
     the crude distance-only synthesized edge below with the real
@@ -165,7 +201,9 @@ def _edge_from_real(real: dict[str, Any], subject_id: str, candidate_id: str) ->
         # The envelope is projected from the directed source event. Keep that
         # ownership explicit at the API boundary so clients cannot mistake
         # every candidate edge for an ellipse belonging to the open event.
-        envelope = {**envelope, "ownerEventId": real["source_event_id"]}
+        envelope = _cap_display_envelope(
+            {**envelope, "ownerEventId": real["source_event_id"]}, source_centroid
+        )
     evidence_id = f"GRAPH_{real['source_event_id']}_{real['target_event_id']}_fire_event_graph"
     limitations = [
         "A candidate edge is a relationship for review, not evidence of a shared cause or responsibility.",
@@ -243,14 +281,14 @@ def investigation_map(audit_id: str, event_ids: list[str]) -> dict[str, Any] | N
             real = real_edges.get(frozenset((source["eventId"], target["eventId"])))
             if real is not None:
                 has_real_edge = True
-                edges.append(_edge_from_real(real, source["eventId"], target["eventId"]))
+                edges.append(_edge_from_real(real, source["eventId"], target["eventId"], source["centroid"]))
 
     for candidate in neighbours:
         subject = min(selected, key=lambda event: _distance_km(candidate, event))
         real = real_edges.get(frozenset((subject["eventId"], candidate["eventId"])))
         if real is not None:
             has_real_edge = True
-            edges.append(_edge_from_real(real, subject["eventId"], candidate["eventId"]))
+            edges.append(_edge_from_real(real, subject["eventId"], candidate["eventId"], subject["centroid"]))
             continue
         distance = round(_distance_km(subject, candidate), 3)
         edge_evidence_id = f"GRAPH_{subject['eventId']}_{candidate['eventId']}_distance"

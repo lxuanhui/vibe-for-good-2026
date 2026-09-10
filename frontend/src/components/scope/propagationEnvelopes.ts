@@ -3,9 +3,9 @@ import type { InvestigationMap } from '../../api/types'
 
 // One polygon per candidate edge with a precomputed wind-oriented
 // surface-spread envelope. Ownership is checked against the register
-// selection, not the event whose drawer happens to be open: opening a
-// contextual neighbour must not make its derived geometry look selected.
-export function envelopePolygons(edges: readonly InvestigationMap['edges'][number][], selectedEventIds: readonly string[] = []): FeatureCollection<Polygon> {
+// selection or the focused event's graph relationship: opening a contextual
+// neighbour may reveal a related source envelope, but never an unrelated one.
+export function envelopePolygons(edges: readonly InvestigationMap['edges'][number][], selectedEventIds: readonly string[] = [], focusedEventId?: string): FeatureCollection<Polygon> {
   const selected = new Set(selectedEventIds)
   return {
     type: 'FeatureCollection',
@@ -17,7 +17,8 @@ export function envelopePolygons(edges: readonly InvestigationMap['edges'][numbe
       // is outside the projected reach. The graph state is the backend's
       // deterministic spatial-plus-temporal eligibility decision; geometry
       // alone must not turn that failed compatibility check into a drawing.
-      if (edge.state !== 'PROPAGATION_COMPATIBLE' || !edge.envelope || !selected.has(edge.envelope.ownerEventId)) return []
+      const belongsToFocus = Boolean(focusedEventId && (edge.sourceEventId === focusedEventId || edge.targetEventId === focusedEventId))
+      if (edge.state !== 'PROPAGATION_COMPATIBLE' || !edge.envelope || (!selected.has(edge.envelope.ownerEventId) && !belongsToFocus)) return []
       return [{
         type: 'Feature' as const,
         geometry: { type: 'Polygon' as const, coordinates: [edge.envelope.polygon] },

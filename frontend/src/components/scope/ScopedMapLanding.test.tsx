@@ -141,6 +141,12 @@ describe('ScopedMapLanding propagation envelopes', () => {
     expect(result.features[0].properties).toEqual({ state: 'PROPAGATION_COMPATIBLE', sourceEventId: 'FE-ONE', targetEventId: 'FE-TARGET' })
   })
 
+  it('renders an eligible envelope from the focused event graph without register selection', () => {
+    const result = envelopePolygons([edge('FE-ONE', 'FE-OTHER')], [], 'FE-TARGET')
+
+    expect(result.features).toHaveLength(1)
+  })
+
   it('renders no envelopes when focus is cleared or ownership is absent', () => {
     const owned = edge('FE-ONE', 'FE-ONE')
     const withoutOwner = { ...owned, envelope: { ...owned.envelope, ownerEventId: undefined as unknown as string } }

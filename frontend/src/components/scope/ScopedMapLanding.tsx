@@ -287,7 +287,7 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
   const visibleGraphNodes = useMemo(() => graphNodes.filter((node) => eventOverlapsDay(node, activeDay)), [graphNodes, activeDay])
   const points = useMemo(() => mapPoints(visibleEvents, visibleGraphNodes), [visibleEvents, visibleGraphNodes])
   const edges = useMemo(() => graphEdges(visibleGraphNodes, taggedEdges), [visibleGraphNodes, taggedEdges])
-  const envelopes = useMemo(() => envelopePolygons(taggedEdges, registerSelection), [taggedEdges, registerSelection])
+  const envelopes = useMemo(() => envelopePolygons(taggedEdges, registerSelection, focusedEventId), [taggedEdges, registerSelection, focusedEventId])
   const [showSpreadEnvelopes, setShowSpreadEnvelopes] = useState(true)
   const center = useMemo<[number, number]>(() => scope.centroid ?? [116.25, -3.8], [scope.centroid])
   const light = southeastAsiaLight(clock)

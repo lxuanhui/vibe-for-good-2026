@@ -44,9 +44,9 @@ CANDIDATE_DISTANCE_KM = 50.0
 # response of any kind -- so it is only honest at a short, near-field range.
 # Anything a candidate pair needs beyond that is a job for AI interpretation
 # over the evidence, not a longer deterministic projection from this model.
-# Kept under 10 km on that basis alone, independent of CANDIDATE_DISTANCE_KM
+# Kept to approximately 5 km on that basis alone, independent of CANDIDATE_DISTANCE_KM
 # and of how many candidate edges a given selection happens to render at once.
-MAX_ENVELOPE_REACH_KM = 8.0
+MAX_ENVELOPE_REACH_KM = 5.0
 
 
 def _event_from_summary(row: dict[str, Any]) -> FireEvent:
