@@ -1,0 +1,13 @@
+{
+  "asset_id": "IMG_FE-20190903-b0c6090b34_s1-vvvh-db-composite-v1_pre_event",
+  "event_id": "FE-20190903-b0c6090b34",
+  "source_evidence_id": "ENV_IMAGERY_FE-20190903-b0c6090b34_Sentinel-1_pre_event",
+  "sensor": "Sentinel-1",
+  "position": "pre_event",
+  "label": "Radar context",
+  "product_id": "S1A_IW_GRDH_1SDV_20190830T215154_20190830T215219_028804_034359_EDA4_COG",
+  "acquisition_time": "2019-08-30T21:51:54.917759Z",
+  "reason": "only 0.0% of the 10 km square carried data on 2019-08-30; the selected product does not cover this event's surroundings",
+  "generator_version": "cdse-process-imagery-v1",
+  "generated_at": "2026-09-10T05:56:08+00:00"
+}

@@ -93,6 +93,15 @@ contract behind a Lambda route for no reason; the console fetches static
 pipeline output from its own origin already, and #171 consumes the manifest
 the same way.
 
+**Measured.** The first run on 2026-09-10 rendered 58 of 64 requested images
+(17.5 MB of JPEG at quality 90, median coverage 100 %, minimum 24 %) and
+recorded 6 as missing, all with 0-4 % data on the pinned day. Those six are
+not an API problem: the scene selector ran once against the scope bbox and
+attached the same four products to every event, so events at the western edge
+of the scope are told their scene is a tile that does not reach them. That is
+#193; the manifest records the gaps honestly rather than filling them from
+another date.
+
 **Open.** #171 builds the drawer surface that reads `manifest.json`. Folding
 each image into the evidence response as a display attribute of its source
 EvidenceObject (rather than a parallel manifest) is the right eventual shape
