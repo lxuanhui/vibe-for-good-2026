@@ -32,7 +32,7 @@ apply an older decision without checking the entries above it.
 
 ## 2026-09-10 - A scene is selected for an event only if its footprint contains the event centroid, and the check is recorded in provenance
 
-**Status:** done · PR #PRNUM · Closes #193 · Refs #171
+**Status:** done · PR #253 · Closes #193 · Refs #171
 
 **Decision.** `scene_selection.select_scenes()` takes the event's location
 (explicitly, or from a FireEvent-like mapping's `centroid`) and drops every
@@ -666,7 +666,7 @@ of the scope are told their scene is a tile that does not reach them. That is
 #193; the manifest records the gaps honestly rather than filling them from
 another date.
 
-> **Corrected 2026-09-10 by PR #PRNUM (#193).** The selector did run per
+> **Corrected 2026-09-10 by PR #253 (#193).** The selector did run per
 > event; what it lacked was a footprint test, so closest-in-time picked the
 > same products for everyone. The selector now requires a product to contain
 > the event centroid, and the six gaps are filled by scenes from adjacent
