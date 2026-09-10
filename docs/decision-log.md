@@ -31,7 +31,7 @@ apply an older decision without checking the entries above it.
 
 ## 2026-09-10 - Clustering thresholds are an explicit, validated value recorded in the artifact; diagnostics are a developer command, not an API field
 
-**Status:** done · PR #TBD · Closes #86
+**Status:** done · PR #215 · Closes #86
 
 **Decision.** `ClusteringParameters` is the one place the spatial and
 temporal thresholds live. It validates at construction (zero, negative,
