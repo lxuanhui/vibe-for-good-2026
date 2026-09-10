@@ -101,21 +101,28 @@ export function AuditLanding({ onStartAudit, onOpenContext }: { onStartAudit: ()
       : hotspots.features.length === 0
         ? 'No thermal detections were returned for the past 24 hours.'
         : `${hotspots.features.length.toLocaleString()} thermal detections in the past 24 hours.`
+  const hasDetections = firmsStatus === 'ready' && hotspots.features.length > 0
   const statusTone = firmsStatus === 'loading'
     ? 'border-status-info/50 bg-status-info/10 text-status-info'
     : firmsStatus === 'unavailable'
       ? 'border-status-quiet/70 bg-status-quiet/20 text-text-muted'
-      : 'border-status-good/50 bg-status-good/10 text-status-good'
+      : hasDetections
+        ? 'border-status-urgent/50 bg-status-urgent/10 text-status-urgent'
+        : 'border-status-good/50 bg-status-good/10 text-status-good'
   const statusDot = firmsStatus === 'loading'
     ? 'bg-status-info text-status-info animate-pulse shadow-[0_0_10px_currentColor]'
     : firmsStatus === 'unavailable'
       ? 'bg-status-quiet text-status-quiet'
-      : 'bg-status-good text-status-good shadow-[0_0_10px_currentColor]'
+      : hasDetections
+        ? 'bg-status-urgent text-status-urgent shadow-[0_0_10px_currentColor]'
+        : 'bg-status-good text-status-good shadow-[0_0_10px_currentColor]'
   const mapStatusTone = firmsStatus === 'loading'
     ? 'border-status-info/60 bg-bg/85 text-status-info'
     : firmsStatus === 'unavailable'
       ? 'border-status-quiet/70 bg-bg/85 text-text-muted'
-      : 'border-status-good/60 bg-bg/80 text-status-good'
+      : hasDetections
+        ? 'border-status-urgent/60 bg-bg/85 text-status-urgent'
+        : 'border-status-good/60 bg-bg/80 text-status-good'
 
   return (
     <main className="relative h-screen overflow-hidden bg-bg text-text">
@@ -123,7 +130,7 @@ export function AuditLanding({ onStartAudit, onOpenContext }: { onStartAudit: ()
         <Map
           mapStyle="/scoped-map-style.json"
           transformRequest={transformRequest}
-          initialViewState={{ longitude: 117.5, latitude: 6.5, zoom: 3 }}
+          initialViewState={{ longitude: 117.5, latitude: -12, zoom: 3 }}
           maxBounds={SEA_BOUNDS}
           minZoom={3}
           maxZoom={10}
