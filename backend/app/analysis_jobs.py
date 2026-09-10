@@ -12,9 +12,9 @@ Job rows live in the existing audit-state table under a namespaced
 ``job#<audit_id>#<event_id>`` hash key rather than a table of their own. The
 key attribute and item shape are identical, so `audit_store` needs no change
 and no new service is switched on. They are deliberately *not* nested inside
-the audit session: `audit_store.update_analysis` reads the whole session,
-mutates it and writes it back, and a worker doing that while the console
-writes a pack review would silently drop one of the two writes.
+the audit session, so a slow analysis job never holds up a pack review. Its
+completed analysis is attached to the session separately with the store's
+revision-checked mutation.
 """
 
 from __future__ import annotations

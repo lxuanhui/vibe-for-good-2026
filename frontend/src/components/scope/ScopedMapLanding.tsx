@@ -242,9 +242,19 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
     const additions = candidateIds.filter((id) => !packed.includes(id))
     if (!additions.length) return
     setPackError('')
-    const results = await Promise.allSettled(additions.map((id) => addToAuditPack(scope.audit_id, id)))
-    const added = additions.filter((_, index) => results[index].status === 'fulfilled')
-    const failed = additions.filter((_, index) => results[index].status === 'rejected')
+    // Keep the requests ordered so an error can remain attached to the exact
+    // selection that failed. The audit store also merges each entry with a
+    // conditional retry, protecting this pack from overlapping Lambda calls.
+    const added: string[] = []
+    const failed: string[] = []
+    for (const id of additions) {
+      try {
+        await addToAuditPack(scope.audit_id, id)
+        added.push(id)
+      } catch {
+        failed.push(id)
+      }
+    }
     if (added.length) setPacked((ids) => [...ids, ...added.filter((id) => !ids.includes(id))])
     setCandidateIds(failed)
     if (failed.length) setPackError(`Could not add ${failed.length} selected FireEvent${failed.length === 1 ? '' : 's'} to the audit report.`)
