@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import type { AuditEventSummary, AuditProgression, AuditScope } from '../../api/types'
 import { fetchAuditRegister } from '../../api/client'
 import { useAppStore } from '../../store/useAppStore'
@@ -50,7 +51,70 @@ function compareEvents(a: AuditEventSummary, b: AuditEventSummary, key: SortKey)
 }
 
 function SummaryHelp({ label, children }: { label: string; children: ReactNode }) {
-  return <details className="relative inline-block align-middle"><summary aria-label={`About ${label}`} className="flex h-4 w-4 cursor-pointer list-none items-center justify-center rounded-full border border-border-strong text-[10px] text-text-muted hover:text-text"><span aria-hidden="true">?</span></summary><div role="note" className="absolute right-0 z-10 mt-2 w-64 rounded border border-border-strong bg-panel-raised p-3 text-left text-[11px] leading-4 text-text shadow-lg">{children}</div></details>
+  const [open, setOpen] = useState(false)
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const popoverRef = useRef<HTMLDivElement>(null)
+
+  useLayoutEffect(() => {
+    if (!open) return
+
+    const updatePosition = () => {
+      const trigger = triggerRef.current
+      const popover = popoverRef.current
+      if (!trigger || !popover) return
+
+      const triggerRect = trigger.getBoundingClientRect()
+      const margin = 8
+      const gap = 8
+      const viewportWidth = document.documentElement.clientWidth || window.innerWidth
+      const viewportHeight = document.documentElement.clientHeight || window.innerHeight
+      const width = popover.offsetWidth || 256
+      const height = popover.offsetHeight
+      const left = Math.min(Math.max(triggerRect.right - width, margin), Math.max(margin, viewportWidth - width - margin))
+      const belowTop = triggerRect.bottom + gap
+      const top = belowTop + height <= viewportHeight - margin
+        ? belowTop
+        : Math.max(margin, triggerRect.top - height - gap)
+
+      setPosition({ top, left })
+    }
+
+    updatePosition()
+    window.addEventListener('resize', updatePosition)
+    window.addEventListener('scroll', updatePosition, true)
+    return () => {
+      window.removeEventListener('resize', updatePosition)
+      window.removeEventListener('scroll', updatePosition, true)
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+
+    const dismissOnOutsideClick = (event: MouseEvent) => {
+      const target = event.target as Node
+      if (!triggerRef.current?.contains(target) && !popoverRef.current?.contains(target)) setOpen(false)
+    }
+    const dismissOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false)
+        triggerRef.current?.focus()
+      }
+    }
+
+    document.addEventListener('mousedown', dismissOnOutsideClick)
+    document.addEventListener('keydown', dismissOnEscape)
+    return () => {
+      document.removeEventListener('mousedown', dismissOnOutsideClick)
+      document.removeEventListener('keydown', dismissOnEscape)
+    }
+  }, [open])
+
+  return <>
+    <button ref={triggerRef} type="button" aria-label={`About ${label}`} aria-expanded={open} aria-controls={`help-${label.replaceAll(' ', '-')}`} onClick={() => { setPosition(null); setOpen((current) => !current) }} className="flex h-4 w-4 cursor-pointer items-center justify-center rounded-full border border-border-strong text-[10px] text-text-muted hover:text-text"><span aria-hidden="true">?</span></button>
+    {open && createPortal(<div ref={popoverRef} id={`help-${label.replaceAll(' ', '-')}`} role="note" className="fixed z-10 max-h-[calc(100vh-1rem)] w-64 max-w-[calc(100vw-1rem)] overflow-y-auto rounded border border-border-strong bg-panel-raised p-3 text-left text-[11px] leading-4 text-text shadow-lg" style={position ? { top: position.top, left: position.left } : { visibility: 'hidden', top: 0, left: 0 }}>{children}</div>, document.body)}
+  </>
 }
 
 export function RegisterSummary({ progression }: { progression: AuditProgression }) {

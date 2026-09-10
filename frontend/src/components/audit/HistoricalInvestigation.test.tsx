@@ -225,6 +225,38 @@ test('provides contextual help for clustering and routing dimensions', () => {
   expect(screen.getByText(/you control filtering/)).toBeTruthy()
 })
 
+test('keeps observation derivation help inside the viewport near the bottom-right edge', () => {
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 })
+  Object.defineProperty(window, 'innerHeight', { configurable: true, value: 768 })
+  Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { configurable: true, value: 256 })
+  Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, value: 120 })
+
+  render(<RegisterSummary progression={summaryProgression} />)
+  const helpButton = screen.getByRole('button', { name: 'About observation derivation' })
+  vi.spyOn(helpButton, 'getBoundingClientRect').mockReturnValue({
+    x: 980, y: 740, top: 740, right: 996, bottom: 756, left: 980, width: 16, height: 16,
+    toJSON: () => ({}),
+  })
+
+  fireEvent.click(helpButton)
+
+  const popover = screen.getByRole('note')
+  expect(popover.getAttribute('style')).toContain('top: 612px')
+  expect(popover.getAttribute('style')).toContain('left: 740px')
+})
+
+test('dismisses contextual help with Escape and returns focus to its trigger', () => {
+  render(<RegisterSummary progression={summaryProgression} />)
+  const helpButton = screen.getByRole('button', { name: 'About observation derivation' })
+
+  fireEvent.click(helpButton)
+  expect(screen.getByRole('note')).toBeTruthy()
+  fireEvent.keyDown(document, { key: 'Escape' })
+
+  expect(screen.queryByRole('note')).toBeNull()
+  expect(document.activeElement).toBe(helpButton)
+})
+
 test('keeps routing explanation out of the normal register layout', () => {
   render(<RegisterSummary progression={summaryProgression} />)
 
