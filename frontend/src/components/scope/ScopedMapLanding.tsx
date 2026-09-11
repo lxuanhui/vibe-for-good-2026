@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Layer, Map, Source, type MapLayerMouseEvent } from 'react-map-gl/maplibre'
 import type { Feature, FeatureCollection, Geometry, LineString, Point } from 'geojson'
-import type { AnalysisJob, AuditEventSummary, AuditScope, EventEvidenceResponse, InvestigationMap, InvestigationMapNode, StructuredAnalysis } from '../../api/types'
+import type { AnalysisJob, AuditEventSummary, AuditScope, EventEvidenceResponse, HydrologyLayerId, InvestigationMap, InvestigationMapNode, StructuredAnalysis } from '../../api/types'
 import { addToAuditPack, fetchAuditRegister, fetchInvestigationBundle, fetchInvestigationMap, generateInvestigationAnalysis } from '../../api/client'
-import { AUDIT_SCOPE_BOUNDARY_COLOR, AUDIT_SCOPE_BUFFER_COLOR, FIRE_EVENT_COLORS, FIRMS_HOTSPOT_COLORS, SOLAR_NIGHT_COLOR, SURFACE_FIRE_ENVELOPE_COLOR } from '../../lib/layerColors'
+import { AUDIT_SCOPE_BOUNDARY_COLOR, AUDIT_SCOPE_BUFFER_COLOR, FIRE_EVENT_COLORS, FIRMS_HOTSPOT_COLORS, HYDROLOGY_RAMP_COLORS, LAYER_COLORS, SOLAR_NIGHT_COLOR, SURFACE_FIRE_ENVELOPE_COLOR } from '../../lib/layerColors'
 import { REGIONAL_MAP_BOUNDS } from '../../lib/regionalBounds'
 import { Brand } from '../brand/Brand'
 import { useAppStore } from '../../store/useAppStore'
 import { useScopedOverlay } from '../../api/hooks'
 import { Button } from '../ui/Button'
+import { Toggle } from '../ui/Toggle'
+import { HYDROLOGY_PLACEHOLDER_LABEL, HYDROLOGY_PLACEHOLDER_RANGES, illustrativeHydrologyField } from '../../api/fixtures/illustrativeHydrology'
 import { EvidenceDrawer } from '../audit/EvidenceDrawer'
 import { envelopePolygons } from './propagationEnvelopes'
 import { eventOverlapsDay, observationDays, observationsForDay, type ScopedMapDay } from './temporalScrubber'
@@ -19,6 +21,65 @@ const GRAPH_LINE_COLOR = '#f97316'
 const SCOPED_MAP_RELATIONSHIP_DISTANCE_KM = 10
 const CLOCK_REFRESH_MS = 60 * 1000
 const TIMELINE_STEP_MS = 750
+
+// The three peat hydrology layers were removed from this aside by #266 and
+// re-added here as toggles rather than by re-mounting LayerControlPanel,
+// which #266 deliberately retired for the scoped map. Captions name the
+// real product and unit so the copy stays true once #280 supplies rows.
+const HYDROLOGY_LAYERS: { id: HydrologyLayerId; label: string; caption: string }[] = [
+  { id: 'groundwater', label: 'Groundwater / water-table depth', caption: 'PEATCLSM depth relative to peat surface (m).' },
+  { id: 'peatclsm', label: 'PEATCLSM water flux', caption: 'Free-surface water flux (kg m-2 s-1).' },
+  { id: 'soil-moisture', label: 'Soil moisture', caption: 'SMAP L4 surface layer, 0-5 cm (m3/m3).' },
+]
+
+type HydrologyLayerState = {
+  id: HydrologyLayerId
+  visible: boolean
+  data: FeatureCollection<Geometry, { weight: number }> | null
+  illustrative: boolean
+}
+
+/** One hydrology layer: the overlay route's answer, or the labelled placeholder.
+
+  The route answers `status: "unavailable"` in production because the cached
+  SMAP subset was never materialised (#280). Until it is, an unavailable or
+  empty answer is replaced with the deterministic synthetic field from
+  fixtures/illustrativeHydrology.ts, and the caller draws the "Illustrative"
+  badge. A real answer with rows is normalised to the same 0 to 1 weight and
+  drawn with no badge, so #284 can retire the fixture without touching the
+  paint. */
+function useHydrologyLayer(scope: AuditScope, id: HydrologyLayerId, day: ScopedMapDay): HydrologyLayerState {
+  const visible = useAppStore((state) => state.layerVisibility[id])
+  const overlay = useScopedOverlay(scope.audit_id, id, day, scope.buffer_bbox, visible)
+  const bbox = scope.buffer_bbox
+  return useMemo(() => {
+    if (!visible) return { id, visible, data: null, illustrative: false }
+    // Still waiting for the route: draw nothing rather than flash the
+    // placeholder and then swap it for rows.
+    if (!overlay) return { id, visible, data: null, illustrative: false }
+    const real = overlay.metadata?.status !== 'unavailable' && overlay.features.length > 0
+    if (real) {
+      const range = HYDROLOGY_PLACEHOLDER_RANGES[id]
+      const features = overlay.features.map((feature) => {
+        const value = Number(feature.properties?.value)
+        const weight = Number.isFinite(value) ? Math.min(1, Math.max(0, (value - range.min) / (range.max - range.min))) : 0
+        return { ...feature, properties: { ...feature.properties, weight } }
+      })
+      return { id, visible, data: { type: 'FeatureCollection' as const, features }, illustrative: false }
+    }
+    if (!bbox) return { id, visible, data: null, illustrative: false }
+    return { id, visible, data: illustrativeHydrologyField(id, bbox, day), illustrative: true }
+  }, [id, visible, overlay, bbox, day])
+}
+
+// Groundwater is drawn as depth below surface, so the "high" end of its ramp
+// is the drained, fire-prone end; the other two read the opposite way (more
+// water is the high end). Same ramp tokens the legend uses.
+const HYDROLOGY_RAMP: Record<HydrologyLayerId, [string, string, string]> = {
+  groundwater: [HYDROLOGY_RAMP_COLORS.groundwaterLow, HYDROLOGY_RAMP_COLORS.groundwaterMid, HYDROLOGY_RAMP_COLORS.groundwaterHigh],
+  peatclsm: [LAYER_COLORS.peatclsm, LAYER_COLORS.peatclsm, LAYER_COLORS.groundwater],
+  'soil-moisture': [HYDROLOGY_RAMP_COLORS.soilMoistureLow, HYDROLOGY_RAMP_COLORS.soilMoistureMid, HYDROLOGY_RAMP_COLORS.soilMoistureHigh],
+}
 
 // The correlation graph is one rolled-together view now, not two flows that
 // silently replace each other: `origin` distinguishes an edge that touches
@@ -167,6 +228,11 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
   const firmsVisible = useAppStore((state) => state.layerVisibility.firms)
   const firmsOverlay = useScopedOverlay(scope.audit_id, 'firms', activeDay, scope.buffer_bbox, firmsVisible)
   const toggleLayer = useAppStore((state) => state.toggleLayer)
+  const groundwaterLayer = useHydrologyLayer(scope, 'groundwater', activeDay)
+  const peatclsmLayer = useHydrologyLayer(scope, 'peatclsm', activeDay)
+  const soilMoistureLayer = useHydrologyLayer(scope, 'soil-moisture', activeDay)
+  const hydrologyLayers = [groundwaterLayer, peatclsmLayer, soilMoistureLayer]
+  const illustrativeHydrologyShown = hydrologyLayers.some((layer) => layer.illustrative)
   const [isPlaying, setIsPlaying] = useState(false)
   const [showPeatland, setShowPeatland] = useState(false)
   const [evidenceReloadToken, setEvidenceReloadToken] = useState(0)
@@ -467,6 +533,13 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
               not a solid wash; the dashed outline (not subject to the same
               compounding) carries the actual boundary. */}
           {showSpreadEnvelopes && envelopes.features.length > 0 && <Source id="fireevent-spread-envelope" type="geojson" data={envelopes}><Layer id="fireevent-spread-envelope-fill" type="fill" paint={{ 'fill-color': SURFACE_FIRE_ENVELOPE_COLOR, 'fill-opacity': 0.05 }} /><Layer id="fireevent-spread-envelope-line" type="line" paint={{ 'line-color': SURFACE_FIRE_ENVELOPE_COLOR, 'line-width': 1.5, 'line-dasharray': [3, 3] }} /></Source>}
+          {hydrologyLayers.map((layer) => layer.data && <Source key={layer.id} id={`scoped-hydrology-${layer.id}`} type="geojson" data={layer.data}>
+            {/* One Source, two Layers: the placeholder is 9 km polygon cells
+                and the real cached rows will be points, and MapLibre draws
+                each geometry only through the layer type that matches it. */}
+            <Layer id={`scoped-hydrology-${layer.id}-cells`} type="fill" paint={{ 'fill-color': ['interpolate', ['linear'], ['get', 'weight'], 0, HYDROLOGY_RAMP[layer.id][0], 0.5, HYDROLOGY_RAMP[layer.id][1], 1, HYDROLOGY_RAMP[layer.id][2]], 'fill-opacity': 0.38 }} />
+            <Layer id={`scoped-hydrology-${layer.id}-points`} type="circle" paint={{ 'circle-radius': ['interpolate', ['exponential', 2], ['zoom'], 5, 2, 10, 24], 'circle-blur': 0.6, 'circle-color': ['interpolate', ['linear'], ['get', 'weight'], 0, HYDROLOGY_RAMP[layer.id][0], 0.5, HYDROLOGY_RAMP[layer.id][1], 1, HYDROLOGY_RAMP[layer.id][2]], 'circle-opacity': 0.5 }} />
+          </Source>)}
           {firmsVisible && firmsOverlay && <Source id="scoped-firms-hotspots" type="geojson" data={firmsOverlay}><Layer id="scoped-firms-hotspot-points" type="circle" paint={{ 'circle-radius': 3.5, 'circle-color': FIRMS_HOTSPOT_COLORS.point, 'circle-opacity': 0.82, 'circle-stroke-color': FIRMS_HOTSPOT_COLORS.stroke, 'circle-stroke-width': 1 }} /></Source>}
           {showObservations && observations.features.length > 0 && <Source id="fireevent-observations" type="geojson" data={observations}><Layer id="fireevent-observations-points" type="circle" paint={{ 'circle-radius': 5, 'circle-color': FIRMS_HOTSPOT_COLORS.core, 'circle-opacity': 0.95, 'circle-stroke-color': FIRMS_HOTSPOT_COLORS.stroke, 'circle-stroke-width': 1.5 }} /></Source>}
           <Source id="audit-events" type="geojson" data={points}>
@@ -483,6 +556,10 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
             />
           </Source>
         </Map>
+        {illustrativeHydrologyShown && <div role="note" aria-label="Hydrology layers are illustrative" className="pointer-events-none absolute left-4 top-4 max-w-xs rounded-lg border border-status-info/60 bg-bg/90 px-3 py-2 text-xs shadow-lg backdrop-blur">
+          <div className="font-semibold uppercase tracking-[0.14em] text-status-info">Hydrology layers are illustrative</div>
+          <p className="mt-1 text-[11px] leading-4 text-text-muted">A synthetic placeholder field, not cached SMAP data. It is not evidence and does not enter the analysis.</p>
+        </div>}
         {selectedObservation && <div role="status" aria-label="FIRMS observation details" className="pointer-events-auto absolute bottom-4 left-4 w-56 rounded-lg border border-amber-300/50 bg-panel/95 p-3 text-xs shadow-lg backdrop-blur">
           <div className="flex items-center justify-between gap-2"><div className="font-semibold text-amber-300">FIRMS observation</div><button type="button" className="text-[10px] text-text-muted hover:text-text" onClick={() => setSelectedObservation(undefined)} aria-label="Close observation details">CLOSE</button></div>
           <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-text-muted">
@@ -507,6 +584,23 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
           <Button aria-pressed={firmsVisible} className={`mt-2 w-full ${firmsVisible ? 'border-accent bg-accent/15 text-accent' : ''}`} onClick={() => toggleLayer('firms')}>SHOW FIRMS</Button>
           <Button aria-pressed={showPeatland} className={`mt-2 w-full ${showPeatland ? 'border-accent bg-accent/15 text-accent' : ''}`} onClick={() => setShowPeatland((shown) => !shown)}>SHOW PEATLAND</Button>
           <Button aria-pressed={showSpreadEnvelopes} className={`mt-2 w-full ${showSpreadEnvelopes ? 'border-accent bg-accent/15 text-accent' : ''}`} onClick={() => setShowSpreadEnvelopes((shown) => !shown)}>SHOW SPREAD ENVELOPES</Button>
+          <div className="mt-4 border-t border-border pt-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] uppercase tracking-[0.14em] text-text-faint">Peat hydrology context</span>
+              <span className="rounded border border-status-info/60 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.12em] text-status-info">{HYDROLOGY_PLACEHOLDER_LABEL}</span>
+            </div>
+            {HYDROLOGY_LAYERS.map((layer, index) => <Toggle
+              key={layer.id}
+              label={layer.label}
+              caption={layer.caption}
+              checked={hydrologyLayers[index].visible}
+              onChange={() => toggleLayer(layer.id)}
+              disabled={!scope.buffer_bbox}
+              disabledHint="This scope has no context buffer to draw over."
+              swatch={<span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: LAYER_COLORS[layer.id] }} />}
+            />)}
+            <p className="mt-2 text-[10px] leading-4 text-text-faint">No cached SMAP L4 subset is materialised in this build, so these layers draw a synthetic placeholder field to show the presentation. They are not measurements and never enter evidence. Replacing them with cached rows is #284.</p>
+          </div>
         </div>
         <div className="p-4">
           <div className="flex items-center justify-between">
