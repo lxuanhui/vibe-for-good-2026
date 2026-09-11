@@ -77,7 +77,9 @@ function useHydrologyLayer(scope: AuditScope, id: HydrologyLayerId, day: ScopedM
 // water is the high end). Same ramp tokens the legend uses.
 const HYDROLOGY_RAMP: Record<HydrologyLayerId, [string, string, string]> = {
   groundwater: [HYDROLOGY_RAMP_COLORS.groundwaterLow, HYDROLOGY_RAMP_COLORS.groundwaterMid, HYDROLOGY_RAMP_COLORS.groundwaterHigh],
-  peatclsm: [LAYER_COLORS.peatclsm, LAYER_COLORS.peatclsm, LAYER_COLORS.groundwater],
+  // Flux has no ramp tokens of its own; blue through the layer's violet to
+  // yellow reads at a glance where violet-on-violet did not in the browser.
+  peatclsm: [HYDROLOGY_RAMP_COLORS.groundwaterLow, LAYER_COLORS.peatclsm, HYDROLOGY_RAMP_COLORS.soilMoistureMid],
   'soil-moisture': [HYDROLOGY_RAMP_COLORS.soilMoistureLow, HYDROLOGY_RAMP_COLORS.soilMoistureMid, HYDROLOGY_RAMP_COLORS.soilMoistureHigh],
 }
 
@@ -535,10 +537,12 @@ export function ScopedMapLanding({ scope, onOpenScope, onOpenRegister, onViewRep
           {showSpreadEnvelopes && envelopes.features.length > 0 && <Source id="fireevent-spread-envelope" type="geojson" data={envelopes}><Layer id="fireevent-spread-envelope-fill" type="fill" paint={{ 'fill-color': SURFACE_FIRE_ENVELOPE_COLOR, 'fill-opacity': 0.05 }} /><Layer id="fireevent-spread-envelope-line" type="line" paint={{ 'line-color': SURFACE_FIRE_ENVELOPE_COLOR, 'line-width': 1.5, 'line-dasharray': [3, 3] }} /></Source>}
           {hydrologyLayers.map((layer) => layer.data && <Source key={layer.id} id={`scoped-hydrology-${layer.id}`} type="geojson" data={layer.data}>
             {/* One Source, two Layers: the placeholder is 9 km polygon cells
-                and the real cached rows will be points, and MapLibre draws
-                each geometry only through the layer type that matches it. */}
-            <Layer id={`scoped-hydrology-${layer.id}-cells`} type="fill" paint={{ 'fill-color': ['interpolate', ['linear'], ['get', 'weight'], 0, HYDROLOGY_RAMP[layer.id][0], 0.5, HYDROLOGY_RAMP[layer.id][1], 1, HYDROLOGY_RAMP[layer.id][2]], 'fill-opacity': 0.38 }} />
-            <Layer id={`scoped-hydrology-${layer.id}-points`} type="circle" paint={{ 'circle-radius': ['interpolate', ['exponential', 2], ['zoom'], 5, 2, 10, 24], 'circle-blur': 0.6, 'circle-color': ['interpolate', ['linear'], ['get', 'weight'], 0, HYDROLOGY_RAMP[layer.id][0], 0.5, HYDROLOGY_RAMP[layer.id][1], 1, HYDROLOGY_RAMP[layer.id][2]], 'circle-opacity': 0.5 }} />
+                and the real cached rows will be points. The filters matter:
+                a circle layer draws every vertex of a polygon too, which
+                put a dot grid over the field the first time this was viewed.
+                fill-antialias off removes the seams between adjacent cells. */}
+            <Layer id={`scoped-hydrology-${layer.id}-cells`} type="fill" filter={['==', ['geometry-type'], 'Polygon']} paint={{ 'fill-antialias': false, 'fill-color': ['interpolate', ['linear'], ['get', 'weight'], 0, HYDROLOGY_RAMP[layer.id][0], 0.5, HYDROLOGY_RAMP[layer.id][1], 1, HYDROLOGY_RAMP[layer.id][2]], 'fill-opacity': 0.38 }} />
+            <Layer id={`scoped-hydrology-${layer.id}-points`} type="circle" filter={['==', ['geometry-type'], 'Point']} paint={{ 'circle-radius': ['interpolate', ['exponential', 2], ['zoom'], 5, 2, 10, 24], 'circle-blur': 0.6, 'circle-color': ['interpolate', ['linear'], ['get', 'weight'], 0, HYDROLOGY_RAMP[layer.id][0], 0.5, HYDROLOGY_RAMP[layer.id][1], 1, HYDROLOGY_RAMP[layer.id][2]], 'circle-opacity': 0.5 }} />
           </Source>)}
           {firmsVisible && firmsOverlay && <Source id="scoped-firms-hotspots" type="geojson" data={firmsOverlay}><Layer id="scoped-firms-hotspot-points" type="circle" paint={{ 'circle-radius': 3.5, 'circle-color': FIRMS_HOTSPOT_COLORS.point, 'circle-opacity': 0.82, 'circle-stroke-color': FIRMS_HOTSPOT_COLORS.stroke, 'circle-stroke-width': 1 }} /></Source>}
           {showObservations && observations.features.length > 0 && <Source id="fireevent-observations" type="geojson" data={observations}><Layer id="fireevent-observations-points" type="circle" paint={{ 'circle-radius': 5, 'circle-color': FIRMS_HOTSPOT_COLORS.core, 'circle-opacity': 0.95, 'circle-stroke-color': FIRMS_HOTSPOT_COLORS.stroke, 'circle-stroke-width': 1.5 }} /></Source>}
