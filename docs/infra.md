@@ -9,8 +9,9 @@ Cost Explorer data for the account, not a model. Where a figure is a forward
 estimate — a service too new or too idle to have billed yet — it says so.
 
 **Region:** `ap-southeast-1` (Singapore). **Account:** `424609180893`.
-**Last measured:** 2026-09-09, against 2026-09-01 → 2026-09-10 usage,
-extrapolated to 30 days.
+**Last measured:** 2026-09-15, against 2026-09-01 → 2026-09-15 usage.
+The hackathon ended on 2026-09-14; see "After the hackathon" at the end for
+what was switched off that day and why.
 
 ## What this project runs
 
@@ -24,7 +25,7 @@ bucket and the CI role).
 | **Lambda** | `vibe-for-good-2026-dev-analysis-worker` — same zip, handler `lambda_handler.analysis_worker`, 512 MB, 300 s | Runs Investigator/Skeptic analysis, which measures ~51s and cannot fit API Gateway's 30s response cap. Invoked async by the API; async retries are off so a failure is not billed three times | **$0.00** (created 2026-09-10; ~$0.02 per 1,000 assessments) |
 | **API Gateway** | HTTP API, `ANY /{proxy+}` | Fronts the Lambda. HTTP API, not REST — roughly a third the price | **$0.0001** |
 | **DynamoDB** | `vibe-for-good-2026-dev-audit-state`, PAY_PER_REQUEST | Audit session state, plus analysis job rows under a `job#<audit>#<event>` key. Lambda serves later calls from a different warm container, so process memory lost the scope | **$0.00** (created 2026-09-09; est. **< $0.05**) |
-| **Amplify Hosting** | `console` app + PR previews | The frontend, and a preview per pull request | **$0.02** |
+| **Amplify Hosting** | `console` app, `main` branch only | The frontend. Pull-request previews were switched off on 2026-09-15 (see below); hosting itself is cents, build minutes were $2.97 for the hackathon fortnight | **$0.02** hosting |
 | **CloudWatch Logs** | 3 groups, 14-day retention, ~11 KB stored | Both Lambdas and API Gateway. Retention is explicit so the groups die with the stack | **$0.00** |
 | **S3** | `vibe-for-good-2026-tfstate-apse1` — versioned, encrypted, lifecycle-expired | Terraform state. Not application storage | **$0.01** |
 | **S3** | `vibe-for-good-2026-dev-cache-<account>` — encrypted, public access blocked, objects expire after a day | The shared copy of `GET /api/firms/live`'s 15-minute cache, so a cold Lambda container reads ~100 KB from S3 instead of refetching from NASA. One object, overwritten every refresh; the spec's disposable-cache role | not yet billed (created 2026-09-10); est. **< $0.01**: one PUT per refresh and one GET per cold start at $0.005 and $0.0004 per thousand, ~0.1 MB stored |
@@ -126,23 +127,56 @@ costing real money.
 
 ## Also in this account, and not ours
 
-The account is shared, and the majority of the bill is not this project:
+The account is shared. Until 2026-09-15 the majority of the bill was not this
+project: **`i-03d53840a3553a537` (`anvil-api`, `t4g.small`)**, an instance
+that predated this project and was in neither Terraform stack, cost about
+$5/month, and none of it was compute. The `t4g.small` was free-tier; the bill
+was its public IPv4 address (~$3.18) and 16 GB `gp3` root volume (~$1.34),
+both charged whether the instance ran or not, so stopping it would have
+saved nothing. August's full-month total for the account was **$6.18**, of
+which this project accounted for roughly a cent.
 
-| Service | What | Est. / month |
-|---|---|---|
-| VPC — public IPv4 address | One in-use address, charged hourly since AWS began billing them | **$3.18** |
-| EC2 — EBS `gp3` | One 16 GB volume, attached | **$1.34** |
-| Secrets Manager | Stored secrets | **$0.35** |
-| ECR | A container image | **$0.01** |
+The owner had it torn down on 2026-09-15 (instance, Elastic IP, security
+group, key pair, ECR repository, instance profile and role). A snapshot of
+its root volume, `snap-04c770acc524da7bb`, is kept as the only backup, at
+about $0.08/month; delete it when nobody wants the app back.
 
-These belong to **`i-03d53840a3553a537` (`anvil-api`, `t4g.small`, running
-since 2026-07-23)** — an instance that predates this project and is not in
-either Terraform stack. August's full-month total for the account was
-**$6.18**, of which this project accounted for roughly a cent.
+Still here and not ours: one Secrets Manager secret in `us-east-1`
+(`kino/github-token`, ~$0.40/month), which belongs to the account owner.
 
-Recorded here only so the next person reading a bill does not conclude the
-console is expensive, or start deleting things to find out. It is somebody's
-running workload; leave it alone unless its owner says otherwise.
+## After the hackathon
+
+The hackathon ended on 2026-09-14. Everything this project runs is metered,
+so at idle it costs about $0.03/month and nothing was worth destroying, but
+one thing was worth trimming and one alert is worth understanding.
+
+**Trimmed on 2026-09-15:** Amplify pull-request previews on `main` are off
+and the stale `pr-255` and `pr-262` preview branches are deleted. Build
+minutes were the only line that scaled with how hard we worked (294 minutes,
+$2.97, in the hackathon fortnight) and previews were most of them. This is
+set in the Amplify console, not Terraform (`infra/console.tf` explains why
+there is no branch resource), so an apply will not turn it back on; re-enable
+it from the app's branch settings if PR previews are wanted again.
+
+**Not destroyed, on purpose:** the Lambdas, API Gateway, DynamoDB table, S3
+cache and Amplify app. They bill nothing at idle and the console URL is the
+thing people will follow from the submission. Bedrock is the one line a
+visitor can spend: ~$0.07 to $0.20 per assessment, only when someone clicks
+Analyse, and `GET .../analyse` never re-triggers a running job. If that ever
+matters, `terraform destroy` on `infra/` removes the API and worker, and the
+`Infra` workflow has to be disabled in the same breath or the next merge
+recreates them.
+
+**The budget alert.** Both account budgets (`anvil-monthly` at $15,
+`kino-monthly` at $10) fired on 2026-09-14 with a *forecast* of $82.81 for
+September. Daily spend tells the real story: a flat $0.19/day baseline
+(anvil-api) all month, then $3.07, $9.57 and $0.92 on 2026-09-09, 10 and 11
+from Bedrock assessments and Amplify builds during the final push, then back
+to $0.19/day. The forecaster extrapolated the spike. Actual month-to-date on
+2026-09-15 was $16.14; AWS's own forecast had already fallen to $22.85, and
+with anvil-api gone the baseline is nearer $0.01/day. A forecast alert the
+day after a burst of work is expected, and is not a sign that something is
+still running.
 
 ## Keeping this current
 
