@@ -31,7 +31,7 @@ const fetchAuditOverlayMock = vi.mocked(fetchAuditOverlay)
 
 afterEach(() => {
   cleanup()
-  useAppStore.setState({ layerVisibility: { ...useAppStore.getState().layerVisibility, firms: false } })
+  useAppStore.setState({ layerVisibility: { ...useAppStore.getState().layerVisibility, firms: false, groundwater: false, peatclsm: false, 'soil-moisture': false } })
   vi.useRealTimers()
 })
 
@@ -162,6 +162,60 @@ it('enables the scoped FIRMS overlay without a focused FireEvent', async () => {
   await waitFor(() => expect(document.querySelector('[data-source-id="scoped-firms-hotspots"]')).toBeTruthy())
   expect(fetchAuditOverlayMock).toHaveBeenCalledWith('audit-1', 'firms', { bbox: scope.buffer_bbox, date: undefined })
   expect(screen.getByRole('button', { name: 'SHOW FIRMS' }).getAttribute('aria-pressed')).toBe('true')
+})
+
+describe('ScopedMapLanding hydrology placeholder (#284)', () => {
+  const unavailable = {
+    type: 'FeatureCollection' as const,
+    features: [],
+    metadata: { layer: 'groundwater' as const, status: 'unavailable' as const, unit: null, source: 'NASA NSIDC DAAC SPL4SMGP v7', coverage: null, reason: 'No materialized cached subset is available for this layer.', limitations: [] },
+  }
+
+  async function renderScopedMap(overrides: Partial<AuditScope> = {}) {
+    fetchAuditRegisterMock.mockResolvedValue({ events: [], progression: { selectedEventIds: [] } as unknown as AuditProgression })
+    render(<ScopedMapLanding scope={{ ...scope, ...overrides }} onOpenScope={() => undefined} onOpenRegister={() => undefined} onViewReport={() => undefined} />)
+    await screen.findByRole('list', { name: 'Available observation dates' })
+  }
+
+  it('asks the overlay route for the layer and draws the labelled placeholder when it answers unavailable', async () => {
+    fetchAuditOverlayMock.mockResolvedValue(unavailable)
+    await renderScopedMap()
+    expect(screen.queryByRole('note', { name: 'Hydrology layers are illustrative' })).toBeNull()
+    expect(document.querySelector('[data-source-id="scoped-hydrology-groundwater"]')).toBeNull()
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Groundwater / water-table depth' }))
+
+    await screen.findByRole('note', { name: 'Hydrology layers are illustrative' })
+    expect(fetchAuditOverlayMock).toHaveBeenCalledWith('audit-1', 'groundwater', { bbox: scope.buffer_bbox, date: undefined })
+    expect(document.querySelector('[data-source-id="scoped-hydrology-groundwater"]')).toBeTruthy()
+    expect(document.querySelector('[data-source-id="scoped-hydrology-peatclsm"]')).toBeNull()
+  })
+
+  it('draws real rows without the illustrative badge', async () => {
+    // fetchAuditOverlay's declared return type predates the hydrology
+    // metadata; the component reads it through useScopedOverlay's wider type.
+    const available = {
+      type: 'FeatureCollection' as const,
+      features: [{ type: 'Feature' as const, geometry: { type: 'Point' as const, coordinates: [116, -3] as [number, number] }, properties: { value: 0.31, unit: 'm3/m3' } }],
+      metadata: { layer: 'soil-moisture' as const, status: 'available' as const, unit: 'm3/m3', source: 'NASA NSIDC DAAC SPL4SMGP v7', coverage: null, reason: '', limitations: [] },
+    }
+    fetchAuditOverlayMock.mockResolvedValue(available)
+    await renderScopedMap()
+    fireEvent.click(screen.getByRole('switch', { name: 'Soil moisture' }))
+
+    await waitFor(() => expect(document.querySelector('[data-source-id="scoped-hydrology-soil-moisture"]')).toBeTruthy())
+    expect(screen.queryByRole('note', { name: 'Hydrology layers are illustrative' })).toBeNull()
+  })
+
+  it('keeps the toggles off and never invents a field when the scope has no buffer to draw over', async () => {
+    fetchAuditOverlayMock.mockResolvedValue(unavailable)
+    await renderScopedMap({ buffer_bbox: null })
+    const toggle = screen.getByRole('switch', { name: 'PEATCLSM water flux' })
+    expect((toggle as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(toggle)
+    expect(fetchAuditOverlayMock).not.toHaveBeenCalledWith('audit-1', 'peatclsm', expect.anything())
+    expect(screen.queryByRole('note', { name: 'Hydrology layers are illustrative' })).toBeNull()
+  })
 })
 
 it('shows only the active review date range in the map header subtitle', async () => {

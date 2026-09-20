@@ -201,6 +201,15 @@ The real derived 2019 FIRMS artifact now reaches the map through
 framed to the demo audit scope, context buffer and observation date. The demo
 must never blur which data is real and which is a fixture.
 
+The three peat hydrology toggles on the scoped map (Groundwater, PEATCLSM
+water flux, Soil moisture) draw a **labelled illustrative placeholder**, not
+data: the overlay routes answer `unavailable` because the cached SMAP L4
+subset was never materialised (#280), so
+`frontend/src/api/fixtures/illustrativeHydrology.ts` generates a
+deterministic synthetic field and the map carries an "illustrative" badge
+while any of them is on. A real `available` answer with rows is drawn
+instead, with no badge. Retiring the placeholder is #284.
+
 ## Skills
 
 | Skill | Load when |

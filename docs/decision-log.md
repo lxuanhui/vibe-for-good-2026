@@ -31,6 +31,49 @@ apply an older decision without checking the entries above it.
 
 ---
 
+## 2026-09-11 - The scoped map's hydrology toggles draw a labelled placeholder until the SMAP cache exists
+
+**Status:** done · PR #285 · Refs #272, #280 · Retired by #284
+
+**Decision.** The scoped map aside again carries toggles for Groundwater,
+PEATCLSM water flux and Soil moisture. Each still asks the real overlay
+route; when the route answers `status: "unavailable"` (which it does in
+production, because `backend/app/data/peat_cache/` was never materialised)
+the map draws a deterministic synthetic field from
+`frontend/src/api/fixtures/illustrativeHydrology.ts`, marked "Illustrative"
+beside the toggles and by a badge on the map. A real answer with rows is
+drawn with no badge. The placeholder never reaches evidence, analysis or
+the audit pack. Owner's call on demo day.
+
+**Why.** #266 removed the toggles from the scoped map on 2026-09-10 because
+three of the four had nothing to draw (#272). That left the console unable
+to show what a peat hydrology layer even looks like, which is part of the
+pitch. Materialising the cache is not a same-day job: CMR now serves
+SPL4SMGP Version 8 at roughly 143 MB per 3-hourly granule, the adapter
+targets Version 7, and the credentialed download plus the subset step have
+not been run (#280). The honest demo-day option is a fixture that says it
+is one, everywhere it appears, which is the rule `CLAUDE.md` already sets
+for fixtures.
+
+**Rejected: leave the layers out until #280 lands.** The presentation of
+hydrology context is what the demo needs to show; a missing panel reads as
+a missing capability rather than a missing dataset.
+
+**Rejected: materialise a partial cache today from one granule.** The
+adapter's version mismatch and the download size made this a gamble on the
+morning of the demo, and a one-granule subset would still need the
+"partial coverage" story explained live.
+
+**Rejected: re-mount `LayerControlPanel`.** #266 deliberately consolidated
+the scoped map's controls into the aside; adding three `Toggle`s there keeps
+that decision rather than reversing it silently.
+
+**Open.** Retiring the placeholder once #280 supplies rows is #284. The
+real-row path normalises `value` over the same plausible range the
+placeholder uses; whether that range matches the cached subset's actual
+spread is checked when the rows exist.
+---
+
 ## 2026-09-11 - A structured-output retry must tell the model why the first reply was rejected
 
 **Status:** done · PR #279 · Closes #278

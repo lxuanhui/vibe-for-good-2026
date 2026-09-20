@@ -141,8 +141,10 @@ export function ConsoleContextPanel({ onDismiss, closeRef }: { onDismiss: () => 
           <div>
             <dt className="font-semibold text-text">Not live in this build</dt>
             <dd className="mt-1 text-text-muted">
-              Satellite imagery, weather and peat enrichment, and the Investigator/Skeptic analysis. Each
-              appears as an explicit unavailable state or a labelled demo fixture, never as a finding.
+              Satellite imagery, weather and peat enrichment, the peat hydrology map layers, and the
+              Investigator/Skeptic analysis. Each appears as an explicit unavailable state or a labelled
+              demo fixture, never as a finding. The hydrology layers draw an illustrative placeholder
+              field until the cached SMAP subset exists.
             </dd>
           </div>
         </dl>
